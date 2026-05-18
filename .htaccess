@@ -1,0 +1,63 @@
+# ============================================================
+# SalesDesk — Apache URL Rewriting
+# Place this file in the web root (public_html/ or equivalent).
+#
+# Route map:
+#   /c/                      → public/c/index.php          (browse)
+#   /c/{slug}/               → public/c/car-detail/index.php?slug={slug}
+#   /{broker-slug}/          → public/broker-storefront/index.php?slug={broker-slug}
+#
+# Reserved paths that must NOT route to the broker storefront:
+#   /app/*, /api/*, /auth/*, /assets/*, /uploads/*, /db/*
+#   /public/*, /includes/*, /views/*, /vendor/*
+#   /c/, /brokers.php, /dealers.php, /privacy, /terms
+#
+# Stack: Apache 2.4 + mod_rewrite + PHP 8.x
+# ============================================================
+
+Options -Indexes
+Options +FollowSymLinks
+
+RewriteEngine On
+
+# ── Security: block direct access to sensitive directories ──
+RewriteRule ^(includes|vendor|db|views)/      - [F,L]
+RewriteRule ^\.                               - [F,L]
+RewriteRule ^(config\.php|composer\.(json|lock))$ - [F,L]
+
+# ── Remove trailing index.php ────────────────────────────────
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+(.+/)?index\.php [NC]
+RewriteRule ^ /%1 [R=301,L]
+
+# ── Enforce HTTPS in production ──────────────────────────────
+# Uncomment when SSL certificate is active:
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+
+# ── Static assets — serve directly ──────────────────────────
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# ── /c/ — Browse all cars ────────────────────────────────────
+RewriteRule ^c/?$ public/c/index.php [L]
+
+# ── /c/{slug}/ — Car detail page ────────────────────────────
+# Slug: lowercase letters, digits, hyphens only.
+RewriteRule ^c/([a-z0-9][a-z0-9\-]{1,99})/?$ c/car-detail/index.php?slug=$1 [L,QSA]
+
+# ── Reserved top-level paths — route directly ────────────────
+# These must come BEFORE the broker storefront catch-all below.
+RewriteRule ^(app|api|auth|assets|uploads|public|includes|views|vendor|db)(/.*)?$ $0 [L]
+RewriteRule ^(brokers|dealers|privacy|terms|sitemap)(\.php)?$ $0 [L]
+
+# ── /{broker-slug}/ — Broker public storefront ───────────────
+# Catch-all: any remaining slug-like path routes to the storefront.
+# Slug must start with a letter to avoid collisions with file paths.
+RewriteRule ^([a-z][a-z0-9\-]{1,59})/?$ broker-storefront/index.php?slug=$1 [L,QSA]
+
+# ── 404 fallback ─────────────────────────────────────────────
+ErrorDocument 404 /404.php
+ErrorDocument 500 /500.php

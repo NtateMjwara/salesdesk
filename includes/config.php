@@ -91,6 +91,13 @@ define('REDIS_HOST', '127.0.0.1');
 define('REDIS_PORT', 6379);
 
 // ============================================================
+// Define $baseUrl 
+// ============================================================
+
+$baseUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/';
+// or for an absolute URL:
+$baseUrl = 'https://salesdesk.co.za/';
+// ============================================================
 // ERROR REPORTING
 // ============================================================
 define('APP_DEBUG', false);    // <-- set true in local dev only, never in production

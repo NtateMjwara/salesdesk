@@ -1,0 +1,972 @@
+/**
+ * SalesDesk — Browse & Mega-Nav Styles
+ * T1 owns this file.
+ *
+ * Extracted from:
+ *   - views/layout-public.php  (mega-nav <style> block)
+ *   - c/index.php              (browse-page <style> block)
+ *
+ * Load order (in layout-public.php <head>):
+ *   global.css → public-fonts.css → public.css → browse.css
+ *
+ * Sections:
+ *   1.  Mega-nav panels (shared base)
+ *   2.  Mega-nav column layout
+ *   3.  Mega-nav items & icons
+ *   4.  Account panel
+ *   5.  Nav trigger buttons
+ *   6.  Browse sidebar card & inputs
+ *   7.  Browse filter chips (condition, multi-select)
+ *   8.  Browse vehicle card
+ *   9.  Browse results bar
+ *  10.  Browse active-filter tags
+ *  11.  Browse price quick-filter buttons
+ *  12.  Browse salesdesk & verified badges
+ *  13.  Browse pagination
+ *  14.  Browse empty state
+ *  15.  Responsive overrides
+ */
+
+
+/* ══════════════════════════════════════
+   1. MEGA-NAV PANELS — shared base
+   ══════════════════════════════════════ */
+.pub-mega-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  z-index: var(--z-dropdown);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  white-space: nowrap;
+}
+
+.pub-mega-panel.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+
+/* ══════════════════════════════════════
+   2. MEGA-NAV COLUMN LAYOUT
+   ══════════════════════════════════════ */
+.pub-mega-cols {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+}
+
+.pub-mega-col { min-width: 170px; }
+
+.pub-mega-col-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 10px 4px;
+}
+
+.pub-mega-col-label + .pub-mega-col-label {
+  /* Second label within same col (e.g. "Quick Links") */
+  margin-top: 8px;
+}
+
+.pub-mega-divider {
+  width: 1px;
+  background: var(--border);
+  margin: 4px 0;
+  opacity: .5;
+  align-self: stretch;
+}
+
+
+/* ══════════════════════════════════════
+   3. MEGA-NAV ITEMS & ICONS
+   ══════════════════════════════════════ */
+.pub-mega-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  transition: background .13s, color .13s;
+  cursor: pointer;
+}
+
+.pub-mega-item:hover {
+  background: var(--p-light);
+  color: var(--p);
+  text-decoration: none;
+}
+
+.pub-mega-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: background .13s, border-color .13s, color .13s;
+}
+
+.pub-mega-item:hover .pub-mega-icon {
+  background: var(--p-light);
+  border-color: var(--p-b);
+  color: var(--p);
+}
+
+.pub-mega-item-text { line-height: 1.2; }
+
+.pub-mega-item-sub {
+  display: block;
+  font-size: 11px;
+  color: var(--faint);
+  font-weight: 400;
+  margin-top: 1px;
+}
+
+
+/* ══════════════════════════════════════
+   4. ACCOUNT PANEL
+   ══════════════════════════════════════ */
+.pub-acct-panel {
+  /* Overrides the centred transform from .pub-mega-panel */
+  right: 0;
+  left: auto;
+  transform: translateY(-6px);
+  min-width: 220px;
+}
+
+.pub-acct-panel.open { transform: translateY(0); }
+
+.pub-acct-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 5px 0;
+  opacity: .6;
+}
+
+.pub-acct-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 6px 10px 3px;
+}
+
+.pub-acct-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  transition: background .13s, color .13s;
+}
+
+.pub-acct-item i {
+  width: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.pub-acct-item:hover {
+  background: var(--p-light);
+  color: var(--p);
+  text-decoration: none;
+}
+
+.pub-acct-item:hover i { color: var(--p); }
+
+.pub-acct-item.danger { color: var(--red); }
+.pub-acct-item.danger i { color: var(--red); }
+.pub-acct-item.danger:hover { background: var(--red-bg); }
+
+
+/* ══════════════════════════════════════
+   5. NAV TRIGGER BUTTONS
+   ══════════════════════════════════════ */
+
+/* Generic trigger (text links: Buy, Sell, News, Tools) */
+.pub-nav__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  padding: 0;
+  transition: color .18s;
+  white-space: nowrap;
+}
+
+.pub-nav__trigger:hover,
+.pub-nav__trigger.open { color: var(--p); }
+
+.pub-nav__trigger .pub-chevron {
+  font-size: 8px;
+  transition: transform .2s ease;
+  display: inline-block;
+  opacity: .6;
+}
+
+.pub-nav__trigger.open .pub-chevron { transform: rotate(180deg); }
+
+/* My Account pill button */
+.pub-nav__acct-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--p);
+  color: #fff;
+  border-radius: var(--r-md);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  cursor: pointer;
+  border: none;
+  transition: background .18s;
+  white-space: nowrap;
+}
+
+.pub-nav__acct-btn:hover { background: var(--p-dark); }
+
+.pub-nav__acct-btn .pub-chevron {
+  font-size: 8px;
+  transition: transform .2s ease;
+  display: inline-block;
+  opacity: .7;
+}
+
+.pub-nav__acct-btn.open .pub-chevron { transform: rotate(180deg); }
+
+/* Guest sign-in link beside the account button */
+.pub-nav__signin {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+  transition: color .18s;
+  white-space: nowrap;
+}
+
+.pub-nav__signin:hover { color: var(--p); }
+
+
+/* ══════════════════════════════════════
+   6. BROWSE SIDEBAR CARD & INPUTS
+   ══════════════════════════════════════ */
+.browse-sidebar {
+  position: sticky;
+  top: 76px;
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+
+/* Thin scrollbar for sidebar */
+.browse-sidebar::-webkit-scrollbar { width: 4px; }
+.browse-sidebar::-webkit-scrollbar-track { background: transparent; }
+.browse-sidebar::-webkit-scrollbar-thumb {
+  background: #dde3ef;
+  border-radius: 4px;
+}
+
+.sidebar-card {
+  background: var(--white);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  padding: 20px;
+}
+
+.sidebar-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+
+.sidebar-card__title {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-card__title i { color: var(--p); font-size: 13px; }
+
+.sidebar-card__reset {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p);
+  background: var(--p-light);
+  padding: 4px 12px;
+  border-radius: var(--r-full);
+  text-decoration: none;
+  transition: background .15s;
+}
+
+.sidebar-card__reset:hover { background: var(--p-b); text-decoration: none; }
+
+.sidebar-card__footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.filter-section {
+  margin-bottom: 18px;
+}
+
+.filter-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--faint);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* Text search input inside sidebar */
+.search-input-sidebar {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+  font-family: var(--sans);
+}
+
+.search-input-sidebar:focus {
+  border-color: var(--p);
+  box-shadow: 0 0 0 3px rgba(15, 76, 158, .08);
+  background: var(--white);
+}
+
+.search-input-sidebar::placeholder { color: var(--faint); }
+
+/* Wrapper for the search icon overlay */
+.search-input-wrap {
+  position: relative;
+}
+
+.search-input-wrap i {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--faint);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+/* Min / max number inputs (price, mileage) */
+.min-max-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.min-max-sep {
+  color: var(--border2);
+  font-weight: 300;
+  flex-shrink: 0;
+}
+
+.min-max-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, background .15s;
+  font-family: var(--sans);
+}
+
+.min-max-input:focus {
+  border-color: var(--p);
+  background: var(--white);
+}
+
+.min-max-input::placeholder { color: var(--faint); }
+
+/* Select dropdowns (make, province, year, desk, sort) */
+.filter-select {
+  width: 100%;
+  padding: 9px 32px 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  /* Chevron background */
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  color: var(--text);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: border-color .15s, background-color .15s;
+}
+
+.filter-select:focus {
+  border-color: var(--p);
+  background-color: var(--white);
+}
+
+/* Year selects side-by-side */
+.year-row {
+  display: flex;
+  gap: 8px;
+}
+
+.year-row .filter-select { flex: 1; width: auto; }
+
+/* Apply button */
+.filter-apply-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--p);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: background .18s;
+}
+
+.filter-apply-btn:hover { background: var(--p-dark); }
+
+
+/* ══════════════════════════════════════
+   7. BROWSE FILTER CHIPS
+   ══════════════════════════════════════ */
+
+/* Shared chip: condition radio, body-style/fuel/trans/drivetrain checkboxes */
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  padding: 7px 10px;
+  border-radius: var(--r-md);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  transition: border-color .18s, background .18s, color .18s, box-shadow .18s;
+}
+
+.filter-chip:hover {
+  border-color: var(--p);
+  color: var(--p);
+}
+
+.filter-chip.active {
+  background: var(--p);
+  color: var(--white);
+  border-color: var(--p);
+  box-shadow: 0 2px 8px rgba(15, 76, 158, .25);
+}
+
+/* Condition row — equal-width chips */
+.condition-chip-row {
+  display: flex;
+  gap: 6px;
+}
+
+.condition-chip-row .filter-chip { flex: 1; }
+
+/* Multi-select chip rows (body style, fuel, trans, drivetrain) */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Price quick-filter pills (above car grid) */
+.price-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: var(--r-full);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all .18s;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+}
+
+.price-pill:hover {
+  border-color: var(--p);
+  color: var(--p);
+  text-decoration: none;
+}
+
+.price-pill.active {
+  background: var(--p);
+  color: var(--white);
+  border-color: var(--p);
+  box-shadow: 0 2px 8px rgba(15, 76, 158, .22);
+}
+
+
+/* ══════════════════════════════════════
+   8. BROWSE VEHICLE CARD
+   ══════════════════════════════════════ */
+.vehicle-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--white);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: transform .28s cubic-bezier(.2, 0, 0, 1),
+              box-shadow .28s cubic-bezier(.2, 0, 0, 1),
+              border-color .18s;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .04);
+}
+
+.vehicle-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(15, 76, 158, .13);
+  border-color: #c7d6f5;
+  text-decoration: none;
+}
+
+/* Image block */
+.vehicle-card__img {
+  position: relative;
+  height: 195px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.vehicle-card__img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .5s ease;
+}
+
+.vehicle-card:hover .vehicle-card__img img { transform: scale(1.06); }
+
+/* Placeholder when no image */
+.vehicle-card__img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  color: var(--border);
+}
+
+/* Overlay pills on the image */
+.vehicle-card__pill {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--r-full);
+  line-height: 1.5;
+  pointer-events: none;
+}
+
+.vehicle-card__pill--year {
+  top: 12px;
+  left: 12px;
+  background: rgba(0, 0, 0, .55);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-family: var(--font-d);
+  font-weight: 700;
+}
+
+.vehicle-card__pill--province {
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, .95);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+}
+
+.vehicle-card__pill--mileage {
+  bottom: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, .95);
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .10);
+}
+
+.vehicle-card__pill--new {
+  bottom: 12px;
+  left: 12px;
+  background: var(--p);
+  color: #fff;
+  font-family: var(--font-d);
+  font-weight: 700;
+}
+
+.vehicle-card__pill--ev {
+  bottom: 12px;
+  left: 12px;
+  background: var(--green);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Card body */
+.vehicle-card__body { padding: 16px; }
+
+.vehicle-card__name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.vehicle-card__name {
+  font-family: var(--font-d);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.vehicle-card__dealer {
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehicle-card__price {
+  font-family: var(--font-d);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--p);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Desk / verified badge row */
+.vehicle-card__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* Spec pills row */
+.vehicle-card__specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.vehicle-card__spec-pill {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 2px 9px;
+  border-radius: var(--r-full);
+}
+
+.vehicle-card__spec-pill i {
+  margin-right: 4px;
+  font-size: 10px;
+}
+
+
+/* ══════════════════════════════════════
+   9. BROWSE RESULTS BAR
+   ══════════════════════════════════════ */
+.results-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.results-bar__count { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0; }
+
+.results-bar__count-num {
+  font-family: var(--font-d);
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text);
+  margin-right: 6px;
+}
+
+.results-bar__heading { color: var(--faint); font-weight: 400; }
+
+/* Sort form sits inside results bar */
+.sort-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sort-select {
+  /* Inherits .filter-select but width is auto */
+  width: auto;
+  padding: 8px 32px 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: var(--text);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  transition: border-color .15s, background-color .15s;
+}
+
+.sort-select:focus {
+  border-color: var(--p);
+  background-color: var(--white);
+}
+
+
+/* ══════════════════════════════════════
+   10. ACTIVE-FILTER TAGS
+   ══════════════════════════════════════ */
+.active-filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.active-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--p-light);
+  color: var(--p);
+  border: 1px solid var(--p-b);
+  border-radius: var(--r-full);
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.active-filter-tag__dismiss {
+  color: #6b8ad4;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: color .15s;
+}
+
+.active-filter-tag__dismiss:hover { color: var(--p); text-decoration: none; }
+
+
+/* ══════════════════════════════════════
+   11. PRICE QUICK-FILTER ROW
+   ══════════════════════════════════════ */
+.price-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+
+/* ══════════════════════════════════════
+   12. BROWSE CARD BADGES
+   ══════════════════════════════════════ */
+.salesdesk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--p-light);
+  color: var(--p);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--p-b);
+  font-family: var(--font-d);
+  letter-spacing: .01em;
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--gr-bg);
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--gr-b);
+}
+
+
+/* ══════════════════════════════════════
+   13. BROWSE PAGINATION
+   ══════════════════════════════════════ */
+.pagination {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.pagination__page {
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-family: var(--mono);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+  transition: border-color .15s, background .15s, color .15s;
+}
+
+.pagination__page:hover { border-color: var(--p); color: var(--p); text-decoration: none; }
+
+.pagination__page.active {
+  border-color: var(--p);
+  background: var(--p);
+  color: #fff;
+}
+
+.pagination__ellipsis {
+  padding: 8px 6px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+
+/* ══════════════════════════════════════
+   14. BROWSE EMPTY STATE
+   ══════════════════════════════════════ */
+.browse-empty {
+  text-align: center;
+  padding: 5rem 1rem;
+  background: var(--white);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+}
+
+.browse-empty__icon {
+  font-size: 40px;
+  margin-bottom: 14px;
+  display: block;
+  color: var(--border);
+}
+
+.browse-empty__title {
+  font-family: var(--font-d);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.browse-empty__sub {
+  font-size: 13px;
+  color: var(--faint);
+  margin-bottom: 20px;
+}
+
+.browse-empty__reset {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p);
+  text-decoration: none;
+}
+
+.browse-empty__reset:hover { text-decoration: underline; }
+
+
+/* ══════════════════════════════════════
+   15. RESPONSIVE
+   ══════════════════════════════════════ */
+@media (max-width: 960px) {
+  .browse-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .browse-sidebar {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .results-bar__count-num { font-size: 18px; }
+  .vehicle-card__img { height: 160px; }
+}

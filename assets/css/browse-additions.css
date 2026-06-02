@@ -1,0 +1,181 @@
+/**
+ * SalesDesk — browse-additions.css
+ * T1 owns this file.
+ *
+ * Utility classes and missing rules required by browse.css and
+ * layout-public.php that do not belong in global.css or public.css.
+ *
+ * Load order: append to browse.css load, or load immediately after it.
+ * In layout-public.php add:
+ *   <link rel="stylesheet" href="...assets/css/browse-additions.css?v=...">
+ *
+ * Contents:
+ *   1.  Screen-reader only utility (.sr-only)
+ *   2.  Footer brand & links (missing from public.css)
+ *   3.  Mega-nav horizontal divider
+ *   4.  Share sheet sub-title, full-width btn, URL input fix
+ *   5.  pub-mega-panel__inner (Sell panel body padding)
+ *   6.  public.css responsive additions (tablet portrait, landscape fixes)
+ */
+
+
+/* ══════════════════════════════════════
+   1. SCREEN-READER ONLY
+   Used on hidden radio/checkbox inputs
+   inside .filter-chip labels.
+   ══════════════════════════════════════ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ══════════════════════════════════════
+   2. FOOTER BRAND & LINKS
+   ══════════════════════════════════════ */
+.pub-footer__brand {
+  font-family: var(--font-d);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.pub-footer__brand span { color: var(--p); }
+
+.pub-footer__links {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.pub-footer__links a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 12px;
+  transition: color .15s;
+}
+
+.pub-footer__links a:hover { color: var(--p); }
+
+
+/* ══════════════════════════════════════
+   3. MEGA-NAV HORIZONTAL DIVIDER
+   Used in the Sell panel between sections.
+   Also lives in browse.css; this is the
+   canonical definition.
+   ══════════════════════════════════════ */
+.pub-mega-hdivider {
+  height: 1px;
+  background: var(--border);
+  margin: 8px 0;
+  opacity: .5;
+}
+
+
+/* ══════════════════════════════════════
+   4. SHARE SHEET & BUTTON UTILITIES
+   ══════════════════════════════════════ */
+.pub-share-sheet__sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  margin-bottom: 0;
+  line-height: 1.5;
+}
+
+.pub-btn-full {
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  justify-content: center;
+}
+
+/* Flex URL input — prevents overflow in share sheet */
+.pub-share-sheet__url input {
+  flex: 1;
+  min-width: 0;
+}
+
+.pub-share-option {
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+
+
+/* ══════════════════════════════════════
+   5. MEGA PANEL INNER BODY
+   Replaces inline style="padding:4px" on
+   the Sell panel's content wrapper.
+   ══════════════════════════════════════ */
+.pub-mega-panel__inner { padding: 4px; }
+
+
+/* ══════════════════════════════════════
+   6. RESPONSIVE ADDITIONS
+   Fills gaps in public.css for sizes
+   not covered there.
+   ══════════════════════════════════════ */
+
+/* Tablet landscape: two-column detail grid can be 1fr at 900px */
+@media (max-width: 960px) {
+  .pub-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pub-enquiry-sticky { position: static; }
+  .pub-gallery__main { height: 300px; }
+  .pub-breadcrumb { display: none; }
+}
+
+/* Tablet portrait */
+@media (max-width: 768px) {
+  .pub-page-wide,
+  .pub-page-narrow { padding: 16px 16px 48px; }
+
+  .pub-gallery__main { height: 260px; }
+  .pub-car-header__name { font-size: 20px; }
+  .pub-car-header__price { font-size: 22px; }
+
+  /* Footer stacks on mobile */
+  .pub-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 1.25rem 16px;
+  }
+}
+
+/* Mobile portrait */
+@media (max-width: 480px) {
+  .pub-nav__signin { display: none; }
+
+  /* Share sheet: 2-col grid */
+  .pub-share-options { grid-template-columns: repeat(2, 1fr); }
+
+  /* Broker hero stats */
+  .pub-broker-hero__stats { gap: 16px; }
+
+  /* Gallery thumbnails smaller */
+  .pub-gallery__thumb { width: 68px; height: 48px; }
+}
+
+/* Landscape orientation on short phones (e.g. iPhone SE landscape) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .pub-nav { height: 50px; }
+  .pub-mobile-nav { top: 50px; }
+  .pub-page-wide,
+  .pub-page-narrow { padding-top: 12px; }
+}
+
+/* High-res / retina: ensure gallery images are sharp */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .pub-nav__logo { image-rendering: auto; }
+}

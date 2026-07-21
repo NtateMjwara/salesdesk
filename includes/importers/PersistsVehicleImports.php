@@ -79,15 +79,22 @@ trait PersistsVehicleImports
      * hardcoded constant) so an admin changing max_images_per_car takes
      * effect immediately for every importer without a deploy.
      *
+     * @param float|null $deadlineTs Optional wall-clock deadline passed
+     *                               through to ImageRehostService::rehost()
+     *                               (see that file's DEADLINE-1/-2 notes).
+     *                               null (the default) means unlimited —
+     *                               CsvImporter, which has no gateway-
+     *                               timeout concern of its own, never
+     *                               passes one and is unaffected.
      * @return array{image_urls: array<int,string>, source_image_urls: array<int,string>}|null
      *         null means "nothing to update" — no source URLs, unchanged
      *         since last run, or every download in the batch failed.
      */
-    private function rehostImages(string $carUuid, array $sourceImageUrls, array $previousSourceImageUrls): ?array
+    private function rehostImages(string $carUuid, array $sourceImageUrls, array $previousSourceImageUrls, ?float $deadlineTs = null): ?array
     {
         $maxImages = getPlatformConfigInt('max_images_per_car', 10);
         try {
-            return $this->imageRehost->rehost($carUuid, $sourceImageUrls, $previousSourceImageUrls, $maxImages);
+            return $this->imageRehost->rehost($carUuid, $sourceImageUrls, $previousSourceImageUrls, $maxImages, $deadlineTs);
         } catch (Throwable $e) {
             // Image re-hosting must never fail the whole car row.
             error_log('[' . static::class . "] Image re-host failed for car {$carUuid}: " . $e->getMessage());

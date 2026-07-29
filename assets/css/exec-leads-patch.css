@@ -1,0 +1,397 @@
+/**
+ * SalesDesk — exec-leads-patch.css
+ * T3 owns this file.
+ *
+ * PURPOSE:
+ *   Fixes horizontal overflow on app/exec/leads.php.
+ *
+ * ROOT CAUSES identified:
+ *
+ *   1. PAGE-LEVEL OVERFLOW — The .d-split-layout is a flex row. When the
+ *      detail panel (360px, flex-shrink:0) is open alongside the list
+ *      column, the combined width can exceed the viewport. The list column
+ *      has min-width:0 (correct) but .d-roster inside it has min-width:480px
+ *      set in dealer.css. On any viewport narrower than ~860px (480 + 360 +
+ *      gap) this causes the page body to overflow horizontally. Fix: add
+ *      overflow-x:hidden to the page wrapper and cap the split layout
+ *      correctly at each breakpoint.
+ *
+ *   2. TABLE OVERFLOW IN SPLIT MODE — .d-roster-wrap already has
+ *      overflow-x:auto but the browser can only create a scroll context if
+ *      the wrapper itself has a constrained width. When .d-split-layout__main
+ *      is a flex child with min-width:0, the browser should constrain it —
+ *      but the app-body container has no overflow:hidden, so the table's
+ *      min-width:480px bleeds through to the viewport. Fix: explicitly
+ *      set max-width:100% on .d-roster-wrap when inside the split layout,
+ *      and ensure the roster scrolls internally.
+ *
+ *   3. TAB BAR OVERFLOW — 7 status tabs in .d-tab-bar with flex-wrap:nowrap
+ *      and overflow-x:auto. The tab bar itself scrolls correctly but the
+ *      scroll container had no max-width constraint when inside the shrunk
+ *      list column, causing it to set the intrinsic width of the column
+ *      rather than be contained by it. Fix: add max-width:100% to .d-tab-bar
+ *      within this page context.
+ *
+ *   4. DETAIL PANEL STICKY OVERSCROLL — On mobile the sticky panel is
+ *      already disabled by dealer.css at ≤1024px (position:static), but
+ *      the .d-detail-card__body max-height:calc(100vh - 200px) remains,
+ *      which can clip content on short viewports. Fix: remove the max-height
+ *      constraint when stacked (not sticky).
+ *
+ * LOAD ORDER:
+ *   Load this file LAST, after all other dealer patch files, so these
+ *   overrides take effect with correct specificity.
+ *
+ * Sections:
+ *   EL-1.  Page-level overflow containment
+ *   EL-2.  Split layout — constrain list column and table
+ *   EL-3.  Tab bar containment
+ *   EL-4.  Terminal (closed/lost) read-only state
+ *   EL-5.  Detail panel — stacked mobile adjustments
+ *   R-1.   Portrait tablet (≤ 1024px) — stack to single column
+ *   R-2.   Landscape phone (≤ 767px)
+ *   R-3.   Portrait phone (≤ 480px)
+ *   R-4.   Small phone (≤ 390px)
+ *   R-5.   Short landscape orientation guard
+ *   R-6.   Touch / pointer overrides
+ *   R-7.   Reduced motion
+ */
+
+
+/* ══════════════════════════════════════
+   EL-1. PAGE-LEVEL OVERFLOW CONTAINMENT
+   Prevents the split layout or table
+   from pushing the viewport wider than
+   the screen on any device.
+   ══════════════════════════════════════ */
+
+/* The app layout body wrapper — whichever class layout-app.php uses.
+   We use both common variants to be safe. */
+.app-body,
+.app-content,
+.app-main {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+/* The split layout itself must never exceed the viewport.
+   overflow-x only — overflow-y must stay visible so the sticky
+   detail panel (.d-detail-card, position:sticky) can still stick
+   relative to the page scroll, not get clipped by this row. */
+.d-split-layout {
+  max-width: 100%;
+  /* Prevent the flex row from creating implicit horizontal overflow */
+  overflow-x: hidden;
+}
+
+
+/* ══════════════════════════════════════
+   EL-2. SPLIT LAYOUT — CONSTRAIN LIST
+   COLUMN AND TABLE SCROLL CONTEXT
+   ══════════════════════════════════════ */
+
+/* The list column is already flex:1; min-width:0 in dealer.css.
+   Add an explicit width constraint so the browser knows to contain
+   the table rather than expand the column to fit it.
+   IMPORTANT: only overflow-x is hidden here, not overflow-y — the
+   column must still allow normal vertical page scroll for a long
+   leads list. Using overflow-x alone (not the overflow shorthand)
+   keeps vertical content unclipped. */
+.d-split-layout__main {
+  /* Width is whatever flex gives it, but never more than the
+     available space minus the panel width and gap */
+  min-width: 0;
+  overflow-x: hidden; /* creates a block formatting context, horizontal only */
+  width: 0; /* combined with flex:1 this forces the column to shrink */
+}
+
+/* The roster wrap MUST scroll internally — not push the parent wider */
+.d-split-layout__main .d-roster-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Critical: the wrapper must be constrained to the column width */
+  max-width: 100%;
+  width: 100%;
+}
+
+/* Ensure the table itself can be narrower than its min-width
+   when inside the split layout — the wrapper scrolls to compensate */
+.d-split-layout__main .d-roster {
+  /* min-width:480px from dealer.css stays — the wrapper scrolls.
+     But we add a max-width guard so on very wide screens it doesn't
+     stretch unnecessarily. */
+  max-width: none; /* allow table to be as wide as its content needs */
+}
+
+
+/* ══════════════════════════════════════
+   EL-3. TAB BAR CONTAINMENT
+   7 tabs × ~90px each = ~630px intrinsic
+   width. The tab bar must scroll within
+   the list column, not set its width.
+   ══════════════════════════════════════ */
+
+.d-split-layout__main .d-tab-bar {
+  max-width: 100%;
+  /* Already has overflow-x:auto from dealer.css — this ensures
+     it is actually constrained by the column, not the other way. */
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Search row also needs containment */
+.d-split-layout__main .d-search-row {
+  max-width: 100%;
+}
+
+.d-split-layout__main .d-search-row .finput {
+  /* Allow the input to shrink fully so it doesn't push the row wide */
+  min-width: 0;
+  flex: 1;
+  max-width: none;
+}
+
+
+/* ══════════════════════════════════════
+   EL-4. TERMINAL STATE — READ-ONLY VIEW
+   Shown in the detail panel when a lead
+   is already closed or lost.
+   ══════════════════════════════════════ */
+
+.d-lead-terminal {
+  text-align: center;
+  padding: 14px 0 8px;
+}
+
+.d-lead-terminal__notes {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 10px;
+  font-style: italic;
+  line-height: 1.6;
+  text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 9px 11px;
+  word-break: break-word;
+  /* Prevent long notes from overflowing the detail panel */
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+
+/* ══════════════════════════════════════
+   EL-5. DETAIL PANEL — STACKED MOBILE
+   When the panel stacks below the list
+   (≤ 1024px), remove the sticky
+   positioning and height cap that caused
+   content clipping on short viewports.
+   ══════════════════════════════════════ */
+
+/* Base: already non-sticky below 1024px via dealer.css §14.
+   These additions fix the body height clipping. */
+
+
+/* ══════════════════════════════════════
+   R-1. PORTRAIT TABLET (≤ 1024px)
+   List and detail stack vertically.
+   The split layout reverts to single
+   column — no overflow possible.
+   ══════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  /* Stack the split layout */
+  .d-split-layout {
+    flex-direction: column;
+    overflow: visible; /* restore — no horizontal overflow risk when stacked */
+  }
+
+  .d-split-layout__main {
+    width: 100%;
+    overflow: visible; /* restore scroll to normal flow */
+  }
+
+  .d-detail-panel {
+    width: 100%;
+  }
+
+  /* Detail card: static, full height */
+  .d-detail-card {
+    position: static;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .d-detail-card__body {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  /* Tab bar: full width, still scrollable */
+  .d-split-layout__main .d-tab-bar {
+    max-width: 100%;
+  }
+
+  /* Roster wrap: standard width, internal scroll still active */
+  .d-split-layout__main .d-roster-wrap {
+    max-width: 100%;
+  }
+
+  /* Hide secondary table columns to reduce table min-width pressure */
+  .d-roster .d-hide-sm,
+  .d-roster th.d-hide-sm {
+    display: none;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   R-2. LANDSCAPE PHONE (≤ 767px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* Tab bar: tighten individual tab padding */
+  .d-tab { padding: 5px 9px; font-size: 11px; }
+
+  /* Search row: full width input */
+  .d-search-row .finput {
+    max-width: none;
+    width: 100%;
+  }
+
+  /* Roster: tighter cell padding */
+  .d-roster td { padding: 11px 12px; }
+  .d-roster th { padding: 9px 12px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-3. PORTRAIT PHONE (≤ 480px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* Tab bar: smallest tab size */
+  .d-tab { padding: 5px 8px; font-size: 10px; }
+
+  /* Roster cells: tightest padding */
+  .d-roster td { padding: 10px 10px; font-size: 12px; }
+  .d-roster th { padding: 8px 10px; font-size: 9px; }
+
+  /* Status pill: ensure it doesn't overflow cell */
+  .d-status-pill { font-size: 9px; padding: 2px 7px; }
+
+  /* Detail card body: allow full height on phones */
+  .d-detail-card__body {
+    max-height: none;
+    overflow-y: visible;
+  }
+
+  /* Search row: stack vertically on portrait phone */
+  .d-search-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .d-search-row .btn { width: 100%; }
+}
+
+
+/* ══════════════════════════════════════
+   R-4. SMALL PHONE (≤ 390px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 390px) {
+  .d-tab { padding: 4px 7px; font-size: 10px; }
+
+  .d-roster td { padding: 9px 9px; font-size: 11px; }
+  .d-roster th { padding: 7px 9px; font-size: 9px; letter-spacing: .04em; }
+
+  /* Status pill: absolute minimum */
+  .d-status-pill { font-size: 9px; padding: 2px 6px; letter-spacing: .02em; }
+
+  /* Buyer name: slightly smaller */
+  .d-lead-buyer-name  { font-size: 12px; }
+  .d-lead-buyer-phone { font-size: 10px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-5. SHORT LANDSCAPE ORIENTATION GUARD
+   (max-height ≤ 500px, landscape)
+   Phones in landscape — wide enough that
+   the split layout can work side by side,
+   but the viewport height is short so
+   the sticky panel must not overflow.
+   ══════════════════════════════════════ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Restore side-by-side split on landscape phones */
+  .d-split-layout {
+    flex-direction: row;
+    overflow-x: hidden;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .d-split-layout__main {
+    flex: 1;
+    min-width: 0;
+    width: 0;
+    overflow-x: hidden;
+  }
+
+  .d-detail-panel {
+    width: 280px;
+    flex-shrink: 0;
+  }
+
+  /* Panel not sticky in landscape — viewport too short */
+  .d-detail-card {
+    position: static;
+  }
+
+  /* Panel body: cap at viewport height minus nav */
+  .d-detail-card__body {
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Tab bar: tightest in landscape */
+  .d-tab { padding: 4px 8px; font-size: 10px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-6. TOUCH / POINTER OVERRIDES
+   Remove stuck hover states on iOS.
+   ══════════════════════════════════════ */
+
+@media (hover: none) and (pointer: coarse) {
+  .d-roster tr.d-roster__row:hover td { background: transparent; }
+  .d-roster tr.d-roster__row:active td { background: var(--bg); }
+
+  /* Larger tap target on tab bar items */
+  .d-tab { min-height: 40px; }
+
+  /* Stage labels: no hover — active only */
+  .d-stage-label:hover { border-color: var(--border); background: var(--bg); }
+  .d-stage-label:active { border-color: var(--p-b); background: var(--p-light); }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .d-roster tr.d-roster__row:hover td { background: var(--bg); }
+  .d-stage-label:hover { border-color: var(--p-b); background: var(--p-light); }
+}
+
+
+/* ══════════════════════════════════════
+   R-7. REDUCED MOTION
+   ══════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .d-stage-label,
+  .d-tab { transition: none; }
+}

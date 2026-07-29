@@ -1,0 +1,866 @@
+/**
+ * SalesDesk — dealer-dashboard-patch.css
+ * T3 owns this file. Append to dealer.css load order in layout-app.php,
+ * OR concatenate directly into dealer.css after section 10 (Settings).
+ *
+ * PURPOSE:
+ *   Provides all semantic classes referenced by the refactored:
+ *     — app/dealer/dashboard.php
+ *     — app/exec/dashboard.php
+ *     — app/exec/settings.php
+ *
+ *   Replaces every inline style= that was causing overflow and
+ *   non-responsive behaviour on mobile. No inline styles remain
+ *   in those files after this patch is applied.
+ *
+ * Sections:
+ *   DB-1.  Dashboard page header
+ *   DB-2.  Dashboard main grid (leads + listings columns)
+ *   DB-3.  Lead list rows (replaces onmouseover/onmouseout)
+ *   DB-4.  Listing mini-rows (inside the right-column card)
+ *   DB-5.  Team quick-stat card
+ *   DB-6.  View-all footer row
+ *   DB-7.  KPI card — missing teal token fix
+ *   ST-1.  Settings — avatar file input hiding
+ *   ST-2.  Settings — plain subtitle
+ *   ST-3.  frow mobile stack (global .frow override for mobile)
+ *   R-1.   Responsive — wide desktop (≥ 1400px)
+ *   R-2.   Responsive — landscape tablet / small laptop (≤ 1279px)
+ *   R-3.   Responsive — portrait tablet (≤ 1024px)
+ *   R-4.   Responsive — landscape phone (≤ 767px)
+ *   R-5.   Responsive — portrait phone (≤ 480px)
+ *   R-6.   Responsive — small phone (≤ 390px)
+ *   R-7.   Responsive — very small phone (≤ 360px)
+ *   R-8.   Orientation — short landscape (max-height guard)
+ *   R-9.   Touch / pointer overrides
+ *   R-10.  Reduced motion
+ *   R-11.  Print
+ */
+
+
+/* ══════════════════════════════════════
+   DB-1. DASHBOARD PAGE HEADER
+   ══════════════════════════════════════ */
+
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 1.75rem;
+  /* Wrap so actions drop below greeting on narrow screens */
+  flex-wrap: wrap;
+}
+
+.dash-header__text { min-width: 0; flex: 1; }
+
+/* Greeting headline — clamp prevents overflow on narrow screens */
+.page-header__greeting {
+  font-family: var(--serif);
+  font-size: clamp(1.2rem, 4vw, 1.65rem);
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 5px;
+  /* Prevent very long names from overflowing */
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page-header__greeting em { font-style: italic; }
+
+/* Page title variant (settings) */
+.page-header__title {
+  font-family: var(--serif);
+  font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+  font-weight: 300;
+  color: var(--text);
+  line-height: 1.2;
+  margin-bottom: 5px;
+}
+
+.page-header__title em { font-style: italic; }
+
+/* Sub-line: badge + dealer name + city */
+.dash-header__sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+  /* Prevent sub overflowing card on narrow screens */
+  min-width: 0;
+}
+
+.dash-header__dealer-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* Truncate very long dealership names */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(260px, 55vw);
+}
+
+.dash-header__dealer-name i { font-size: 11px; color: var(--faint); flex-shrink: 0; }
+
+.dash-header__city {
+  color: var(--faint);
+  font-size: 12px;
+  /* Hide on very small screens — non-critical info */
+}
+
+/* Plain sub for settings header */
+.dash-header__sub-plain {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.5;
+}
+
+/* Actions strip (buttons) */
+.dash-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  /* Align to top-right; on narrow screens it wraps below the heading */
+  margin-top: 2px;
+}
+
+/* Label text inside the primary "List a car" button */
+.dash-btn-label {
+  /* Hidden on very small screens — icon alone is sufficient */
+}
+
+
+/* ══════════════════════════════════════
+   DB-2. DASHBOARD MAIN GRID
+   3fr / 2fr on desktop → single column
+   on tablet/phone via media queries.
+   ══════════════════════════════════════ */
+
+.dash-main-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.dash-leads-col    { min-width: 0; }
+.dash-listings-col { min-width: 0; }
+
+/* Card that wraps the listings mini-list */
+.dash-listings-card {
+  overflow: hidden;
+  /* Prevent card expanding past its column */
+  min-width: 0;
+}
+
+
+/* ══════════════════════════════════════
+   DB-3. LEAD LIST ROWS
+   Replaces onmouseover/onmouseout JS.
+   Full-bleed anchor with intent dot,
+   buyer info, and status/age on the right.
+   ══════════════════════════════════════ */
+
+.dash-lead-list { border-radius: var(--r-xl); overflow: hidden; }
+
+.dash-lead-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  /* CSS transition — no JS hover needed */
+  transition: background .12s;
+  /* Prevent any child from overflowing the row */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dash-lead-row:last-of-type { border-bottom: none; }
+.dash-lead-row:hover  { background: var(--bg); text-decoration: none; }
+.dash-lead-row:active { background: var(--p-light); }
+.dash-lead-row:focus-visible {
+  outline: 2px solid var(--p);
+  outline-offset: -2px;
+}
+
+/* Intent dot */
+.dash-intent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dash-intent--hot  { background: var(--green); }
+.dash-intent--warm { background: var(--amber); }
+.dash-intent--cool { background: var(--faint); }
+
+/* Centre info block */
+.dash-lead-row__info {
+  flex: 1;
+  min-width: 0; /* critical — allows text-overflow: ellipsis to fire */
+}
+
+.dash-lead-row__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  /* Truncate long names — was causing overflow */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-lead-row__meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-lead-row__sep {
+  margin: 0 3px;
+  color: var(--border2);
+}
+
+/* Right: status + age */
+.dash-lead-row__right {
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+
+.dash-lead-status {
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* Status colour map */
+.dash-status--new         { color: var(--p); }
+.dash-status--contacted   { color: var(--amber); }
+.dash-status--testdrive,
+.dash-status--test_drive  { color: var(--teal); }
+.dash-status--negotiation { color: var(--purple); }
+.dash-status--closed      { color: var(--green); }
+.dash-status--lost        { color: var(--faint); }
+
+.dash-lead-row__age {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* View-all footer inside the list */
+.dash-view-all-row {
+  padding: 10px 16px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+.dash-view-all-link {
+  font-size: 12px;
+  color: var(--p);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.dash-view-all-link:hover { text-decoration: underline; }
+
+
+/* ══════════════════════════════════════
+   DB-4. LISTING MINI-ROWS
+   Used in both dealer + exec dashboards.
+   Fixed-width thumbnail + info + badge/leads.
+   ══════════════════════════════════════ */
+
+.dash-listing-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  /* Prevent overflow */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dash-listing-row:last-of-type { border-bottom: none; }
+
+/* Add-listing footer row variant */
+.dash-listing-row--add {
+  justify-content: center;
+  padding: 10px 14px;
+}
+
+/* Thumbnail */
+.dash-listing-row__thumb {
+  width: 44px;
+  height: 36px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: var(--faint);
+}
+
+.dash-listing-row__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Icon-only variant (exec, no image) */
+.dash-listing-row__thumb--icon { background: var(--bg); }
+
+/* Info block */
+.dash-listing-row__info {
+  flex: 1;
+  min-width: 0; /* allows truncation */
+}
+
+.dash-listing-row__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-listing-row__price-row {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dash-listing-row__comm { color: var(--green); }
+
+/* Right: badge + lead count */
+.dash-listing-row__right {
+  flex-shrink: 0;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.dash-listing-row__leads {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+
+/* ══════════════════════════════════════
+   DB-5. TEAM QUICK-STAT CARD
+   ══════════════════════════════════════ */
+
+.dash-team-card {
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.dash-team-card__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dash-team-card__text { min-width: 0; }
+
+.dash-team-card__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.dash-team-card__sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.dash-team-card__pending { color: var(--amber); }
+
+
+/* ══════════════════════════════════════
+   DB-7. KPI CARD — TEAL TOKEN FIX
+   --teal and --teal-bg were missing from
+   global.css in some build environments.
+   These fallbacks ensure the exec pipeline
+   KPI card always renders correctly.
+   ══════════════════════════════════════ */
+
+:root {
+  /* Guard: define if not already present */
+  --teal:    var(--teal,    #0d7377);
+  --teal-bg: var(--teal-bg, #f0fdfa);
+  --teal-b:  var(--teal-b,  #99f6e4);
+}
+
+/* Explicit teal KPI icon backing — overrides any env where
+   --teal-bg falls back to a bad value */
+.kpi-card__bg-icon--teal {
+  background: #f0fdfa;
+  color: #0d7377;
+}
+
+
+/* ══════════════════════════════════════
+   ST-1. SETTINGS — AVATAR FILE INPUT
+   Visually hidden but keyboard-accessible.
+   ══════════════════════════════════════ */
+
+.d-avatar-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ══════════════════════════════════════
+   ST-2. SETTINGS — AVATAR UPLOAD INFO
+   ══════════════════════════════════════ */
+
+.d-avatar-upload-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Allows it to grow and push the hint below the button */
+  min-width: 0;
+}
+
+
+/* ══════════════════════════════════════
+   ST-3. FROW GLOBAL MOBILE STACK
+   .frow is defined in components.css as a
+   2-col grid. On mobile it must collapse
+   to a single column. This override lives
+   here so components.css stays untouched.
+   ══════════════════════════════════════ */
+
+@media (max-width: 540px) {
+  .frow {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   R-1. WIDE DESKTOP (≥ 1400px)
+   ══════════════════════════════════════ */
+
+@media (min-width: 1400px) {
+  .dash-main-grid {
+    grid-template-columns: 3fr 2fr;
+    gap: 2rem;
+  }
+
+  .dash-header__dealer-name { max-width: 340px; }
+
+  .page-header__greeting { font-size: 1.75rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-2. LANDSCAPE TABLET / SMALL LAPTOP
+        (≤ 1279px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 1279px) and (min-width: 1025px) {
+  .dash-main-grid {
+    grid-template-columns: 3fr 2fr;
+    gap: 1.25rem;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   R-3. PORTRAIT TABLET (≤ 1024px)
+   KPI goes 2×2; main grid stays 2-col
+   but with equal columns.
+   ══════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  /* KPI: 2×2 */
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Main grid: equal halves — both panels readable */
+  .dash-main-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  /* Settings layout: single column */
+  .d-settings-layout  { grid-template-columns: 1fr; }
+  .d-settings-sidebar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .d-settings-info-card { flex: 1; min-width: 220px; }
+
+  /* Avatar row: keep horizontal */
+  .d-avatar-row { flex-direction: row; }
+}
+
+
+/* ══════════════════════════════════════
+   R-4. LANDSCAPE PHONE (≤ 767px)
+   Main grid stacks; KPI stays 2×2.
+   ══════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* KPI: 2×2, tighter */
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+
+  .kpi-card { padding: 14px 14px 12px; }
+  .kpi-card__value { font-size: 24px; }
+  .kpi-card__bg-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 16px;
+    border-radius: 0 var(--r-xl) 0 46px;
+  }
+
+  /* Main grid: single column — listings appear below leads */
+  .dash-main-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  /* Header: actions wrap naturally */
+  .dash-header {
+    gap: 10px;
+    margin-bottom: 1.25rem;
+  }
+
+  .page-header__greeting { font-size: clamp(1.15rem, 5vw, 1.4rem); }
+
+  /* Truncate dealer name more aggressively */
+  .dash-header__dealer-name { max-width: 180px; }
+
+  /* Settings: sidebar becomes single column */
+  .d-settings-sidebar { flex-direction: column; }
+  .d-settings-info-card { min-width: unset; }
+  .d-settings-section { padding: 1.25rem; }
+
+  /* Avatar row: stays horizontal on landscape phone — still enough width */
+  .d-avatar-row { flex-direction: row; align-items: flex-start; }
+
+  /* frow already overridden at 540px — no change needed here */
+}
+
+
+/* ══════════════════════════════════════
+   R-5. PORTRAIT PHONE (≤ 480px)
+   Everything single-column. KPI 2×2 with
+   compressed values. Settings stack fully.
+   ══════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* KPI values smaller to avoid overflow */
+  .kpi-card  { padding: 12px 12px 10px; }
+  .kpi-card__value  { font-size: 22px; }
+  .kpi-card__label  { font-size: 11px; }
+  .kpi-card__sub    { font-size: 10px; }
+
+  /* Corner icon: smaller on tight cards */
+  .kpi-card__bg-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 14px;
+    border-radius: 0 var(--r-xl) 0 42px;
+  }
+
+  /* Header */
+  .dash-header { margin-bottom: 1rem; }
+  .page-header__greeting { font-size: clamp(1.05rem, 5.5vw, 1.25rem); }
+
+  /* Hide city on portrait phone — not enough horizontal space */
+  .dash-header__city { display: none; }
+
+  /* "List a car" button: keep icon, hide label text on very small screens */
+  .dash-btn-label { display: none; }
+
+  /* Lead rows: reduce padding */
+  .dash-lead-row { padding: 10px 12px; gap: 10px; }
+  .dash-lead-row__name { font-size: 12px; }
+  .dash-lead-row__meta { font-size: 10px; }
+
+  /* Listing rows */
+  .dash-listing-row { padding: 10px 12px; gap: 8px; }
+  .dash-listing-row__thumb { width: 38px; height: 32px; font-size: 14px; }
+  .dash-listing-row__name  { font-size: 11px; }
+
+  /* Settings: single-column sidebar */
+  .d-settings-sidebar { flex-direction: column; gap: 10px; }
+  .d-settings-section { padding: 1rem; }
+  .d-settings-card    { border-radius: var(--r-lg); }
+
+  /* Avatar: stack vertically on portrait phone */
+  .d-avatar-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  /* Account detail rows: allow email to wrap */
+  .d-account-detail-row__val {
+    font-size: 10px;
+    max-width: 180px;
+    white-space: normal;
+    word-break: break-all;
+    text-align: right;
+  }
+
+  /* Section head: tighten */
+  .d-section-head { margin-bottom: .625rem; padding-bottom: .5rem; }
+  .d-section-head__title { font-size: 13px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-6. SMALL PHONE (≤ 390px)
+   Covers iPhone SE (3rd gen), Galaxy A-series.
+   ══════════════════════════════════════ */
+
+@media (max-width: 390px) {
+  /* KPI: squeeze values */
+  .kpi-card  { padding: 10px 10px 9px; }
+  .kpi-card__value  { font-size: 20px; }
+  .kpi-card__bg-icon { width: 38px; height: 38px; font-size: 13px; }
+
+  /* Lead rows: tightest */
+  .dash-lead-row { padding: 9px 10px; gap: 8px; }
+
+  /* Listing rows */
+  .dash-listing-row { padding: 9px 10px; }
+  .dash-listing-row__thumb { width: 34px; height: 28px; font-size: 12px; }
+
+  /* Header actions: stack if needed */
+  .dash-header__actions { gap: 6px; }
+
+  /* Settings */
+  .d-settings-section { padding: 0.875rem; }
+  .d-settings-info-card { padding: 1rem 1.125rem; }
+
+  /* Avatar preview: slightly smaller */
+  .d-avatar-preview { width: 60px; height: 60px; font-size: 18px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-7. VERY SMALL PHONE (≤ 360px)
+   Covers older budget Androids.
+   ══════════════════════════════════════ */
+
+@media (max-width: 360px) {
+  /* Hide KPI corner icon — reclaim space */
+  .kpi-card__bg-icon { display: none; }
+  .kpi-card  { padding: 10px 9px 8px; }
+  .kpi-card__value { font-size: 19px; }
+
+  /* KPI strip gap tightest */
+  .kpi-strip { gap: 6px; }
+
+  /* Greeting: smallest clamp floor */
+  .page-header__greeting { font-size: 1.0rem; }
+
+  /* Dealer name: minimal truncation width */
+  .dash-header__dealer-name { max-width: 130px; }
+
+  /* Lead row: minimal */
+  .dash-lead-row { padding: 8px 10px; gap: 7px; }
+  .dash-lead-row__name { font-size: 11px; }
+  .dash-lead-row__age  { font-size: 10px; }
+  .dash-lead-status    { font-size: 9px; }
+
+  /* Listing row */
+  .dash-listing-row { padding: 8px 10px; }
+
+  /* Settings form */
+  .d-settings-section { padding: 0.75rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-8. ORIENTATION — SHORT LANDSCAPE
+   (max-height ≤ 500px, orientation landscape)
+   Landscape phones: compact everything
+   vertically without losing columns.
+   ══════════════════════════════════════ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Keep 4-col KPI in landscape — avoids stacking into a tall block */
+  .kpi-strip {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+
+  .kpi-card { padding: 10px 12px 8px; }
+  .kpi-card__value { font-size: 20px; }
+  .kpi-card__bg-icon { width: 38px; height: 38px; font-size: 13px; }
+  .kpi-card__sub { display: none; } /* hide sub on landscape — save vertical space */
+
+  /* Main grid: restore 2-col in short landscape */
+  .dash-main-grid {
+    grid-template-columns: 3fr 2fr;
+    gap: 1rem;
+  }
+
+  /* Header: compact */
+  .dash-header { margin-bottom: 1rem; }
+  .page-header__greeting { font-size: 1.1rem; }
+
+  /* Settings: 2-col even on landscape phone */
+  .d-settings-layout { grid-template-columns: 1fr 280px; }
+  .d-settings-sidebar { flex-direction: column; }
+  .d-settings-section { padding: 1rem 1.25rem; }
+
+  /* Avatar row: always horizontal in landscape */
+  .d-avatar-row { flex-direction: row; }
+  /* frow: restore 2-col in landscape */
+  .frow { grid-template-columns: 1fr 1fr; }
+}
+
+/* Galaxy Z Flip / very short landscape */
+@media (max-height: 380px) and (orientation: landscape) {
+  .kpi-card__bg-icon { display: none; }
+  .kpi-card { padding: 8px 10px 6px; }
+  .kpi-card__value { font-size: 18px; }
+
+  .dash-header { margin-bottom: 0.75rem; }
+  .page-header__greeting { font-size: 1rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-9. TOUCH / POINTER OVERRIDES
+   Remove "stuck" hover states on touch.
+   Provide :active feedback instead.
+   ══════════════════════════════════════ */
+
+@media (hover: none) and (pointer: coarse) {
+  /* Lead rows */
+  .dash-lead-row:hover  { background: transparent; }
+  .dash-lead-row:active { background: var(--bg); }
+
+  /* KPI cards */
+  .kpi-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border); }
+
+  /* Team card inner */
+  .dash-team-card__inner:hover { background: transparent; }
+
+  /* View-all link: larger tap target */
+  .dash-view-all-link {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: -8px -16px;
+  }
+
+  /* Section action link: larger tap area */
+  .d-section-head__action {
+    padding: 6px 0;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Fine-pointer / mouse: restore standard hover */
+@media (hover: hover) and (pointer: fine) {
+  .dash-lead-row:hover { background: var(--bg); }
+}
+
+
+/* ══════════════════════════════════════
+   R-10. REDUCED MOTION
+   ══════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-lead-row,
+  .kpi-card {
+    transition: none;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   R-11. PRINT
+   ══════════════════════════════════════ */
+
+@media print {
+  /* Header: no action buttons */
+  .dash-header__actions { display: none !important; }
+
+  /* KPI: 4-col, no shadows or icons */
+  .kpi-strip { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+  .kpi-card__bg-icon { display: none !important; }
+  .kpi-card { box-shadow: none !important; border: 1px solid #ccc !important; }
+
+  /* Main grid: side by side in print */
+  .dash-main-grid { grid-template-columns: 3fr 2fr !important; gap: 1rem !important; }
+
+  /* No hover link effects */
+  .dash-lead-row { border-bottom: 1px solid #eee !important; }
+  .dash-view-all-row { display: none !important; }
+
+  /* Settings: single column, no sidebar */
+  .d-settings-layout  { grid-template-columns: 1fr !important; }
+  .d-settings-sidebar { display: none !important; }
+  .d-settings-section { padding: 1rem !important; }
+
+  /* Avoid breaking cards across pages */
+  .kpi-card,
+  .dash-listing-row,
+  .dash-lead-row { break-inside: avoid; }
+}

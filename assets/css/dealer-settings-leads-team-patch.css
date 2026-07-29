@@ -1,0 +1,613 @@
+/**
+ * SalesDesk — dealer-settings-leads-team-patch.css
+ * T3 owns this file. Load after dealer.css, dealer-dashboard-patch.css,
+ * and dealer-analytics-patch.css in layout-app.php, or concatenate into
+ * dealer.css after section 10.
+ *
+ * PURPOSE:
+ *   Provides every semantic class referenced by the refactored:
+ *     — app/dealer/settings.php
+ *     — app/dealer/leads.php
+ *     — app/dealer/team.php
+ *
+ *   These three pages shared the same root problem as the dashboards:
+ *   layout-critical rules (grid-template-columns, flex direction, sticky
+ *   positioning) were written as inline style= attributes, so the media
+ *   queries already shipped in dealer.css never had a chance to fire.
+ *   team.php additionally had its own page-scoped <style> block that
+ *   duplicated dealer.css classes under different names with no mobile
+ *   breakpoints at all — that block has been deleted from the PHP file;
+ *   this patch is the only source of truth for those styles now.
+ *
+ * Sections:
+ *   ST-4.  Settings shell (sidebar nav + content, replaces 200px/1fr grid)
+ *   ST-5.  Settings nav links + pending dot
+ *   ST-6.  Card heading / sub helper classes
+ *   ST-7.  CIPC verification status block
+ *   ST-8.  Avatar row bordered variant + square preview (logo)
+ *   ST-9.  Profile actions row
+ *   LD-1.  Search row (leads page)
+ *   LD-2.  Roster: hide-on-small column utility
+ *   LD-3.  Detail panel action row + mark-as-lost button
+ *   LD-4.  Modal breakdown rows (close-deal commission summary)
+ *   TM-1.  (uses existing .d-team-stat-strip / .d-exec-card from dealer.css —
+ *          no new base classes needed, only responsive additions below)
+ *   R-1.   Wide desktop (≥ 1400px)
+ *   R-2.   Landscape tablet / small laptop (≤ 1279px)
+ *   R-3.   Portrait tablet (≤ 1024px)
+ *   R-4.   Landscape phone (≤ 767px)
+ *   R-5.   Portrait phone (≤ 480px)
+ *   R-6.   Small phone (≤ 390px)
+ *   R-7.   Very small phone (≤ 360px)
+ *   R-8.   Short landscape orientation guard
+ *   R-9.   Touch / pointer overrides
+ *   R-10.  Reduced motion
+ *   R-11.  Print
+ */
+
+
+/* ══════════════════════════════════════
+   ST-4. SETTINGS SHELL
+   Replaces the inline
+   style="display:grid;grid-template-columns:200px 1fr"
+   that never collapsed on mobile. Desktop:
+   sidebar nav + content side by side.
+   Tablet/mobile: nav becomes a horizontal
+   scrollable tab strip above the content.
+   ══════════════════════════════════════ */
+
+.d-settings-shell {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.d-settings-content { min-width: 0; }
+
+
+/* ══════════════════════════════════════
+   ST-5. SETTINGS NAV LINKS
+   ══════════════════════════════════════ */
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px;
+}
+
+.settings-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: background .15s, color .15s;
+  position: relative;
+  /* Comfortable tap target */
+  min-height: 40px;
+}
+
+.settings-nav-link:hover { background: var(--bg); color: var(--text); text-decoration: none; }
+
+.settings-nav-link.active {
+  background: var(--p-light);
+  color: var(--p);
+  font-weight: 600;
+}
+
+.snl-icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.snl-dot {
+  margin-left: auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+}
+
+
+/* ══════════════════════════════════════
+   ST-6. CARD HEADING / SUB HELPERS
+   Replaces inline
+   style="font-family:var(--serif);font-size:1.2rem;font-weight:300"
+   repeated on every settings section heading.
+   ══════════════════════════════════════ */
+
+.d-card-heading {
+  font-family: var(--serif);
+  font-size: clamp(1.05rem, 3vw, 1.2rem);
+  font-weight: 300;
+  margin-bottom: 1.25rem;
+  line-height: 1.3;
+}
+
+.d-card-heading em { font-style: italic; }
+
+.d-card-sub {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+  line-height: 1.6;
+}
+
+
+/* ══════════════════════════════════════
+   ST-7. CIPC VERIFICATION STATUS BLOCK
+   Replaces the inline-styled status row
+   (icon + text + "view doc" button) that
+   squeezed the button to nothing at 320px.
+   Stacks vertically on mobile.
+   ══════════════════════════════════════ */
+
+.cipc-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  margin-bottom: 1.5rem;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.cipc-block--gr  { background: var(--gr-bg);   border-color: var(--gr-b); }
+.cipc-block--amb { background: var(--amb-bg);  border-color: var(--amb-b); }
+.cipc-block--red { background: var(--red-bg);  border-color: var(--red-b); }
+.cipc-block--neu { background: var(--bg);      border-color: var(--border); }
+
+.cipc-block-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: rgba(255,255,255,.55);
+}
+
+.cipc-block--gr  .cipc-block-icon { color: var(--green); }
+.cipc-block--amb .cipc-block-icon { color: var(--amber); }
+.cipc-block--red .cipc-block-icon { color: var(--red); }
+.cipc-block--neu .cipc-block-icon { color: var(--faint); }
+
+.cipc-block-info { flex: 1; min-width: 160px; }
+
+.cipc-block-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.cipc-block--gr  .cipc-block-title { color: var(--green); }
+.cipc-block--amb .cipc-block-title { color: var(--amber); }
+.cipc-block--red .cipc-block-title { color: var(--red); }
+.cipc-block--neu .cipc-block-title { color: var(--faint); }
+
+.cipc-block-sub {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.55;
+}
+
+.cipc-block-date {
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 3px;
+}
+
+.cipc-block-action {
+  flex-shrink: 0;
+  text-decoration: none;
+  /* On mobile this becomes full-width — see R-5 */
+}
+
+
+/* ══════════════════════════════════════
+   ST-8. AVATAR ROW VARIANTS
+   Bordered variant (company logo section)
+   + square preview (logo isn't a person,
+   shouldn't be a circle).
+   ══════════════════════════════════════ */
+
+.d-avatar-row--bordered {
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.d-avatar-preview--square {
+  border-radius: var(--r-lg);
+}
+
+
+/* ══════════════════════════════════════
+   ST-9. PROFILE ACTIONS ROW
+   Save + change-password buttons.
+   ══════════════════════════════════════ */
+
+.d-profile-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+
+/* ══════════════════════════════════════
+   LD-1. SEARCH ROW (leads page)
+   ══════════════════════════════════════ */
+
+.d-search-row {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.d-search-row .finput {
+  max-width: 260px;
+  flex: 1;
+  min-width: 160px;
+}
+
+
+/* ══════════════════════════════════════
+   LD-2. ROSTER: HIDE-ON-SMALL COLUMN
+   Generic utility, reused by analytics
+   patch too — defined once, here, since
+   leads.php is the first page to need it
+   below the tablet breakpoint.
+   ══════════════════════════════════════ */
+
+.d-hide-sm { /* visible by default; hidden in R-4 below */ }
+
+
+/* ══════════════════════════════════════
+   LD-3. DETAIL PANEL ACTION ROW
+   ══════════════════════════════════════ */
+
+.d-detail-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.d-detail-actions .btn { flex: 1; min-width: 100px; }
+
+.d-mark-lost-btn {
+  width: 100%;
+  margin-top: 6px;
+  color: var(--faint);
+}
+
+
+/* ══════════════════════════════════════
+   LD-4. MODAL BREAKDOWN ROWS
+   Used in the "close deal" commission
+   summary modal. Generic enough to reuse
+   anywhere a key/value breakdown is shown
+   inside a modal.
+   ══════════════════════════════════════ */
+
+.d-modal-breakdown {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px;
+  margin-bottom: 1rem;
+}
+
+.d-modal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.d-modal-row:last-child { margin-bottom: 0; }
+
+.d-modal-row--total {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.d-modal-row__key {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.d-modal-row__key--strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.d-modal-row__val {
+  font-size: 13px;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.d-modal-row__val--neg { color: var(--red); }
+
+.d-modal-row__val--total {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+
+/* ══════════════════════════════════════
+   R-1. WIDE DESKTOP (≥ 1400px)
+   ══════════════════════════════════════ */
+
+@media (min-width: 1400px) {
+  .d-settings-shell { grid-template-columns: 220px 1fr; gap: 2rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-2. LANDSCAPE TABLET / SMALL LAPTOP
+        (≤ 1279px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 1279px) and (min-width: 1025px) {
+  .d-settings-shell { grid-template-columns: 180px 1fr; gap: 1.25rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-3. PORTRAIT TABLET (≤ 1024px)
+   Settings nav becomes a horizontal
+   scrollable tab strip; content full width.
+   ══════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  .d-settings-shell {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    gap: 4px;
+    padding: 8px;
+  }
+
+  .settings-nav::-webkit-scrollbar { display: none; }
+
+  .settings-nav-link {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  /* CIPC action button: still inline on tablet, enough room */
+  .cipc-block-action { margin-left: auto; }
+
+  /* Detail panel (leads) already handled by dealer.css §14 at this
+     breakpoint — .d-split-layout stacks, .d-detail-card loses sticky. */
+}
+
+
+/* ══════════════════════════════════════
+   R-4. LANDSCAPE PHONE (≤ 767px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* Settings nav: tighter pills */
+  .settings-nav-link { padding: 8px 10px; font-size: 12px; }
+  .snl-icon { font-size: 12px; }
+
+  /* CIPC block: stack icon+text above the action button */
+  .cipc-block { flex-direction: column; align-items: stretch; }
+  .cipc-block-icon { margin-bottom: 4px; }
+  .cipc-block-action {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Avatar row (logo): wraps naturally via existing .d-avatar-row rules
+     from dealer-dashboard-patch.css — no extra change needed here */
+
+  /* Leads: hide secondary columns on roster so the table never forces
+     horizontal scroll on a 375px screen for the columns that matter least */
+  .d-roster .d-hide-sm,
+  .d-roster th.d-hide-sm { display: none; }
+
+  /* Leads search row: stack search input above buttons */
+  .d-search-row .finput { max-width: none; width: 100%; }
+
+  /* Profile actions: stack on phone */
+  .d-profile-actions { flex-direction: column; align-items: stretch; }
+  .d-profile-actions .btn { width: 100%; justify-content: center; }
+
+  /* Modal breakdown: tighter padding */
+  .d-modal-breakdown { padding: 12px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-5. PORTRAIT PHONE (≤ 480px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .d-settings-shell { gap: .75rem; }
+
+  .settings-nav-link { padding: 7px 9px; font-size: 11px; gap: 6px; }
+
+  .d-card-heading { margin-bottom: 1rem; }
+
+  /* CIPC block tighter padding */
+  .cipc-block { padding: 12px 14px; gap: 10px; }
+  .cipc-block-icon { width: 32px; height: 32px; font-size: 14px; }
+  .cipc-block-title { font-size: 13px; }
+  .cipc-block-sub { font-size: 11px; }
+
+  /* Team stat strip: 2x2 (consistent with dashboard KPI behaviour) */
+  .d-team-stat-strip { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  /* Exec card: simplify to icon + info, actions wrap below */
+  .d-exec-card {
+    grid-template-columns: 38px 1fr;
+    padding: 13px 14px;
+    gap: 10px;
+  }
+  .d-exec-card__actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+  .d-exec-card__actions .btn { flex: 1; min-width: 0; }
+
+  /* Detail panel action row: full width buttons */
+  .d-detail-actions .btn { min-width: 0; }
+
+  /* Modal: tighter title/sub */
+  .modal-title { font-size: 15px; }
+  .modal-sub { font-size: 12px; }
+
+  /* Search row: button full width on its own line */
+  .d-search-row { flex-direction: column; align-items: stretch; }
+  .d-search-row .btn { width: 100%; }
+}
+
+
+/* ══════════════════════════════════════
+   R-6. SMALL PHONE (≤ 390px)
+   Covers iPhone SE (3rd gen), Galaxy A-series.
+   ══════════════════════════════════════ */
+
+@media (max-width: 390px) {
+  .settings-nav-link { padding: 6px 8px; font-size: 10px; }
+
+  .d-team-stat-strip { gap: 6px; }
+  .d-team-stat-box { padding: 12px 12px; }
+  .d-team-stat-box__num { font-size: 22px; }
+
+  .d-exec-card { padding: 11px 12px; gap: 8px; }
+  .d-exec-card__name { font-size: 13px; }
+  .d-exec-card__meta { font-size: 11px; }
+
+  .cipc-block { padding: 10px 12px; }
+
+  .d-modal-breakdown { padding: 10px; }
+  .d-modal-row__val--total { font-size: 14px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-7. VERY SMALL PHONE (≤ 360px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 360px) {
+  .d-team-stat-strip { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .d-team-stat-box__num { font-size: 19px; }
+
+  .d-exec-card__stats { gap: 10px; }
+  .d-exec-card__stat { font-size: 11px; }
+
+  .settings-nav-link { gap: 4px; }
+  .snl-icon { display: none; } /* reclaim space — label text alone is enough */
+
+  /* Leads table: drop the intent column header label width pressure
+     by tightening cell padding globally via existing .d-roster rules */
+  .d-roster td, .d-roster th { padding: 9px 10px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-8. SHORT LANDSCAPE GUARD
+   (max-height ≤ 500px, landscape)
+   ══════════════════════════════════════ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Settings: keep 2-col even in short landscape — there's enough width */
+  .d-settings-shell { grid-template-columns: 200px 1fr; }
+  .settings-nav { flex-direction: column; overflow-x: visible; }
+  .settings-nav-link { white-space: normal; }
+
+  /* Team stat strip: 4-col to avoid vertical stacking */
+  .d-team-stat-strip { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
+  /* Detail panel body already capped by dealer.css §19 at this breakpoint */
+}
+
+
+/* ══════════════════════════════════════
+   R-9. TOUCH / POINTER OVERRIDES
+   ══════════════════════════════════════ */
+
+@media (hover: none) and (pointer: coarse) {
+  .settings-nav-link:hover { background: transparent; color: var(--muted); }
+  .settings-nav-link:active { background: var(--bg); color: var(--text); }
+
+  .cipc-block-action:active { opacity: .8; }
+
+  /* Larger tap target on the mark-as-lost button */
+  .d-mark-lost-btn { min-height: 40px; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settings-nav-link:hover { background: var(--bg); color: var(--text); }
+}
+
+
+/* ══════════════════════════════════════
+   R-10. REDUCED MOTION
+   ══════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-nav-link { transition: none; }
+}
+
+
+/* ══════════════════════════════════════
+   R-11. PRINT
+   ══════════════════════════════════════ */
+
+@media print {
+  .settings-nav { display: none !important; }
+  .d-settings-shell { grid-template-columns: 1fr !important; }
+
+  .cipc-block-action { display: none !important; }
+
+  .d-detail-actions,
+  .d-mark-lost-btn,
+  .d-exec-card__actions,
+  .d-search-row,
+  .d-tab-bar { display: none !important; }
+
+  .d-roster .d-hide-sm,
+  .d-roster th.d-hide-sm { display: table-cell !important; }
+
+  .d-exec-card,
+  .cipc-block,
+  .d-modal-breakdown { break-inside: avoid; }
+}

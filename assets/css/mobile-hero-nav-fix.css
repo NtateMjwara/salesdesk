@@ -1,0 +1,212 @@
+/**
+ * SalesDesk — Mobile Hero & Nav Fix  (v5.1)
+ * assets/css/mobile-hero-nav-fix.css
+ *
+ * Load order slot 6 — after browse-additions.css, before how-it-works.css.
+ * See layout-public.php <head> for the full load order.
+ *
+ * What this file fixes:
+ *   NAV-1   Mobile top bar: brand left, account icon + hamburger right only.
+ *           No text labels, no guest sign-in link visible on small screens.
+ *   NAV-2   Account button collapses to a 36×36 round icon on mobile.
+ *   NAV-3   pub-nav__inner max-width restored (inline style in layout-public.php
+ *           v5 incorrectly set it to 100%, which broke hamburger alignment).
+ *           REMOVED from layout-public.php in v5.1 — this file owns the rule.
+ *   HERO-1  Hero min-height removed on mobile. Was 100vh, causing a large
+ *           empty gap between the headline and the search card on phones.
+ *           Compact padding takes over instead.
+ *   HERO-2  Search card padding, radii, and input heights tightened on mobile
+ *           to match a clean single-column card layout.
+ *   CRUMB-1 Breadcrumb max-width and spacing corrected (was set in an inline
+ *           style block in layout-public.php v5 with wrong values).
+ */
+
+
+/* ══════════════════════════════════════
+   NAV INNER
+   Corrects the inline style that was set
+   to max-width:100% in layout-public.php.
+   That block has been removed in v5.1.
+   ══════════════════════════════════════ */
+.pub-nav__inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 20px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+
+/* ══════════════════════════════════════
+   MOBILE NAV — ≤ 1024px
+   brand left | flex spacer | icon + burger
+   ══════════════════════════════════════ */
+@media (max-width: 1024px) {
+
+  /* Hamburger resets — override browse.css defaults */
+  .pub-nav__hamburger {
+    border: none !important;
+    background: transparent !important;
+    padding: 4px !important;
+    width: 32px !important;
+    height: 32px !important;
+    gap: 4px !important;
+  }
+
+  /* Push actions + hamburger to the far right */
+  .pub-nav__actions {
+    margin-left: auto;
+    gap: 6px;
+  }
+
+  /* Account button: icon-only circle */
+  .pub-nav__acct-btn .pub-nav-label,
+  .pub-nav__acct-btn .pub-chevron {
+    display: none !important;
+  }
+
+  .pub-nav__acct-btn {
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    font-size: 16px !important;
+  }
+
+  /* Hide guest sign-in text link — too cluttered on mobile */
+  .pub-nav__signin--guest {
+    display: none !important;
+  }
+
+  /* Brand tightened */
+  .pub-nav__brand { gap: 7px; }
+  .pub-nav__name  { font-size: 16px !important; }
+}
+
+
+/* ══════════════════════════════════════
+   HERO — compact on mobile
+   ══════════════════════════════════════ */
+@media (max-width: 768px) {
+  .sd-hero {
+    min-height: unset !important;
+    padding: 36px 16px 32px !important;
+    align-items: flex-start !important;
+  }
+
+  .sd-hero__content {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .sd-hero__title {
+    font-size: 22px !important;
+    margin-bottom: 6px !important;
+    letter-spacing: -0.5px !important;
+  }
+
+  .sd-hero__sub {
+    font-size: 13px !important;
+    margin-bottom: 18px !important;
+  }
+
+  .sd-hero__hints {
+    margin-top: 12px !important;
+    font-size: 12px !important;
+    gap: 12px !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   SEARCH CARD — clean & contained
+   ══════════════════════════════════════ */
+@media (max-width: 768px) {
+  .sd-search-card {
+    border-radius: 16px !important;
+    padding: 16px !important;
+    box-shadow:
+      0 8px 32px rgba(8,20,60,.22),
+      0 2px 8px rgba(0,0,0,.10) !important;
+  }
+
+  .sd-search-input {
+    height: 48px !important;
+    font-size: 14px !important;
+    border-radius: 12px !important;
+    padding-left: 44px !important;
+    padding-right: 52px !important;
+  }
+
+  .sd-search-icon {
+    left: 14px !important;
+    font-size: 16px !important;
+  }
+
+  .sd-history-btn {
+    right: 10px !important;
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 15px !important;
+  }
+
+  .sd-search-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .sd-search-select,
+  .sd-search-field {
+    height: 44px !important;
+    font-size: 13px !important;
+    padding: 0 12px !important;
+  }
+
+  .sd-search-divider {
+    margin: 8px 0 10px !important;
+  }
+
+  .sd-search-radio-row {
+    font-size: 13px !important;
+    gap: 16px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .sd-search-bottom-row {
+    margin: 4px 0 10px !important;
+  }
+
+  .sd-reset-btn {
+    font-size: 13px !important;
+  }
+
+  .sd-search-submit {
+    height: 50px !important;
+    font-size: 16px !important;
+    border-radius: 10px !important;
+  }
+}
+
+/* Single-column selects only on very small phones */
+@media (max-width: 360px) {
+  .sd-search-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* ══════════════════════════════════════
+   BREADCRUMB
+   Corrects the inline style override that
+   was in layout-public.php v5.
+   ══════════════════════════════════════ */
+.pub-breadcrumb {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 24px;
+}

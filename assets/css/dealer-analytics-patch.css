@@ -1,0 +1,877 @@
+/**
+ * SalesDesk — dealer-analytics-patch.css
+ * T3 owns this file. Load after dealer.css and dealer-dashboard-patch.css
+ * in layout-app.php, or concatenate into dealer.css after section 10.
+ *
+ * PURPOSE:
+ *   Provides every semantic class referenced by the refactored:
+ *     — app/dealer/analytics.php
+ *     — app/exec/analytics.php
+ *
+ *   Replaces all inline style= layout attributes that prevented
+ *   media queries from firing on mobile/tablet.
+ *
+ * Design notes:
+ *   Bar charts are CSS-driven. Bar heights/widths are the only data-
+ *   computed values remaining as inline style (unavoidable for canvas-
+ *   less charts). All layout, colour, spacing, and typography is here.
+ *
+ * Sections:
+ *   AN-1.  Range toggle
+ *   AN-2.  Main analytics grid (chart + minibar)
+ *   AN-3.  Bar chart (monthly volume)
+ *   AN-4.  Mini-bar rows (top listings / top cars)
+ *   AN-5.  Broker table column classes
+ *   AN-6.  Exec table column classes
+ *   AN-7.  Shared cell utility classes
+ *   AN-8.  Pipeline breakdown grid
+ *   AN-9.  Section spacing
+ *   R-1.   Wide desktop (≥ 1400px)
+ *   R-2.   Landscape tablet / small laptop (≤ 1279px)
+ *   R-3.   Portrait tablet (≤ 1024px)
+ *   R-4.   Landscape phone (≤ 767px)
+ *   R-5.   Portrait phone (≤ 480px)
+ *   R-6.   Small phone (≤ 390px)
+ *   R-7.   Very small phone (≤ 360px)
+ *   R-8.   Short landscape orientation guard
+ *   R-9.   Touch / pointer overrides
+ *   R-10.  Reduced motion
+ *   R-11.  Print
+ */
+
+
+/* ══════════════════════════════════════
+   AN-1. RANGE TOGGLE
+   Date-range selector buttons.
+   ══════════════════════════════════════ */
+
+.an-range-toggle {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.an-range-toggle .btn {
+  /* Ensure consistent sizing across all range buttons */
+  min-width: 72px;
+  text-align: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+
+/* ══════════════════════════════════════
+   AN-2. MAIN ANALYTICS GRID
+   3fr chart / 2fr mini-bar on desktop.
+   Collapses to single column at ≤ 1024px.
+   ══════════════════════════════════════ */
+
+.an-grid {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  align-items: start;
+}
+
+/* Section spacing for broker + exec tables */
+.an-section {
+  margin-bottom: 2rem;
+}
+
+.an-chart-card   { min-width: 0; }
+.an-minibar-card { min-width: 0; }
+
+
+/* ══════════════════════════════════════
+   AN-3. BAR CHART — MONTHLY VOLUME
+   The chart is a flex row of columns.
+   Bar heights are data-driven inline style
+   (only these two values remain inline).
+   All layout, colour, label positioning
+   is CSS-controlled here.
+   ══════════════════════════════════════ */
+
+.an-bar-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  /* Fixed height: 120px bars + 22px label row below */
+  height: 142px;
+  /* Horizontal scroll if many months on a narrow screen */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  /* Bottom padding for label row */
+  padding-bottom: 22px;
+  /* Prevent chart from collapsing on narrow screens */
+  min-width: 100%;
+}
+
+.an-bar-chart::-webkit-scrollbar { display: none; }
+
+/* Each month = one column */
+.an-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  height: 120px;
+  justify-content: flex-end;
+  /* Minimum column width prevents bars becoming invisible slivers */
+  min-width: 20px;
+}
+
+/* Inner track: positions the bar + count label relative to each other */
+.an-bar-track {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 120px;
+  position: relative;
+}
+
+/* The bar itself — height set via inline style (data-driven) */
+.an-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  overflow: hidden;
+  min-height: 4px;
+  transition: opacity .15s;
+}
+
+.an-bar--current { background: var(--p); }
+.an-bar--past    { background: var(--p-b); }
+
+/* Green overlay slice for closed deals */
+.an-bar-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--green);
+  opacity: .7;
+  /* height set via inline style (data-driven) */
+}
+
+/* Lead count label above bar — bottom offset data-driven inline */
+.an-bar-count {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Month abbreviation label below bar */
+.an-bar-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--faint);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Chart legend */
+.an-chart-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.an-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.an-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.an-legend-swatch--leads  { background: var(--p-b); }
+.an-legend-swatch--closed { background: var(--green); opacity: .7; }
+
+
+/* ══════════════════════════════════════
+   AN-4. MINI-BAR ROWS (top listings)
+   ══════════════════════════════════════ */
+
+.an-minibar-row { margin-bottom: 12px; }
+.an-minibar-row:last-child { margin-bottom: 0; }
+
+.an-minibar-row__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.an-minibar-row__name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Prevent name from pushing count off-screen */
+  min-width: 0;
+  flex: 1;
+}
+
+.an-minibar-row__count {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.an-minibar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+/* Width is data-driven inline style — only this value stays inline */
+.an-minibar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+
+.an-minibar-fill--green { background: var(--green); }
+.an-minibar-fill--blue  { background: var(--p-b); }
+
+.an-minibar-row__sub {
+  font-size: 10px;
+  color: var(--faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+
+/* ══════════════════════════════════════
+   AN-5. BROKER TABLE COLUMN CLASSES
+   Applied to <th> and <td> in the broker
+   performance table. Controls widths and
+   alignment for each column type.
+   ══════════════════════════════════════ */
+
+/* Shared: all table cells in analytics tables */
+.an-broker-table td,
+.an-broker-table th,
+.an-exec-table td,
+.an-exec-table th {
+  vertical-align: middle;
+}
+
+/* Rank number column */
+.an-col-rank {
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Broker name + desk */
+.an-col-broker {
+  min-width: 0;
+  /* Takes remaining space after fixed columns */
+}
+
+.an-broker-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.an-broker-desk {
+  font-size: 11px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+/* Numeric columns (leads / closed) */
+.an-col-num {
+  width: 70px;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* Conversion bar column */
+.an-col-conv {
+  width: 140px;
+  min-width: 100px;
+}
+
+/* Earned (paid) column */
+.an-col-earned {
+  width: 110px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Conversion bar component */
+.an-conv-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.an-conv-track {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 30px;
+}
+
+/* Width is data-driven inline style — only this value stays inline */
+.an-conv-fill { height: 100%; border-radius: 2px; }
+
+.an-conv-fill--green { background: var(--green); }
+.an-conv-fill--amber { background: var(--amber); }
+.an-conv-fill--blue  { background: var(--p-b); }
+
+.an-conv-value {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-width: 30px;
+  text-align: right;
+}
+
+
+/* ══════════════════════════════════════
+   AN-6. EXEC TABLE COLUMN CLASSES
+   ══════════════════════════════════════ */
+
+.an-col-exec {
+  min-width: 0;
+}
+
+.an-exec-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.an-exec-meta {
+  font-size: 11px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
+.an-col-status   { width: 90px; }
+.an-col-response { width: 90px; text-align: center; }
+
+
+/* ══════════════════════════════════════
+   AN-7. SHARED CELL UTILITY CLASSES
+   Applied to <td> elements for colour
+   and font-family without inline styles.
+   ══════════════════════════════════════ */
+
+.an-cell-mono  { font-family: var(--mono); }
+.an-cell-faint { color: var(--faint); }
+.an-cell-muted { color: var(--muted); }
+.an-cell-green { color: var(--green); }
+
+
+/* ══════════════════════════════════════
+   AN-8. PIPELINE BREAKDOWN GRID
+   Exec analytics page only.
+   ══════════════════════════════════════ */
+
+.an-pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.an-pipeline-cell {
+  text-align: center;
+  padding: 14px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition: border-color .15s;
+  border-top: 3px solid var(--border);
+}
+
+.an-pipeline-cell:hover { border-color: var(--border2); }
+
+/* Status colour accents on top border */
+.an-pipeline-cell--blue   { border-top-color: var(--p); }
+.an-pipeline-cell--amber  { border-top-color: var(--amber); }
+.an-pipeline-cell--teal   { border-top-color: var(--teal); }
+.an-pipeline-cell--purple { border-top-color: var(--purple); }
+.an-pipeline-cell--green  { border-top-color: var(--green); }
+.an-pipeline-cell--faint  { border-top-color: var(--faint); }
+
+.an-pipeline-cell__num {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--mono);
+  line-height: 1.1;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+/* Colour the number by status */
+.an-pipeline-cell--blue   .an-pipeline-cell__num { color: var(--p); }
+.an-pipeline-cell--amber  .an-pipeline-cell__num { color: var(--amber); }
+.an-pipeline-cell--teal   .an-pipeline-cell__num { color: var(--teal); }
+.an-pipeline-cell--purple .an-pipeline-cell__num { color: var(--purple); }
+.an-pipeline-cell--green  .an-pipeline-cell__num { color: var(--green); }
+.an-pipeline-cell--faint  .an-pipeline-cell__num { color: var(--faint); }
+
+.an-pipeline-cell__label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+  margin-bottom: 2px;
+  line-height: 1.3;
+}
+
+.an-pipeline-cell__pct {
+  font-size: 10px;
+  color: var(--faint);
+  font-family: var(--mono);
+}
+
+
+/* ══════════════════════════════════════
+   R-1. WIDE DESKTOP (≥ 1400px)
+   ══════════════════════════════════════ */
+
+@media (min-width: 1400px) {
+  .an-grid { grid-template-columns: 7fr 4fr; gap: 2rem; }
+
+  .an-broker-name,
+  .an-broker-desk { max-width: 260px; }
+
+  .an-exec-name,
+  .an-exec-meta   { max-width: 220px; }
+
+  .an-col-conv  { width: 180px; }
+  .an-col-earned { width: 130px; }
+
+  .an-pipeline-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+
+  .an-range-toggle .btn { min-width: 80px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-2. LANDSCAPE TABLET / SMALL LAPTOP
+        (≤ 1279px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 1279px) and (min-width: 1025px) {
+  .an-grid { grid-template-columns: 3fr 2fr; gap: 1.25rem; }
+
+  .an-col-conv   { width: 120px; }
+  .an-col-earned { width: 100px; }
+
+  .an-broker-name,
+  .an-broker-desk { max-width: 160px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-3. PORTRAIT TABLET (≤ 1024px)
+   Analytics grid stacks single column.
+   KPI 2×2. Tables stay scrollable.
+   ══════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+  /* KPI 2×2 */
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Analytics grid: single column, chart above mini-bars */
+  .an-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Range toggle: may wrap on narrow tablet */
+  .an-range-toggle { flex-wrap: wrap; }
+  .an-range-toggle .btn { min-width: 60px; }
+
+  /* Broker/exec table: allow horizontal scroll on tablet */
+  .d-roster-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  .an-broker-table,
+  .an-exec-table { min-width: 560px; }
+
+  .an-col-conv   { width: 110px; }
+  .an-col-earned { width: 100px; }
+
+  .an-broker-name { max-width: 180px; }
+  .an-broker-desk { max-width: 180px; }
+
+  /* Pipeline: fewer columns */
+  .an-pipeline-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+}
+
+
+/* ══════════════════════════════════════
+   R-4. LANDSCAPE PHONE (≤ 767px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 767px) {
+  /* KPI 2×2, smaller */
+  .kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 1.25rem;
+  }
+
+  .kpi-card { padding: 14px 14px 12px; }
+  .kpi-card__value { font-size: 24px; }
+  .kpi-card__bg-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 16px;
+    border-radius: 0 var(--r-xl) 0 46px;
+  }
+
+  /* Header */
+  .dash-header { flex-direction: column; gap: 10px; margin-bottom: 1.25rem; }
+  .dash-header__actions { width: 100%; }
+  .an-range-toggle { width: 100%; justify-content: flex-start; }
+  .an-range-toggle .btn { flex: 1; min-width: 0; font-size: 11px; }
+
+  /* Analytics grid already single column from ≤ 1024px */
+
+  /* Bar chart: narrower gaps, smaller labels */
+  .an-bar-chart { gap: 4px; }
+  .an-bar-label { font-size: 8px; }
+  .an-bar-count { font-size: 8px; }
+
+  /* Broker/exec tables: scroll, truncate name more */
+  .an-broker-table,
+  .an-exec-table { min-width: 480px; }
+
+  .an-broker-name { max-width: 130px; }
+  .an-broker-desk { max-width: 130px; }
+  .an-exec-name   { max-width: 120px; }
+  .an-exec-meta   { max-width: 120px; }
+
+  .an-col-num    { width: 56px; font-size: 12px; }
+  .an-col-conv   { width: 100px; }
+  .an-col-earned { width: 90px; font-size: 11px; }
+  .an-col-rank   { width: 26px; }
+
+  /* Pipeline: 3 columns */
+  .an-pipeline-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .an-pipeline-cell { padding: 12px 8px; }
+  .an-pipeline-cell__num { font-size: 22px; }
+
+  /* Section spacing */
+  .an-section { margin-bottom: 1.5rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-5. PORTRAIT PHONE (≤ 480px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  /* KPI 2×2 tighter */
+  .kpi-card  { padding: 12px 12px 10px; }
+  .kpi-card__value  { font-size: 22px; }
+  .kpi-card__label  { font-size: 11px; }
+  .kpi-card__sub    { font-size: 10px; }
+  .kpi-card__bg-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 14px;
+    border-radius: 0 var(--r-xl) 0 42px;
+  }
+
+  /* Range toggle: wrap, full width each */
+  .an-range-toggle { gap: 3px; }
+  .an-range-toggle .btn { font-size: 11px; padding: 5px 8px; }
+
+  /* Bar chart: shorter so the whole chart section isn't too tall */
+  .an-bar-chart {
+    height: 120px;
+    padding-bottom: 20px;
+    gap: 3px;
+  }
+
+  .an-bar-col   { min-width: 16px; }
+  .an-bar-label { font-size: 8px; bottom: -18px; }
+  .an-bar-count { font-size: 7px; }
+
+  /* Mini-bar rows: smaller name text */
+  .an-minibar-row__name  { font-size: 11px; }
+  .an-minibar-row__count { font-size: 10px; }
+  .an-minibar-row__sub   { font-size: 9px; }
+
+  /* Broker table: hide earned column on portrait phone */
+  .an-broker-table .an-col-earned,
+  .an-broker-table th.an-col-earned { display: none; }
+
+  /* Exec table: hide response column on portrait phone */
+  .an-exec-table .an-col-response,
+  .an-exec-table th.an-col-response { display: none; }
+
+  /* Truncate names more aggressively */
+  .an-broker-name,
+  .an-broker-desk { max-width: 110px; }
+  .an-exec-name,
+  .an-exec-meta   { max-width: 100px; }
+
+  /* Pipeline: 2 columns */
+  .an-pipeline-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .an-pipeline-cell { padding: 10px 8px; border-top-width: 2px; }
+  .an-pipeline-cell__num { font-size: 20px; }
+  .an-pipeline-cell__label { font-size: 10px; }
+
+  /* Section head */
+  .d-section-head { margin-bottom: .5rem; }
+}
+
+
+/* ══════════════════════════════════════
+   R-6. SMALL PHONE (≤ 390px)
+   Covers iPhone SE (3rd gen), Galaxy A-series.
+   ══════════════════════════════════════ */
+
+@media (max-width: 390px) {
+  .kpi-card  { padding: 10px 10px 9px; }
+  .kpi-card__value { font-size: 20px; }
+  .kpi-card__bg-icon { width: 38px; height: 38px; font-size: 13px; }
+
+  .an-bar-chart { height: 110px; gap: 2px; }
+  .an-bar-col   { min-width: 14px; }
+
+  .an-range-toggle .btn { padding: 5px 6px; font-size: 10px; }
+
+  /* Pipeline: still 2-col but tighter */
+  .an-pipeline-grid { gap: 6px; }
+  .an-pipeline-cell { padding: 9px 6px; }
+  .an-pipeline-cell__num { font-size: 18px; }
+
+  /* Broker/exec table: min-width smaller */
+  .an-broker-table,
+  .an-exec-table { min-width: 380px; }
+
+  .an-broker-name,
+  .an-broker-desk { max-width: 90px; }
+  .an-col-num { width: 48px; font-size: 11px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-7. VERY SMALL PHONE (≤ 360px)
+   ══════════════════════════════════════ */
+
+@media (max-width: 360px) {
+  /* Hide KPI corner icons */
+  .kpi-card__bg-icon { display: none; }
+  .kpi-card { padding: 10px 9px 8px; }
+  .kpi-card__value { font-size: 19px; }
+  .kpi-strip { gap: 6px; }
+
+  .an-bar-chart { height: 100px; }
+
+  /* Pipeline: 2-col tightest */
+  .an-pipeline-grid { grid-template-columns: repeat(2, 1fr); gap: 5px; }
+  .an-pipeline-cell { padding: 8px 5px; }
+  .an-pipeline-cell__num { font-size: 17px; }
+  .an-pipeline-cell__label { font-size: 9px; }
+  .an-pipeline-cell__pct   { font-size: 9px; }
+
+  /* Also hide rank column on tiny phones */
+  .an-broker-table .an-col-rank,
+  .an-broker-table th.an-col-rank,
+  .an-exec-table   .an-col-rank,
+  .an-exec-table   th.an-col-rank { display: none; }
+}
+
+
+/* ══════════════════════════════════════
+   R-8. SHORT LANDSCAPE GUARD
+   (max-height ≤ 500px, landscape)
+   Compact vertically without losing the
+   key information on landscape phones.
+   ══════════════════════════════════════ */
+
+@media (max-height: 500px) and (orientation: landscape) {
+  /* KPI: 4-col to avoid vertical stacking */
+  .kpi-strip {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+
+  .kpi-card { padding: 10px 12px 8px; }
+  .kpi-card__value { font-size: 20px; }
+  .kpi-card__bg-icon { width: 38px; height: 38px; font-size: 13px; }
+  /* Hide sub-line in landscape to save vertical space */
+  .kpi-card__sub { display: none; }
+
+  /* Analytics grid: restore 2-col in landscape */
+  .an-grid { grid-template-columns: 3fr 2fr; gap: 1rem; }
+
+  /* Bar chart: shorter */
+  .an-bar-chart { height: 110px; }
+
+  /* Range toggle: single row */
+  .dash-header { flex-direction: row; flex-wrap: wrap; }
+  .an-range-toggle { flex-wrap: nowrap; }
+  .an-range-toggle .btn { min-width: 56px; }
+
+  /* Pipeline: 3 columns in landscape */
+  .an-pipeline-grid { grid-template-columns: repeat(3, 1fr); }
+
+  /* Section spacing: tighter */
+  .an-section { margin-bottom: 1.25rem; }
+}
+
+@media (max-height: 380px) and (orientation: landscape) {
+  .kpi-card__bg-icon { display: none; }
+  .kpi-card { padding: 8px 10px 6px; }
+  .kpi-card__value { font-size: 18px; }
+  .an-bar-chart { height: 90px; }
+}
+
+
+/* ══════════════════════════════════════
+   R-9. TOUCH / POINTER OVERRIDES
+   Remove hover states that stick on iOS.
+   ══════════════════════════════════════ */
+
+@media (hover: none) and (pointer: coarse) {
+  /* KPI cards */
+  .kpi-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border); }
+
+  /* Table rows */
+  .d-roster__row:hover td { background: transparent; }
+  .d-roster__row:active td { background: var(--bg); }
+
+  /* Pipeline cells */
+  .an-pipeline-cell:hover { border-color: inherit; }
+  .an-pipeline-cell:active { background: var(--bg2); }
+
+  /* Mini-bar: no hover needed (non-interactive) */
+  .an-bar:hover { opacity: 1; }
+
+  /* Larger tap areas on range toggle */
+  .an-range-toggle .btn { min-height: 40px; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  /* Restore subtle bar hover on desktop */
+  .an-bar:hover { opacity: .85; cursor: default; }
+  .an-pipeline-cell:hover { border-color: var(--border2); }
+  .d-roster__row:hover td { background: var(--bg); }
+}
+
+
+/* ══════════════════════════════════════
+   R-10. REDUCED MOTION
+   ══════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .an-minibar-fill,
+  .an-conv-fill,
+  .an-bar { transition: none; }
+}
+
+
+/* ══════════════════════════════════════
+   R-11. PRINT
+   ══════════════════════════════════════ */
+
+@media print {
+  /* KPI: 4-col, no icons */
+  .kpi-strip { grid-template-columns: repeat(4, 1fr) !important; gap: 8px !important; }
+  .kpi-card__bg-icon { display: none !important; }
+  .kpi-card { box-shadow: none !important; border: 1px solid #ccc !important; }
+
+  /* Analytics grid: side by side */
+  .an-grid { grid-template-columns: 3fr 2fr !important; gap: 1rem !important; }
+
+  /* Range toggle: hide */
+  .an-range-toggle { display: none !important; }
+
+  /* Tables: no horizontal scroll */
+  .d-roster-wrap { overflow: visible !important; }
+  .an-broker-table,
+  .an-exec-table { min-width: unset !important; }
+
+  /* Restore hidden columns for print */
+  .an-broker-table .an-col-earned,
+  .an-broker-table th.an-col-earned,
+  .an-exec-table .an-col-response,
+  .an-exec-table th.an-col-response,
+  .an-broker-table .an-col-rank,
+  .an-broker-table th.an-col-rank { display: table-cell !important; }
+
+  /* Pipeline: 3 columns in print */
+  .an-pipeline-grid { grid-template-columns: repeat(3, 1fr) !important; }
+
+  /* Mini-bar transitions off */
+  .an-minibar-fill,
+  .an-conv-fill { transition: none !important; }
+
+  /* Avoid breaking sections */
+  .an-section,
+  .an-pipeline-cell,
+  .kpi-card { break-inside: avoid; }
+
+  .an-chart-legend { display: flex !important; }
+}

@@ -1,0 +1,35 @@
+User-agent: *
+Allow: /
+
+# Internal / non-public code and data — same paths .htaccess already
+# blocks direct access to (see the "Security: block direct access to
+# sensitive directories" rule).
+Disallow: /includes/
+Disallow: /vendor/
+Disallow: /db/
+Disallow: /views/
+Disallow: /sitemap/includes/
+
+# Authenticated / dashboard areas — nothing behind a login is worth
+# crawling, and letting bots hit them wastes crawl budget on 302s to
+# the login page.
+Disallow: /app/
+Disallow: /auth/login.php
+
+# API endpoints — not content, no reason for a crawler to hit these.
+Disallow: /api/
+
+# Query-string filter combinations on /cars-for-sale/ are intentionally
+# NOT blocked here. Blocking them via robots.txt would stop Googlebot
+# from crawling them at all — which means it would never see the
+# <link rel="canonical"> / <meta name="robots" content="noindex,follow">
+# tags those pages now render (see includes/seo-canonical.php), and
+# could still show the bare URL in search results with no snippet
+# ("indexed, though blocked by robots.txt"). Letting Googlebot crawl
+# and read the per-page canonical/noindex signal is the more precise
+# tool — some single-facet combinations (condition, a single make, a
+# few body types) are deliberately real, indexable landing pages
+# linked from the homepage; only the deeper multi-filter combinations
+# get noindex'd, and robots.txt has no way to tell those apart.
+
+Sitemap: https://salesdesk.co.za/sitemap.xml

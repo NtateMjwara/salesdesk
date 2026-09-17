@@ -438,9 +438,9 @@
 
 /* Narrow: broker storefront */
 .pub-page-narrow {
-  max-width: 1240px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 28px 24px 64px;
+  padding: 28px 0 64px;
 }
 
 /* Two-column detail grid */

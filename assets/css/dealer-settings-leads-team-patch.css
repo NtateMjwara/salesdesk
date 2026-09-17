@@ -19,6 +19,18 @@
  *   breakpoints at all — that block has been deleted from the PHP file;
  *   this patch is the only source of truth for those styles now.
  *
+ *   FOLLOW-UP FIX (leads page horizontal overflow):
+ *   .d-split-layout is a flex row (list column + 360px detail panel).
+ *   .d-roster inside the list column has min-width:480px from dealer.css.
+ *   .d-split-layout__main only had flex:1; min-width:0 — with no explicit
+ *   width:0 base and no overflow-x containment, a flex item's default
+ *   width:auto lets its content (the 480px table) dictate the column's
+ *   minimum size instead of the column dictating the table's available
+ *   space. On any viewport narrower than ~860px (480 + 360 + gap) with the
+ *   detail panel open, this pushed the table past the column, past the
+ *   split layout, and past the viewport edge — the page overflowed
+ *   horizontally instead of the table scrolling internally. See LD-0 below.
+ *
  * Sections:
  *   ST-4.  Settings shell (sidebar nav + content, replaces 200px/1fr grid)
  *   ST-5.  Settings nav links + pending dot
@@ -26,6 +38,7 @@
  *   ST-7.  CIPC verification status block
  *   ST-8.  Avatar row bordered variant + square preview (logo)
  *   ST-9.  Profile actions row
+ *   LD-0.  Split layout overflow containment (leads page horizontal scroll fix)
  *   LD-1.  Search row (leads page)
  *   LD-2.  Roster: hide-on-small column utility
  *   LD-3.  Detail panel action row + mark-as-lost button

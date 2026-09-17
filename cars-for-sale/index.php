@@ -1,9 +1,28 @@
 <?php
 /**
- * SalesDesk — Public Browse / Search Page  (v2.4)
+ * SalesDesk — Public Browse / Search Page  (v2.5)
  * Route: /cars-for-sale/  (via .htaccess → cars-for-sale/index.php)
  *
- * FIX LOG v2.4 (this pass):
+ * FIX LOG v2.5 (this pass):
+ *   SEO-2  $pageTitle / $ogTitle / $ogDescription previously used ONLY
+ *           the result count ("72 New and Used Cars for Sale in South
+ *           Africa | SalesDesk") for every filtered variant of this page
+ *           — ?make=Toyota, ?condition=used, ?body_type[]=SUV all
+ *           rendered the exact same boilerplate title text apart from
+ *           the leading number. Since $headingLabel (built further
+ *           below from the active facets) was already computed for the
+ *           on-page heading but never fed into the title/meta, Google's
+ *           sitelink algorithm had nothing distinguishing to grab for
+ *           each curated facet page except the number itself — which is
+ *           exactly what showed up as bare "72" / "426" / "67" sitelinks
+ *           in search results instead of "Toyota" / "Used Cars" / "SUV".
+ *           $pageTitle/$ogTitle/$ogDescription now incorporate
+ *           $headingLabel (aliased as $facetLabel) whenever a curated
+ *           facet is active, so each indexable facet page gets a
+ *           genuinely distinct, human-readable title that matches what
+ *           the page itself displays.
+ *
+ * FIX LOG v2.4 (prior pass, preserved for audit trail):
  *   SEARCH-1  Sidebar search box no longer auto-submits the whole page
  *              on a debounced keystroke. It previously did
  *              `setTimeout(() => inp.form.submit(), 350)` on every
@@ -521,9 +540,34 @@ $seoCanonical = seoResolveBrowseCanonical(
     $sort, $page
 );
 
-$pageTitle     = number_format($total) . ' New and Used Cars for Sale in South Africa | SalesDesk';
-$ogTitle       = number_format($total) . ' New and Used Cars for Sale — SalesDesk';
-$ogDescription = number_format($total) . ' New and used cars available on SalesDesk, South Africa\'s broker car sales platform.';
+/**
+ * SEO-2 (this pass): $headingLabel already computed above ("Used",
+ * "Toyota", "SUV", "Gauteng", combinations thereof, or the literal
+ * "All Cars" when nothing is filtered) is now the basis for the page
+ * title/meta instead of the bare result count. Previously EVERY
+ * filtered variant of this page — curated (indexable) or not —
+ * shared the exact same title text apart from the leading number,
+ * which is what left Google's sitelinks with nothing to display for
+ * each facet page except that number (see the "72 / 426 / 67" bare
+ * sitelinks this was diagnosed from). $facetLabel is null only for
+ * the unfiltered "All Cars" case, which keeps its original generic
+ * title — every other case (curated or noindexed multi-filter combo
+ * alike) now gets a title that actually names what's being shown.
+ */
+$facetLabel = ($headingLabel !== 'All Cars') ? $headingLabel : null;
+
+$pageTitle = $facetLabel
+    ? number_format($total) . ' ' . $facetLabel . ' Cars for Sale in South Africa | SalesDesk'
+    : number_format($total) . ' New and Used Cars for Sale in South Africa | SalesDesk';
+
+$ogTitle = $facetLabel
+    ? number_format($total) . ' ' . $facetLabel . ' Cars for Sale — SalesDesk'
+    : number_format($total) . ' New and Used Cars for Sale — SalesDesk';
+
+$ogDescription = $facetLabel
+    ? 'Browse ' . number_format($total) . ' ' . $facetLabel . ' cars for sale on SalesDesk, South Africa\'s broker car sales platform.'
+    : number_format($total) . ' New and used cars available on SalesDesk, South Africa\'s broker car sales platform.';
+
 $canonicalUrl  = $seoCanonical['canonical'];
 $metaRobotsNoindex = $seoCanonical['noindex'];
 

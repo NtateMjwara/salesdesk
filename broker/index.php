@@ -29,6 +29,19 @@
  *              'DSG', '4×4' vs the real '4WD') — meaning those filter
  *              checkboxes here could never actually match a real row.
  *              Fixed by switching to the shared whitelist functions.
+ *   WIDE-1    Storefront container/sidebar/grid max-width raised from
+ *              1240px to 100% (see the three rules inside $extraCss
+ *              below) so the page uses the full viewport width. The
+ *              inner .pub-browse-grid still caps at 3 columns via its
+ *              own @media rule below (untouched) — cards simply get
+ *              wider on large screens instead of the grid gaining more
+ *              columns. NOTE: the equivalent .pub-page-narrow rule in
+ *              assets/css/public.css was updated the same way, but this
+ *              page doesn't actually use that class ($layoutVariant is
+ *              'wide' below) — these three inline rules are what govern
+ *              this page's width. Kept inline here intentionally to
+ *              bust cache immediately; can be removed once
+ *              assets/css/public.css's own change has propagated.
  *
  * v3 CHANGES (prior pass, preserved for audit trail):
  *   The inventory section now reuses the exact same filter sidebar,
@@ -448,54 +461,56 @@ $shareUrl   = $canonicalUrl;
 $shareTitle = $desk['display_name'] . ' — Car Broker on SalesDesk';
 
 // ── Page-scoped CSS ──────────────────────────────────────────────
-// The hero / contact strip / bio / CTA sit inside a centred 1240px
-// column. The filter sidebar + results grid below are pinned to the
-// SAME max-width and side padding (overriding browse.css's own
-// full-bleed margin-inline/padding-inline rhythm) so every section
-// of the page shares identical left/right edges. On desktop the
-// vehicle grid is also capped at 3 columns — instead of browse.css's
-// auto-fill behaviour, which could stretch to 4-5 narrow columns on
-// wide screens — so cards read wider and more substantial.
+// WIDE-2 (this pass): the previous fixed max-width overrides on
+// .broker-container / .broker-inventory-head / .browse-layout have
+// been removed. .browse-layout is no longer overridden at all here —
+// it now inherits browse.css's own clamp()-based full-bleed sizing
+// directly, which is the exact same rule /cars-for-sale/index.php
+// uses untouched, so this page now matches that page's width exactly
+// instead of guessing a pixel value. .broker-container and
+// .broker-inventory-head (hero/bio/CTA wrapper — not shared with
+// cars-for-sale) use the same clamp(16px, 4vw, 48px) margin-inline /
+// clamp(12px, 2vw, 24px) padding-inline rhythm already used elsewhere
+// in this codebase (see .pub-detail-grid / .pub-related-grid in
+// public.css) so the hero lines up edge-to-edge with the sidebar+grid
+// below it.
+// CARD-1 (this pass): vehicle cards were capped at 3 columns via the
+// media rule below, but #carGrid also had an *inline* style attribute
+// (grid-template-columns:repeat(auto-fill,minmax(240px,1fr))) in the
+// markup, which — since inline styles always win over stylesheet
+// rules regardless of media query — was silently overriding this rule
+// on desktop. That inline style has been removed from the markup below
+// so this rule now actually governs the grid, giving a true 3-per-row
+// cap with each card getting more width as the page widens.
+// CARD-2 (this pass): the location/province pill and the wishlist
+// heart button were both anchored to the same top-right corner of the
+// card image, so they rendered on top of each other. The province pill
+// is nudged left inline (see the loop below) to clear the wishlist
+// button.
 // SEARCH-1: .typeahead-box / .typeahead-item styles added here too,
 // shared visually with cars-for-sale/index.php's own copy.
 $extraCss = '<style>
 .broker-container {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 28px 24px 0;
+  margin-inline: clamp(16px, 4vw, 48px);
+  padding: 28px clamp(12px, 2vw, 24px) 0;
 }
 .broker-inventory-head {
-  max-width: 1240px;
-  margin: 0 auto 14px;
-  padding: 0 24px;
+  margin-inline: clamp(16px, 4vw, 48px);
+  margin-bottom: 14px;
+  padding-inline: clamp(12px, 2vw, 24px);
 }
 
-/* Pin the filter sidebar + results grid to the same 1240px column
-   and side padding as the hero/contact strip above, instead of
-   browse.css\'s clamp()-based full-bleed margins. */
-.browse-layout {
-  max-width: 1240px;
-  margin-left: auto;
-  margin-right: auto;
-  padding-left: 24px;
-  padding-right: 24px;
-}
-
-/* Desktop: cap the vehicle grid at 3 columns (was auto-fill, which
-   could produce 4-5 narrow columns on wide screens) so each card
+/* Desktop: cap the vehicle grid at exactly 3 columns (was auto-fill,
+   which could produce 4-5 narrow columns on wide screens) so each card
    gets noticeably more width. Applies from tablet-landscape up;
-   browse.css\'s own ≤768px single/2-column mobile rules are untouched. */
+   browse.css\'s own ≤768px single/2-column mobile rules are untouched.
+   NOTE: this rule only takes effect now that the conflicting inline
+   style has been removed from #carGrid — see CARD-1 above. */
 @media (min-width: 769px) {
   .pub-browse-grid {
     grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    gap: 24px;
   }
-}
-
-@media (max-width: 768px) {
-  .broker-container      { padding: 16px 16px 0; }
-  .broker-inventory-head { padding: 0 16px; margin-bottom: 10px; }
-  .browse-layout          { padding-left: 16px; padding-right: 16px; }
 }
 
 /* SEARCH-1: search suggestion dropdown, shared with cars-for-sale/index.php */
@@ -1049,8 +1064,7 @@ ob_start();
 
     <?php else: ?>
 
-    <div class="pub-browse-grid" id="carGrid"
-         style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));">
+    <div class="pub-browse-grid" id="carGrid">
       <?php foreach ($inventory as $car):
         $imgs   = json_decode($car['image_urls'] ?? '[]', true) ?: [];
         $thumb  = $imgs[0] ?? null;
@@ -1099,7 +1113,10 @@ ob_start();
             </span>
 
             <?php if ($prov): ?>
-            <span class="vehicle-card__pill vehicle-card__pill--province">
+            <!-- CARD-2: inline `right` offset clears the wishlist heart
+                 button, which shares this top-right corner (see
+                 .pub-nav-icon-btn below, position:absolute top:10px;right:10px). -->
+            <span class="vehicle-card__pill vehicle-card__pill--province" style="right:54px;">
               <i class="fa-solid fa-location-dot pill-icon"></i><?= htmlspecialchars($prov) ?>
             </span>
             <?php endif; ?>

@@ -1,10 +1,10 @@
 <?php
 /**
- * SalesDesk — Public Car Detail Page  (v2)
+ * SalesDesk — Public Car Detail Page  (v3)
  * Route: /c/{desk-slug}/{car-slug}/
  *        (via .htaccess → c/car-detail/index.php?desk_slug=…&car_slug=…)
  *
- * Attribution model v2:
+ * Attribution model v2 (unchanged):
  *   The desk slug is embedded in the URL path — every detail page is
  *   definitionally tied to a specific SalesDesk. No ?ref= is required
  *   for attribution, but it is still accepted and stored when present
@@ -15,6 +15,29 @@
  *     2. No ref (or ref doesn't match desk) → derive salesdesk_id from
  *        desk_slug, use that desk's tracking_code for this car
  *     3. Desk doesn't have the car → 404 (the car is not on that desk)
+ *
+ * CHANGES IN v3 (this pass):
+ *   DATA-1  Car SELECT expanded to pull every buyer-relevant column the
+ *           schema already has (variant, VIN, engine/drivetrain specs,
+ *           ownership/warranty/service data) — previously only a small
+ *           subset was surfaced despite being in `cars`.
+ *   DATA-2  New query joins car_feature_links → car_features so the
+ *           listing shows the dealer's actual selected features,
+ *           grouped by category, instead of nothing at all.
+ *   UX-1    "Full specification" is now one tab inside a
+ *           Specifications / Features / History & Warranty tab group
+ *           (previously a single long spec table with no features and
+ *           no ownership/warranty disclosure anywhere on the page).
+ *   UX-2    Vehicle history & warranty tab surfaces previous owners,
+ *           service history, service book, warranty + service plan
+ *           expiry, and — legally significant in SA — an unmissable
+ *           write-off disclosure banner when is_written_off = 1.
+ *   UX-3    VIN is shown masked (last 6 characters only) for privacy;
+ *           full VIN stays available to the dealer/broker off-listing.
+ *   SEO-1   Added schema.org Vehicle JSON-LD so search engines get
+ *           structured price/mileage/condition data.
+ *   Everything from v2 (attribution, related cars, enquiry form, desk
+ *   card, dealer card, finance estimator) is unchanged in behaviour.
  *
  * Security: no auth required. SQL fully parameterised.
  */
@@ -81,11 +104,21 @@ if (!$deskRow) {
 }
 
 // ── Load car ──────────────────────────────────────────────────
+// DATA-1: expanded to surface every buyer-relevant column already
+// present in the `cars` table (see db/schema_consolidated.sql).
 $carStmt = $pdo->prepare("
     SELECT
-        c.id, c.uuid, c.slug, c.make, c.model, c.year, c.price,
-        c.mileage, c.condition_type, c.body_type, c.colour,
+        c.id, c.uuid, c.slug, c.make, c.model, c.variant, c.year, c.price,
+        c.mileage, c.condition_type, c.body_type, c.colour, c.interior_colour,
         c.transmission, c.fuel_type, c.drivetrain, c.description,
+        c.vin, c.mm_code,
+        c.engine_capacity_cc, c.cylinders, c.induction, c.power_kw, c.torque_nm,
+        c.gears, c.fuel_consumption_l100km, c.co2_emissions_gkm,
+        c.previous_owners, c.service_history, c.has_service_book, c.is_written_off,
+        c.doors, c.seats,
+        c.warranty_type, c.warranty_expiry_date, c.warranty_expiry_km,
+        c.service_plan_expiry_date, c.service_plan_expiry_km,
+        c.vat_inclusive,
         c.commission_type, c.commission_value,
         c.image_urls, c.status, c.created_at,
         d.id                    AS dealer_id,
@@ -94,7 +127,7 @@ $carStmt = $pdo->prepare("
         d.verification_status   AS dealer_verification,
         d.brand_focus,
         a.city                  AS dealer_city,
-        a.province              AS dealer_province,
+        a.province               AS dealer_province,
         a.suburb                AS dealer_suburb,
         u_d.email               AS dealer_email
     FROM cars c
@@ -161,6 +194,44 @@ recordCarView($visitor, (int)$car['id'], $activeTrackingCode);
 
 // ── Wishlist state ─────────────────────────────────────────────
 $isWishlisted = isCarWishlisted($visitor['id'], (int)$car['id']);
+
+// ── Car features (DATA-2) ───────────────────────────────────────
+// Pulls the dealer's actual selected features, grouped by category,
+// from car_feature_links → car_features. Previously nothing from
+// these two tables was ever shown to buyers.
+$featStmt = $pdo->prepare("
+    SELECT cf.category, cf.name, cf.slug, cf.is_popular
+    FROM car_feature_links cfl
+    JOIN car_features cf ON cf.id = cfl.feature_id
+    WHERE cfl.car_id = ?
+    ORDER BY cf.category ASC, cf.sort_order ASC, cf.name ASC
+");
+$featStmt->execute([(int)$car['id']]);
+$featureRows = $featStmt->fetchAll();
+
+$featuresByCategory = [];
+foreach ($featureRows as $f) {
+    $featuresByCategory[$f['category']][] = $f;
+}
+$totalFeatureCount = count($featureRows);
+
+// Icons for feature category headers (falls back to a generic tag icon).
+$categoryIcons = [
+    'Safety'                        => 'fa-shield-halved',
+    'Security'                      => 'fa-lock',
+    'Comfort & Convenience'         => 'fa-couch',
+    'Seating'                       => 'fa-chair',
+    'Infotainment & Connectivity'   => 'fa-satellite-dish',
+    'Exterior'                      => 'fa-car-side',
+    'Performance & Driving'         => 'fa-gauge-high',
+    'Off-Road & Utility'            => 'fa-mountain',
+    'Electric & Hybrid'             => 'fa-bolt',
+    'Lighting'                      => 'fa-lightbulb',
+    'Driver Assistance (ADAS)'      => 'fa-robot',
+    'Commercial Vehicle'            => 'fa-truck',
+    'Luxury'                        => 'fa-gem',
+    'Practical'                     => 'fa-box',
+];
 
 // ── Related cars (same dealer, same status, exclude current) ──
 $relStmt = $pdo->prepare("
@@ -235,7 +306,7 @@ $org = $orgStmt->fetch();
 $images    = json_decode($car['image_urls'] ?? '[]', true) ?: [];
 $coverImg  = $images[0] ?? '';
 
-$carTitle    = "{$car['year']} {$car['make']} {$car['model']}";
+$carTitle    = "{$car['year']} {$car['make']} {$car['model']}" . ($car['variant'] ? " {$car['variant']}" : '');
 $priceDisp   = 'R ' . number_format((float)$car['price'], 0, '.', ' ');
 $monthlyEst  = estimateMonthlyPayment((float)$car['price']);
 $monthlyDisp = 'R ' . number_format($monthlyEst, 0, '.', ' ') . ' /mo';
@@ -290,6 +361,43 @@ $breadcrumbs    = [
 
 $isAvailable = ($car['status'] === 'active');
 
+// ── VIN — mask for public display; only the last 6 characters shown ──
+// UX-3: full VIN is still stored/available to the dealer & broker, but a
+// public listing has no reason to expose the full number.
+$vinDisplay = null;
+if (!empty($car['vin'])) {
+    $vinLen     = strlen($car['vin']);
+    $vinDisplay = $vinLen > 6
+        ? str_repeat('•', $vinLen - 6) . substr($car['vin'], -6)
+        : $car['vin'];
+}
+
+// ── Warranty / service-plan expiry formatting ─────────────────
+function sd_format_expiry(?string $date, ?int $km): string
+{
+    $parts = [];
+    if ($date) $parts[] = date('M Y', strtotime($date));
+    if ($km)   $parts[] = number_format($km) . ' km';
+    if (!$parts) return '—';
+    return implode(' or ', $parts) . (count($parts) > 1 ? ' — whichever comes first' : '');
+}
+$warrantyDisplay    = sd_format_expiry($car['warranty_expiry_date'] ?? null, $car['warranty_expiry_km'] ?? null);
+$servicePlanDisplay = sd_format_expiry($car['service_plan_expiry_date'] ?? null, $car['service_plan_expiry_km'] ?? null);
+
+$warrantyTypeLabel = match($car['warranty_type'] ?? 'none') {
+    'manufacturer' => "Manufacturer warranty",
+    'extended'     => "Extended warranty",
+    'dealer'       => "Dealer warranty",
+    default        => "No warranty",
+};
+
+$serviceHistoryLabel = match($car['service_history'] ?? 'unknown') {
+    'full'    => 'Full service history',
+    'partial' => 'Partial service history',
+    'none'    => 'No service history',
+    default   => 'Service history unknown',
+};
+
 // ── CSRF token ────────────────────────────────────────────────
 if (session_status() === PHP_SESSION_NONE) session_start();
 if (!isset($_SESSION[CSRF_TOKEN_NAME])) {
@@ -297,8 +405,42 @@ if (!isset($_SESSION[CSRF_TOKEN_NAME])) {
 }
 $csrfToken = $_SESSION[CSRF_TOKEN_NAME];
 
+// ── Structured data (SEO-1) ────────────────────────────────────
+$vehicleJsonLd = [
+    '@context'          => 'https://schema.org',
+    '@type'             => 'Vehicle',
+    'name'              => $carTitle,
+    'vehicleModelDate'  => (string)$car['year'],
+    'manufacturer'      => $car['make'],
+    'model'             => $car['model'],
+    'mileageFromOdometer' => $car['mileage'] ? [
+        '@type' => 'QuantitativeValue',
+        'value' => (int)$car['mileage'],
+        'unitCode' => 'KMT',
+    ] : null,
+    'vehicleTransmission' => $car['transmission'] ?: null,
+    'fuelType'            => $car['fuel_type'] ?: null,
+    'color'               => $car['colour'] ?: null,
+    'offers' => [
+        '@type'         => 'Offer',
+        'price'         => (float)$car['price'],
+        'priceCurrency' => 'ZAR',
+        'availability'  => $isAvailable ? 'https://schema.org/InStock' : 'https://schema.org/SoldOut',
+        'url'           => $canonicalUrl,
+        'seller'        => [
+            '@type' => 'AutoDealer',
+            'name'  => $car['dealer_name'],
+        ],
+    ],
+];
+$vehicleJsonLd = array_filter($vehicleJsonLd, fn($v) => $v !== null);
+
 ob_start();
 ?>
+
+<script type="application/ld+json">
+<?= json_encode($vehicleJsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>
+</script>
 
 <?php if (!$isAvailable): ?>
 <div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 0;text-align:center;
@@ -306,6 +448,14 @@ ob_start();
   <i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>
   This listing is currently <?= htmlspecialchars($car['status']) ?>.
   <a href="/c/" style="color:#0f4c9e;margin-left:8px;">Browse available cars →</a>
+</div>
+<?php endif; ?>
+
+<?php if (!empty($car['is_written_off'])): ?>
+<div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:10px 0;text-align:center;
+            font-size:13px;color:#dc2626;font-weight:600;">
+  <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>
+  This vehicle has been declared an insurance write-off. See the History &amp; Warranty tab for details.
 </div>
 <?php endif; ?>
 
@@ -383,6 +533,9 @@ ob_start();
         <?php if ($car['dealer_verification'] === 'verified'): ?>
         <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-circle-check"></i> Verified Dealer</span>
         <?php endif; ?>
+        <?php if ($serviceHistoryLabel === 'Full service history'): ?>
+        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-file-circle-check"></i> Full Service History</span>
+        <?php endif; ?>
         <!-- v2: desk attribution badge always visible -->
         <span class="pub-badge pub-badge-desk">
           <i class="fa-solid fa-id-card"></i>
@@ -435,36 +588,174 @@ ob_start();
     </div>
     <?php endif; ?>
 
-    <!-- Full spec table -->
-    <div class="pub-spec-section pub-reveal">
-      <div class="pub-spec-section__title">Full specification</div>
-      <div class="pub-spec-table">
-        <?php
-        $specs = [
-            ['Make',         $car['make']],
-            ['Model',        $car['model']],
-            ['Year',         $car['year']],
-            ['Condition',    ucfirst($car['condition_type'])],
-            ['Body type',    $car['body_type']    ?: '—'],
-            ['Colour',       $car['colour']       ?: '—'],
-            ['Transmission', $car['transmission'] ?: '—'],
-            ['Fuel type',    $car['fuel_type']    ?: '—'],
-            ['Drivetrain',   $car['drivetrain']   ?: '—'],
-            ['Mileage',      $car['mileage'] ? number_format((int)$car['mileage']) . ' km' : '—'],
-            ['Price',        $priceDisp, true],
-        ];
-        foreach ($specs as $row):
-            [$key, $val, $highlight] = array_pad($row, 3, false);
-        ?>
-        <div class="pub-spec-table__row">
-          <span class="pub-spec-table__key"><?= htmlspecialchars($key) ?></span>
-          <span class="pub-spec-table__val <?= $highlight ? 'highlight' : '' ?>">
-            <?= htmlspecialchars((string)$val) ?>
-          </span>
-        </div>
-        <?php endforeach; ?>
+    <!-- ═══════════════════════════════════
+         UX-1: Specifications / Features / History tab group
+         Replaces the old single long spec table — same data plus
+         car_features (grouped by category) and ownership/warranty
+         disclosure, all reachable without endless scrolling.
+         ═══════════════════════════════════ -->
+    <div class="pub-tabs pub-reveal" id="specTabs">
+      <div class="pub-tabs__nav" role="tablist" aria-label="Vehicle details">
+        <button class="pub-tabs__btn active" type="button" data-tab="specs" role="tab" aria-selected="true">
+          <i class="fa-solid fa-list-check"></i> Specifications
+        </button>
+        <button class="pub-tabs__btn" type="button" data-tab="features" role="tab" aria-selected="false">
+          <i class="fa-solid fa-star"></i> Features
+          <?php if ($totalFeatureCount): ?>
+          <span class="pub-tabs__count"><?= $totalFeatureCount ?></span>
+          <?php endif; ?>
+        </button>
+        <button class="pub-tabs__btn" type="button" data-tab="history" role="tab" aria-selected="false">
+          <i class="fa-solid fa-shield-halved"></i> History &amp; Warranty
+          <?php if (!empty($car['is_written_off'])): ?>
+          <span class="pub-tabs__count pub-tabs__count--warn"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <?php endif; ?>
+        </button>
       </div>
-    </div>
+
+      <!-- ── Specifications panel ── -->
+      <div class="pub-tabs__panel active" data-panel="specs" role="tabpanel">
+        <div class="pub-spec-table">
+          <?php
+          $specs = array_filter([
+              ['Make',            $car['make']],
+              ['Model',           $car['model']],
+              ['Variant',         $car['variant'] ?: null],
+              ['Year',            $car['year']],
+              ['Condition',       ucfirst($car['condition_type'])],
+              ['Body type',       $car['body_type']    ?: null],
+              ['Exterior colour', $car['colour']       ?: null],
+              ['Interior colour', $car['interior_colour'] ?: null],
+              ['Doors',           $car['doors']        ?: null],
+              ['Seats',           $car['seats']        ?: null],
+              ['Transmission',    $car['transmission'] ?: null],
+              ['Gears',           $car['gears']        ?: null],
+              ['Fuel type',       $car['fuel_type']    ?: null],
+              ['Drivetrain',      $car['drivetrain']   ?: null],
+              ['Engine capacity', $car['engine_capacity_cc'] ? number_format((int)$car['engine_capacity_cc']) . ' cc' : null],
+              ['Cylinders',       $car['cylinders']    ?: null],
+              ['Induction',       $car['induction'] ? ucwords(str_replace('_', ' ', $car['induction'])) : null],
+              ['Power',           $car['power_kw']  ? (int)$car['power_kw'] . ' kW' : null],
+              ['Torque',          $car['torque_nm'] ? (int)$car['torque_nm'] . ' Nm' : null],
+              ['Fuel consumption',$car['fuel_consumption_l100km'] ? $car['fuel_consumption_l100km'] . ' L/100km' : null],
+              ['CO₂ emissions',   $car['co2_emissions_gkm'] ? (int)$car['co2_emissions_gkm'] . ' g/km' : null],
+              ['Mileage',         $car['mileage'] ? number_format((int)$car['mileage']) . ' km' : null],
+              ['VAT',             $car['vat_inclusive'] ? 'VAT inclusive' : 'Second-hand goods scheme (margin VAT)'],
+              ['Price',           $priceDisp, true],
+          ], fn($row) => $row[1] !== null);
+          foreach ($specs as $row):
+              [$key, $val, $highlight] = array_pad($row, 3, false);
+          ?>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key"><?= htmlspecialchars($key) ?></span>
+            <span class="pub-spec-table__val <?= $highlight ? 'highlight' : '' ?>">
+              <?= htmlspecialchars((string)$val) ?>
+            </span>
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+
+      <!-- ── Features panel ── -->
+      <div class="pub-tabs__panel" data-panel="features" role="tabpanel">
+        <?php if ($totalFeatureCount): ?>
+        <div class="pub-feat-groups">
+          <?php foreach ($featuresByCategory as $category => $items):
+              $catIcon = $categoryIcons[$category] ?? 'fa-tag';
+          ?>
+          <div class="pub-feat-group">
+            <div class="pub-feat-group__title">
+              <i class="fa-solid <?= $catIcon ?>"></i>
+              <?= htmlspecialchars($category) ?>
+              <span class="pub-feat-group__count"><?= count($items) ?></span>
+            </div>
+            <ul class="pub-feat-list">
+              <?php foreach ($items as $item): ?>
+              <li class="pub-feat-item">
+                <i class="fa-solid fa-check"></i>
+                <?= htmlspecialchars($item['name']) ?>
+              </li>
+              <?php endforeach; ?>
+            </ul>
+          </div>
+          <?php endforeach; ?>
+        </div>
+        <?php else: ?>
+        <div class="pub-feat-empty">
+          <i class="fa-solid fa-circle-info"></i>
+          The dealer hasn't listed detailed features for this car yet.
+          Ask <?= htmlspecialchars($deskRow['desk_name']) ?> about specific options via the enquiry form.
+        </div>
+        <?php endif; ?>
+      </div>
+
+      <!-- ── History & Warranty panel ── -->
+      <div class="pub-tabs__panel" data-panel="history" role="tabpanel">
+
+        <?php if (!empty($car['is_written_off'])): ?>
+        <div class="pub-history-alert">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <div>
+            <strong>Insurance write-off disclosed.</strong>
+            This vehicle has previously been declared an insurance write-off.
+            Ask the dealer for the full assessment report before proceeding.
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <div class="pub-spec-table">
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Previous owners</span>
+            <span class="pub-spec-table__val"><?= $car['previous_owners'] !== null ? (int)$car['previous_owners'] : 'Not disclosed' ?></span>
+          </div>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Service history</span>
+            <span class="pub-spec-table__val"><?= htmlspecialchars($serviceHistoryLabel) ?></span>
+          </div>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Service book</span>
+            <span class="pub-spec-table__val"><?= !empty($car['has_service_book']) ? 'Present' : 'Not available' ?></span>
+          </div>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Warranty</span>
+            <span class="pub-spec-table__val"><?= htmlspecialchars($warrantyTypeLabel) ?></span>
+          </div>
+          <?php if (($car['warranty_type'] ?? 'none') !== 'none'): ?>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Warranty expires</span>
+            <span class="pub-spec-table__val"><?= htmlspecialchars($warrantyDisplay) ?></span>
+          </div>
+          <?php endif; ?>
+          <?php if ($servicePlanDisplay !== '—'): ?>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">Service plan expires</span>
+            <span class="pub-spec-table__val"><?= htmlspecialchars($servicePlanDisplay) ?></span>
+          </div>
+          <?php endif; ?>
+          <?php if ($vinDisplay): ?>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">VIN</span>
+            <span class="pub-spec-table__val" style="font-family:var(--mono);letter-spacing:.03em;">
+              <?= htmlspecialchars($vinDisplay) ?>
+            </span>
+          </div>
+          <?php endif; ?>
+          <?php if ($car['mm_code']): ?>
+          <div class="pub-spec-table__row">
+            <span class="pub-spec-table__key">M&amp;M code</span>
+            <span class="pub-spec-table__val"><?= htmlspecialchars($car['mm_code']) ?></span>
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <p class="pub-history-note">
+          <i class="fa-solid fa-circle-info"></i>
+          Ownership, warranty and service details are supplied by the dealer.
+          Always request supporting documentation before purchase.
+        </p>
+      </div>
+
+    </div><!-- /pub-tabs -->
 
     <!-- Finance estimator -->
     <div class="pub-spec-section pub-reveal">
@@ -816,8 +1107,188 @@ ob_start();
   .pub-related {
     margin-inline: clamp(16px, 4vw, 48px);
     padding-inline: clamp(12px, 2vw, 24px);   
-  }  
+  }
+
+  /* ═══════════════════════════════════════════
+     UX-1: Specifications / Features / History tabs
+     ═══════════════════════════════════════════ */
+  .pub-tabs {
+    background: var(--white, #fff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--r-lg, 14px);
+    box-shadow: 0 2px 12px rgba(15,76,158,.06);
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+
+  .pub-tabs__nav {
+    display: flex;
+    gap: 2px;
+    padding: 6px;
+    background: var(--bg, #f3f4f8);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .pub-tabs__nav::-webkit-scrollbar { display: none; }
+
+  .pub-tabs__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    font-family: var(--sans, 'DM Sans', sans-serif);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted, #64748b);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+
+  .pub-tabs__btn:hover { color: var(--p, #0f4c9e); }
+
+  .pub-tabs__btn.active {
+    background: var(--white, #fff);
+    color: var(--p, #0f4c9e);
+    box-shadow: 0 1px 4px rgba(0,0,0,.08);
+  }
+
+  .pub-tabs__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--p-light, #eff4ff);
+    color: var(--p, #0f4c9e);
+    font-size: 10px;
+    font-weight: 700;
+    font-family: var(--mono, monospace);
+  }
+  .pub-tabs__btn.active .pub-tabs__count { background: var(--p, #0f4c9e); color: #fff; }
+  .pub-tabs__count--warn { background: #fef2f2; color: #dc2626; }
+
+  .pub-tabs__panel { display: none; padding: 20px; }
+  .pub-tabs__panel.active { display: block; }
+
+  /* Feature groups */
+  .pub-feat-groups {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px 28px;
+  }
+  .pub-feat-group__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-d, 'Sora', sans-serif);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text, #1e293b);
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+  }
+  .pub-feat-group__title i { color: var(--p, #0f4c9e); font-size: 12px; }
+  .pub-feat-group__count {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--faint, #94a3b8);
+    font-family: var(--mono, monospace);
+  }
+  .pub-feat-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
+  .pub-feat-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12.5px;
+    color: var(--text2, #3d4663);
+    line-height: 1.4;
+  }
+  .pub-feat-item i { color: var(--green, #15803d); font-size: 10px; margin-top: 3px; flex-shrink: 0; }
+
+  .pub-feat-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: var(--bg, #f3f4f8);
+    border: 1px dashed var(--border2, #cbd5e1);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--muted, #64748b);
+    line-height: 1.6;
+  }
+  .pub-feat-empty i { color: var(--p, #0f4c9e); margin-top: 2px; }
+
+  /* History & warranty */
+  .pub-history-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #991b1b;
+    line-height: 1.55;
+  }
+  .pub-history-alert i { color: #dc2626; font-size: 16px; margin-top: 1px; flex-shrink: 0; }
+
+  .pub-history-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 11.5px;
+    color: var(--faint, #94a3b8);
+    margin-top: 14px;
+    line-height: 1.6;
+  }
+  .pub-history-note i { margin-top: 2px; flex-shrink: 0; }
+
+  @media (max-width: 640px) {
+    .pub-feat-groups { grid-template-columns: 1fr; }
+    .pub-tabs__btn { padding: 10px 12px; font-size: 12px; }
+    .pub-tabs__panel { padding: 16px; }
+  }
 </style>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.getElementById('specTabs');
+  if (!root) return;
+
+  var btns   = Array.from(root.querySelectorAll('.pub-tabs__btn'));
+  var panels = Array.from(root.querySelectorAll('.pub-tabs__panel'));
+
+  btns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = btn.getAttribute('data-tab');
+
+      btns.forEach(function (b) {
+        var isActive = b === btn;
+        b.classList.toggle('active', isActive);
+        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+
+      panels.forEach(function (p) {
+        p.classList.toggle('active', p.getAttribute('data-panel') === target);
+      });
+    });
+  });
+})();
+</script>
 
 <?php
 $pageContent = ob_get_clean();

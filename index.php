@@ -506,7 +506,7 @@ ob_start();
   <div class="sd-hero__content anim-up">
 
     <h1 class="sd-hero__title">New &amp; Used Cars for Sale</h1>
-    <p class="sd-hero__sub">South Africa&rsquo;s Independent Car Marketplace.</p>
+    <p class="sd-hero__sub">South Africa&rsquo;s Automotive Commerce Community.</p>
 
     <?php include __DIR__ . '/views/partials/hero-search-widget.php'; ?>
 

@@ -9,6 +9,13 @@
  *
  * Car limit enforced on "Add to Desk" (b10, D-10).
  * Share sheet rendered inline per car (b4).
+ *
+ * FIX: deskStmt now selects p.car_limit (previously omitted), so
+ * this page enforces the broker's actual per-broker override (set
+ * via app/admin/users.php "set_car_limit") instead of always
+ * falling back to the platform default. Platform default was raised
+ * from 10 to 150 — see includes/config.php DEFAULT_BROKER_CAR_LIMIT
+ * and db/0003_update_broker_car_limit.sql.
  */
 
 declare(strict_types=1);
@@ -28,7 +35,7 @@ $userId = (int) $_SESSION['user_id'];
 
 // ── Load broker salesdesk ─────────────────────────────────────
 $deskStmt = $pdo->prepare("
-    SELECT sd.id, sd.slug, sd.display_name
+    SELECT sd.id, sd.slug, sd.display_name, p.car_limit
     FROM salesdesks sd
     LEFT JOIN profiles p ON p.user_id = sd.user_id
     WHERE sd.user_id = ? AND sd.is_active = 1

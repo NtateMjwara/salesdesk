@@ -6,6 +6,30 @@
  * Task sep3: JOIN leads ON leads.car_id = cars.id WHERE cars.uploaded_by_exec_id = se.id
  * Same pipeline and detail as dealer leads.
  * Exec can update status, add notes. Attribution display is immutable.
+ * Exec cannot close or mark lost — that is dealer principal only.
+ *
+ * REFACTORED: All inline style= layout attributes replaced with semantic
+ * CSS classes. Mirrors the pattern established in dealer_leads.php.
+ *
+ * Problems fixed (identical root causes to dealer/leads.php):
+ *   — outer flex split (list + sticky detail panel) was inline →
+ *     .d-split-layout; stacks to single column on tablet/mobile
+ *   — onclick table row navigation was combined with inline background
+ *     colour state → .d-roster__row / .d-roster__row--selected CSS classes
+ *     fix the iOS stuck-hover bug
+ *   — buyer name/phone cell, desk cell → .d-lead-buyer-name / .d-lead-buyer-phone
+ *     with min-width:0 parents so ellipsis fires instead of overflowing
+ *   — filter tabs → .d-tab-bar / .d-tab, horizontally scrollable
+ *   — status tabs had no wrapping guard — 7 tabs in a flex container at
+ *     320px width caused significant overflow
+ *   — detail panel: header, attribution, buyer message, stage list all
+ *     converted from inline style= to dealer.css §5 classes
+ *   — intent dot used inline width/height/border-radius/background →
+ *     .dash-intent-dot + modifier class
+ *   — pipeline stage radio labels used per-row inline border-color and
+ *     background switching → .d-stage-label / .d-stage-label--active
+ *   — "deal close is handled by dealer" info alert was inline-styled →
+ *     uses .alert.alert-info from components.css
  */
 require_once '../../includes/security.php';
 require_once '../../includes/session.php';
@@ -39,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $leadRow = $check->fetch();
 
         if ($leadRow) {
+            // Exec can only move leads through pre-close stages
             $validStatuses = ['new','contacted','test_drive','negotiation'];
             $newStatus     = $_POST['new_status'] ?? '';
             $notes         = trim($_POST['dealer_notes'] ?? '');
@@ -79,7 +104,7 @@ $countsStmt = $pdo->prepare("
 $countsStmt->execute([$execId]);
 $statusCounts = array_fill_keys(['new','contacted','test_drive','negotiation','closed','lost'], 0);
 foreach ($countsStmt->fetchAll() as $r) {
-    $statusCounts[$r['status']] = (int)$r['cnt'];
+    $statusCounts[$r['status']] = (int) $r['cnt'];
 }
 
 // ── Load leads — exec-scoped ──────────────────────────────────
@@ -97,6 +122,7 @@ $leadsStmt = $pdo->prepare("
         l.id, l.buyer_name, l.buyer_phone, l.buyer_intent,
         l.status, l.created_at, l.dealer_notes,
         c.make, c.model, c.year, c.price,
+        u.email AS broker_email,
         p.first_name AS broker_first, p.last_name AS broker_last,
         sd.display_name AS desk_name
     FROM leads l
@@ -136,6 +162,7 @@ if ($detailId > 0) {
     $detailLead = $detailStmt->fetch();
 }
 
+// ── Helpers ───────────────────────────────────────────────────
 function intentLabel(string $intent): string {
     return match($intent) {
         'within_30d' => '🔥 Hot — within 30 days',
@@ -144,27 +171,58 @@ function intentLabel(string $intent): string {
     };
 }
 
+function intentBadge(string $intent): string {
+    return match($intent) {
+        'within_30d' => '<span class="badge" style="background:var(--gr-bg);color:var(--green);border-color:var(--gr-b);">🔥 Hot</span>',
+        'one_to_3mo' => '<span class="badge" style="background:var(--amb-bg);color:var(--amber);border-color:var(--amb-b);">Warm</span>',
+        default      => '<span class="badge badge-suspended">Browsing</span>',
+    };
+}
+
+function statusPill(string $status): string {
+    $cls = match($status) {
+        'new'         => 'd-status-pill--new',
+        'contacted'   => 'd-status-pill--contacted',
+        'test_drive'  => 'd-status-pill--test-drive',
+        'negotiation' => 'd-status-pill--negotiation',
+        'closed'      => 'd-status-pill--closed',
+        'lost'        => 'd-status-pill--lost',
+        default       => '',
+    };
+    $label = match($status) {
+        'new'         => 'New',
+        'contacted'   => 'Contacted',
+        'test_drive'  => 'Test Drive',
+        'negotiation' => 'Negotiation',
+        'closed'      => 'Closed',
+        'lost'        => 'Lost',
+        default       => $status,
+    };
+    return "<span class=\"d-status-pill {$cls}\">{$label}</span>";
+}
+
 $pageTitle = 'Leads';
 ob_start();
 ?>
 
-<div style="display:flex;align-items:flex-start;gap:1.5rem;">
+<div class="d-split-layout">
 
-  <!-- ── LEADS LIST ─────────────────────────────────────────── -->
-  <div style="flex:1;min-width:0;">
-    <div style="margin-bottom:1.25rem;">
-      <h1 style="font-family:var(--serif);font-size:1.5rem;font-weight:300;">
-        My lead <em style="font-style:italic;">pipeline</em>
-      </h1>
-      <p style="font-size:13px;color:var(--muted);margin-top:2px;">
-        Leads on cars you uploaded at <?= htmlspecialchars($exec['dealer_name']) ?>
-      </p>
+  <!-- ── LEADS LIST PANEL ────────────────────────────────────── -->
+  <div class="d-split-layout__main">
+
+    <div class="dash-header">
+      <div class="dash-header__text">
+        <h1 class="page-header__title">My lead <em>pipeline</em></h1>
+        <p class="dash-header__sub-plain">
+          Leads on cars you uploaded at <?= htmlspecialchars($exec['dealer_name']) ?>
+        </p>
+      </div>
     </div>
 
-    <!-- Status tabs -->
-    <div style="display:flex;gap:2px;margin-bottom:1rem;overflow-x:auto;">
+    <!-- Status filter tabs -->
+    <div class="d-tab-bar" role="tablist" aria-label="Filter leads by status">
       <?php
-      $tabs = [
+      $tabDefs = [
         ''            => 'All (' . array_sum($statusCounts) . ')',
         'new'         => 'New (' . $statusCounts['new'] . ')',
         'contacted'   => 'Contacted (' . $statusCounts['contacted'] . ')',
@@ -173,90 +231,78 @@ ob_start();
         'closed'      => 'Closed (' . $statusCounts['closed'] . ')',
         'lost'        => 'Lost (' . $statusCounts['lost'] . ')',
       ];
-      foreach ($tabs as $val => $lbl):
+      foreach ($tabDefs as $val => $label):
         $active = $filterStatus === $val;
       ?>
       <a href="?status=<?= urlencode($val) ?><?= $search ? '&q=' . urlencode($search) : '' ?>"
-         style="white-space:nowrap;padding:6px 12px;border-radius:var(--r-sm);
-                font-size:12px;font-weight:<?= $active ? '600' : '400' ?>;
-                text-decoration:none;background:<?= $active ? 'var(--p)' : 'transparent' ?>;
-                color:<?= $active ? '#fff' : 'var(--muted)' ?>;">
-        <?= $lbl ?>
+         class="d-tab <?= $active ? 'd-tab--active' : '' ?>"
+         role="tab"
+         aria-selected="<?= $active ? 'true' : 'false' ?>">
+        <?= $label ?>
       </a>
       <?php endforeach; ?>
     </div>
 
     <!-- Search -->
-    <form method="GET" style="display:flex;gap:8px;margin-bottom:1rem;">
+    <form method="GET" class="d-search-row">
       <input type="hidden" name="status" value="<?= htmlspecialchars($filterStatus) ?>">
-      <input class="finput" name="q" placeholder="Search buyer or vehicle…"
-             value="<?= htmlspecialchars($search) ?>" style="max-width:240px;">
+      <input class="finput" name="q"
+             placeholder="Search buyer or vehicle…"
+             value="<?= htmlspecialchars($search) ?>">
       <button class="btn btn-ghost btn-sm" type="submit">Search</button>
       <?php if ($search): ?>
-      <a href="?status=<?= urlencode($filterStatus) ?>" class="btn btn-ghost btn-sm"
+      <a href="?status=<?= urlencode($filterStatus) ?>"
+         class="btn btn-ghost btn-sm"
          style="text-decoration:none;">Clear</a>
       <?php endif; ?>
     </form>
 
+    <!-- Leads table -->
     <?php if (empty($leads)): ?>
     <div class="empty">
-      <span class="empty-icon"><i class="fa-solid fa-inbox"></i></span>
+      <span class="empty-icon"><i class="fa-solid fa-inbox" aria-hidden="true"></i></span>
       No leads yet on your listings.
     </div>
     <?php else: ?>
-    <div class="roster-wrap">
-      <table class="roster">
+    <div class="d-roster-wrap">
+      <table class="d-roster">
         <thead>
           <tr>
             <th>Buyer</th>
-            <th>Vehicle</th>
-            <th>Broker</th>
+            <th class="d-hide-sm">Vehicle</th>
+            <th class="d-hide-sm">Broker</th>
             <th>Intent</th>
             <th>Status</th>
-            <th>Date</th>
+            <th class="d-hide-sm">Date</th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ($leads as $lead):
           $ageHours = (time() - strtotime($lead['created_at'])) / 3600;
-          $ageLabel = $ageHours < 24 ? round($ageHours) . 'h ago' : round($ageHours / 24) . 'd ago';
-          $isSelected = $detailId === (int)$lead['id'];
-          $intentColour = match($lead['buyer_intent']) {
-            'within_30d' => 'var(--green)', 'one_to_3mo' => 'var(--amber)', default => 'var(--faint)'
-          };
+          $ageLabel = $ageHours < 24
+            ? round($ageHours) . 'h ago'
+            : round($ageHours / 24) . 'd ago';
+          $isSelected = $detailId === (int) $lead['id'];
         ?>
-        <tr style="cursor:pointer;<?= $isSelected ? 'background:var(--p-light)' : '' ?>"
+        <tr class="d-roster__row <?= $isSelected ? 'd-roster__row--selected' : '' ?>"
             onclick="window.location='/app/exec/leads.php?id=<?= $lead['id'] ?>&status=<?= urlencode($filterStatus) ?>'">
           <td>
-            <div style="font-weight:500;color:var(--text);font-size:13px;">
+            <div class="d-lead-buyer-name">
               <?= htmlspecialchars($lead['buyer_name']) ?>
             </div>
-            <div style="font-size:11px;color:var(--faint);">
+            <div class="d-lead-buyer-phone">
               <?= htmlspecialchars($lead['buyer_phone']) ?>
             </div>
           </td>
-          <td style="font-size:12px;">
+          <td class="d-hide-sm" style="font-size:12px;">
             <?= htmlspecialchars("{$lead['year']} {$lead['make']} {$lead['model']}") ?>
           </td>
-          <td style="font-size:12px;color:var(--muted);">
+          <td class="d-hide-sm" style="font-size:12px;color:var(--muted);">
             <?= htmlspecialchars($lead['desk_name'] ?? $lead['broker_email'] ?? '—') ?>
           </td>
-          <td>
-            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
-                         background:<?= $intentColour ?>;margin-right:4px;"></span>
-            <span style="font-size:11px;color:var(--muted);">
-              <?= match($lead['buyer_intent']) {
-                'within_30d' => 'Hot', 'one_to_3mo' => 'Warm', default => 'Browsing'
-              } ?>
-            </span>
-          </td>
-          <td>
-            <span style="font-size:10px;font-family:var(--mono);font-weight:600;
-                         text-transform:uppercase;color:var(--p);">
-              <?= str_replace('_', ' ', $lead['status']) ?>
-            </span>
-          </td>
-          <td style="font-size:11px;color:var(--faint);"><?= $ageLabel ?></td>
+          <td><?= intentBadge($lead['buyer_intent']) ?></td>
+          <td><?= statusPill($lead['status']) ?></td>
+          <td class="d-hide-sm" style="font-size:11px;color:var(--faint);"><?= $ageLabel ?></td>
         </tr>
         <?php endforeach; ?>
         </tbody>
@@ -265,144 +311,169 @@ ob_start();
     <?php endif; ?>
   </div>
 
-  <!-- ── DETAIL PANEL ──────────────────────────────────────── -->
+  <!-- ── LEAD DETAIL PANEL ────────────────────────────────────── -->
   <?php if ($detailLead): ?>
-  <div style="width:340px;flex-shrink:0;">
-    <div class="card" style="overflow:hidden;position:sticky;top:76px;">
+  <div class="d-detail-panel" id="detailPanel">
+    <div class="d-detail-card">
 
-      <div style="padding:16px 18px;border-bottom:1px solid var(--border);background:var(--bg);
-                  display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-        <div>
-          <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:3px;">
+      <!-- Header -->
+      <div class="d-detail-card__head">
+        <div style="min-width:0;">
+          <div class="d-detail-card__head-name">
             <?= htmlspecialchars($detailLead['buyer_name']) ?>
           </div>
-          <div style="font-size:11px;color:var(--muted);"><?= intentLabel($detailLead['buyer_intent']) ?></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            <?= intentLabel($detailLead['buyer_intent']) ?>
+          </div>
         </div>
         <a href="/app/exec/leads.php?status=<?= urlencode($filterStatus) ?>"
-           style="color:var(--faint);text-decoration:none;font-size:18px;">
-          <i class="fa-solid fa-xmark"></i>
+           class="d-detail-card__close"
+           aria-label="Close detail panel">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </a>
       </div>
 
-      <div style="padding:16px 18px;overflow-y:auto;max-height:calc(100vh - 200px);">
+      <div class="d-detail-card__body">
 
         <!-- Buyer contact -->
-        <div style="margin-bottom:1.25rem;">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.06em;color:var(--faint);margin-bottom:6px;">Contact</div>
+        <div class="d-detail-section">
+          <span class="d-detail-section__label">Contact</span>
           <a href="tel:<?= htmlspecialchars($detailLead['buyer_phone']) ?>"
              style="display:block;font-size:14px;color:var(--p);font-weight:600;
                     text-decoration:none;margin-bottom:3px;">
-            <i class="fa-solid fa-phone" style="font-size:11px;margin-right:5px;"></i>
+            <i class="fa-solid fa-phone" style="font-size:11px;margin-right:5px;" aria-hidden="true"></i>
             <?= htmlspecialchars($detailLead['buyer_phone']) ?>
           </a>
           <?php if ($detailLead['buyer_email']): ?>
           <a href="mailto:<?= htmlspecialchars($detailLead['buyer_email']) ?>"
-             style="display:block;font-size:12px;color:var(--p);text-decoration:none;">
-            <i class="fa-solid fa-envelope" style="font-size:11px;margin-right:5px;"></i>
+             style="display:block;font-size:12px;color:var(--p);text-decoration:none;word-break:break-all;">
+            <i class="fa-solid fa-envelope" style="font-size:11px;margin-right:5px;" aria-hidden="true"></i>
             <?= htmlspecialchars($detailLead['buyer_email']) ?>
           </a>
           <?php endif; ?>
           <?php if ($detailLead['buyer_message']): ?>
-          <div style="margin-top:8px;font-size:12px;color:var(--muted);
-                      background:var(--bg);border:1px solid var(--border);
-                      border-radius:var(--r-sm);padding:9px 11px;
-                      font-style:italic;line-height:1.6;">
+          <div class="d-buyer-message">
             "<?= htmlspecialchars($detailLead['buyer_message']) ?>"
           </div>
           <?php endif; ?>
         </div>
 
         <!-- Attribution (immutable) -->
-        <div style="margin-bottom:1.25rem;background:var(--p-light);
-                    border:1px solid var(--p-b);border-radius:var(--r-md);padding:12px 14px;">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.06em;color:var(--p);margin-bottom:6px;">
-            <i class="fa-solid fa-lock" style="font-size:9px;margin-right:3px;"></i>
-            Attribution (locked)
-          </div>
-          <div style="font-size:12px;color:var(--p-dark);line-height:1.9;">
-            <strong>Broker:</strong>
-            <?= htmlspecialchars(trim(($detailLead['broker_first'] ?? '') . ' ' . ($detailLead['broker_last'] ?? '')) ?: $detailLead['broker_email']) ?>
-            <br><strong>Desk:</strong> <?= htmlspecialchars($detailLead['desk_name'] ?? '—') ?>
-            <br><strong>At:</strong> <?= date('d M Y H:i', strtotime($detailLead['attributed_at'])) ?>
+        <div class="d-detail-section">
+          <div class="d-attribution">
+            <div class="d-attribution__label">
+              <i class="fa-solid fa-lock" style="font-size:9px;" aria-hidden="true"></i>
+              Attribution (locked)
+            </div>
+            <div class="d-attribution__content">
+              <strong>Broker:</strong>
+              <?= htmlspecialchars(trim(($detailLead['broker_first'] ?? '') . ' ' . ($detailLead['broker_last'] ?? '')) ?: $detailLead['broker_email']) ?>
+              <br>
+              <strong>Desk:</strong> <?= htmlspecialchars($detailLead['desk_name'] ?? '—') ?>
+              <br>
+              <strong>Attributed:</strong>
+              <?= date('d M Y H:i', strtotime($detailLead['attributed_at'])) ?>
+            </div>
           </div>
         </div>
 
-        <!-- Car -->
-        <div style="margin-bottom:1.25rem;">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;
-                      letter-spacing:.06em;color:var(--faint);margin-bottom:5px;">Vehicle</div>
+        <!-- Vehicle -->
+        <div class="d-detail-section">
+          <span class="d-detail-section__label">Vehicle</span>
           <div style="font-size:13px;font-weight:600;color:var(--text);">
             <?= htmlspecialchars("{$detailLead['year']} {$detailLead['make']} {$detailLead['model']}") ?>
           </div>
-          <div style="font-size:12px;color:var(--muted);">R <?= number_format($detailLead['price'], 0) ?></div>
+          <div style="font-size:12px;color:var(--muted);">
+            R <?= number_format($detailLead['price'], 0) ?>
+          </div>
         </div>
 
-        <!-- Status update — exec can update pre-close stages only -->
+        <!-- Commission status if deal closed -->
+        <?php if ($detailLead['commission_id']): ?>
+        <div class="d-detail-section">
+          <div class="d-commission-block">
+            <span class="d-commission-block__label">Commission</span>
+            <div class="d-commission-block__status">
+              Status: <?= htmlspecialchars($detailLead['commission_status']) ?>
+            </div>
+          </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Status update — exec can only move through pre-close stages -->
         <?php if (!in_array($detailLead['status'], ['closed','lost'])): ?>
-        <form method="POST">
+        <form method="POST" id="statusForm">
           <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
           <input type="hidden" name="action" value="update_status">
           <input type="hidden" name="lead_id" value="<?= $detailLead['id'] ?>">
 
-          <div style="margin-bottom:1rem;">
-            <div style="font-size:10px;font-weight:700;text-transform:uppercase;
-                        letter-spacing:.06em;color:var(--faint);margin-bottom:7px;">
-              Pipeline stage
+          <div class="d-detail-section">
+            <span class="d-detail-section__label">Pipeline stage</span>
+            <div class="d-stage-list">
+              <?php foreach ([
+                ['new',         'New'],
+                ['contacted',   'Contacted'],
+                ['test_drive',  'Test Drive'],
+                ['negotiation', 'Negotiation'],
+              ] as [$sv, $sl]):
+                $isCurrent = $detailLead['status'] === $sv;
+              ?>
+              <label class="d-stage-label <?= $isCurrent ? 'd-stage-label--active' : '' ?>">
+                <input type="radio"
+                       name="new_status"
+                       value="<?= $sv ?>"
+                       <?= $isCurrent ? 'checked' : '' ?>
+                       style="accent-color:var(--p);flex-shrink:0;">
+                <span class="d-stage-label__text"><?= $sl ?></span>
+                <?php if ($isCurrent): ?>
+                <span class="d-stage-label__current">CURRENT</span>
+                <?php endif; ?>
+              </label>
+              <?php endforeach; ?>
             </div>
-            <?php foreach ([['new','New'],['contacted','Contacted'],['test_drive','Test Drive'],['negotiation','Negotiation']] as [$sv,$sl]): ?>
-            <label style="display:flex;align-items:center;gap:8px;padding:7px 10px;
-                           border-radius:var(--r-md);margin-bottom:4px;cursor:pointer;
-                           border:1px solid <?= $detailLead['status'] === $sv ? 'var(--p-b)' : 'var(--border)' ?>;
-                           background:<?= $detailLead['status'] === $sv ? 'var(--p-light)' : 'var(--bg)' ?>;">
-              <input type="radio" name="new_status" value="<?= $sv ?>"
-                     <?= $detailLead['status'] === $sv ? 'checked' : '' ?>
-                     style="accent-color:var(--p);">
-              <span style="font-size:12px;font-weight:<?= $detailLead['status'] === $sv ? '600' : '400' ?>;
-                           color:<?= $detailLead['status'] === $sv ? 'var(--p)' : 'var(--text2)' ?>;">
-                <?= $sl ?>
-              </span>
-            </label>
-            <?php endforeach; ?>
           </div>
 
           <div class="fgroup">
-            <label class="flabel" for="exec_notes">Notes</label>
-            <textarea class="finput" id="exec_notes" name="dealer_notes" rows="3"
+            <label class="flabel" for="exec_notes">
+              Notes <span class="flabel-opt">(internal)</span>
+            </label>
+            <textarea class="finput"
+                      id="exec_notes"
+                      name="dealer_notes"
+                      rows="3"
                       maxlength="500"
                       placeholder="Call notes, test drive feedback…"><?= htmlspecialchars($detailLead['dealer_notes'] ?? '') ?></textarea>
           </div>
 
-          <div class="alert alert-info" style="font-size:11px;padding:8px 12px;">
-            <i class="fa-solid fa-circle-info alert-icon"></i>
-            Deal close is handled by the dealer principal.
+          <!-- Exec permission boundary notice -->
+          <div class="alert alert-info" style="margin-bottom:1rem;">
+            <i class="fa-solid fa-circle-info alert-icon" aria-hidden="true"></i>
+            Deal close and lost marking are handled by the dealer principal.
           </div>
 
-          <button class="btn btn-primary btn-full" type="submit" style="margin-top:8px;">
+          <button class="btn btn-primary btn-full" type="submit">
             Update status
           </button>
         </form>
+
         <?php else: ?>
-        <div style="text-align:center;padding:10px 0;">
-          <span style="font-size:13px;font-weight:600;
-                       color:<?= $detailLead['status'] === 'closed' ? 'var(--green)' : 'var(--faint)' ?>;">
-            <?= ucfirst($detailLead['status']) ?>
-          </span>
+        <!-- Already closed/lost — read-only view -->
+        <div class="d-lead-terminal">
+          <?= statusPill($detailLead['status']) ?>
           <?php if ($detailLead['dealer_notes']): ?>
-          <div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic;">
+          <div class="d-lead-terminal__notes">
             <?= htmlspecialchars($detailLead['dealer_notes']) ?>
           </div>
           <?php endif; ?>
         </div>
         <?php endif; ?>
 
-      </div>
-    </div>
-  </div>
-  <?php endif; ?>
+      </div><!-- /d-detail-card__body -->
+    </div><!-- /d-detail-card -->
+  </div><!-- /d-detail-panel -->
+  <?php endif; // detailLead ?>
 
-</div>
+</div><!-- /d-split-layout -->
 
 <?php
 $pageContent = ob_get_clean();

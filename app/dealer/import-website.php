@@ -13,14 +13,38 @@
  * import.php's docblock, adjusted for what's different about a website
  * source vs a CSV upload):
  *
- *   1. SYNCHRONOUS ONLY, SAME AS CSV IMPORT. sync() crawls the site,
+ *   1. SYNCHRONOUS, BUT NOW WALL-CLOCK-BOUNDED. sync() crawls the site,
  *      extracts markup, and re-hosts images inline within this request —
- *      there is still no job queue in this codebase. WebsiteImporter caps
- *      itself at MAX_PAGES per run so worst-case time stays bounded, and
- *      this page raises set_time_limit() the same way import.php does.
- *      A production-grade version should hand this off to a background
- *      worker and let the dealer poll vehicle_imports.status instead —
- *      that infrastructure doesn't exist yet, so it isn't built here.
+ *      there is still no job queue in this codebase. Earlier versions of
+ *      this page relied on set_time_limit() plus MAX_PAGES to keep things
+ *      bounded, but neither actually controls how long the REQUEST takes
+ *      from a reverse proxy's point of view: set_time_limit() only caps
+ *      PHP's own execution time, and MAX_PAGES doesn't bound wall-clock
+ *      time (a hanging page fetch or a car with several large photos to
+ *      re-host can each burn many seconds on their own). In practice this
+ *      meant a normal-sized dealer site could run past nginx's
+ *      fastcgi_read_timeout / Apache's ProxyTimeout (both commonly 60s by
+ *      default) and the gateway would return its own 504 — independent of
+ *      whatever PHP was still doing.
+ *
+ *      WebsiteImporter now enforces its own wall-clock budget internally
+ *      (see WebsiteImporter::DEFAULT_TIME_BUDGET_SECONDS, 35s by default,
+ *      covering crawling AND image re-hosting combined) and stops early
+ *      rather than running past it, returning whatever it found so far —
+ *      a partial import is far better than a request that 504s with
+ *      nothing imported at all. set_time_limit(300) below is now just a
+ *      generous backstop so PHP itself never becomes the bottleneck; it
+ *      is NOT the thing keeping this page under your gateway's timeout —
+ *      that's WebsiteImporter's internal deadline. If you've raised your
+ *      gateway's own timeout, you can raise 'time_budget_seconds' to
+ *      match when calling sync() below.
+ *
+ *      OPERATOR ACTION STILL RECOMMENDED: confirm your reverse proxy's
+ *      read timeout is at least ~60s (nginx: fastcgi_read_timeout /
+ *      proxy_read_timeout; Apache+mod_proxy_fcgi: ProxyTimeout) so the
+ *      ~35s internal budget plus DB write overhead has comfortable
+ *      margin. If your platform hard-caps gateway timeouts below that
+ *      (some managed hosts do), lower 'time_budget_seconds' to match.
  *
  *   2. DEALER-PRINCIPAL ONLY, SAME AS CSV IMPORT. No sales_exec branch —
  *      pointing SalesDesk at a whole website's worth of stock felt like
@@ -59,6 +83,13 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/importers/WebsiteImporter.php';
+
+// Wall-clock budget (seconds) for the whole crawl + image re-host — see
+// this file's docblock point 1. Defaults to WebsiteImporter's own
+// DEFAULT_TIME_BUDGET_SECONDS (35s) if not overridden here; declared
+// explicitly at the page level, rather than left implicit, so raising it
+// to match a raised gateway timeout is a one-line change.
+const WEBSITE_IMPORT_TIME_BUDGET_SECONDS = 35;
 
 applyCachePolicy('auth');
 requireLogin();
@@ -102,9 +133,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
     } elseif ($defaultCommissionType === 'percentage' && $defaultCommissionValue > 30) {
         $error = 'Default percentage commission must be 30% or less.';
     } else {
-        // Website crawling (including image downloads for every vehicle
-        // found) can genuinely take a while — same stopgap as CSV import,
-        // not a scalability fix. See docblock point 1.
+        // WebsiteImporter internally caps itself to WEBSITE_IMPORT_TIME_BUDGET_SECONDS
+        // wall-clock seconds (crawling + image re-hosting combined) and
+        // returns whatever it found so far once that's reached — see this
+        // file's docblock point 1 for why that, not set_time_limit(), is
+        // what actually keeps this request under your gateway's timeout.
+        // set_time_limit(300) here is just a generous backstop so PHP
+        // itself is never the bottleneck.
         set_time_limit(300);
 
         try {
@@ -113,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                 'initiated_by'             => $userId,
                 'default_commission_type'  => $defaultCommissionType,
                 'default_commission_value' => $defaultCommissionValue,
+                'time_budget_seconds'      => WEBSITE_IMPORT_TIME_BUDGET_SECONDS,
             ]);
 
             writeAuditLog(
@@ -175,7 +211,9 @@ ob_start();
       <i class="fa-solid fa-circle-info" style="margin-right:4px;"></i>
       If your site doesn't publish this kind of markup, we won't find any vehicles — in that case,
       <a href="/app/dealer/import.php" style="color:var(--p);font-weight:600;">CSV import</a> is the
-      more reliable option today.
+      more reliable option today. On the Motus platform (motusvw.co.za and similar)? Use
+      <a href="/app/dealer/import-motus.php" style="color:var(--p);font-weight:600;">Motus import</a>
+      instead — built specifically for that platform.
     </p>
   </div>
 
@@ -190,9 +228,22 @@ ob_start();
   <!-- ── Result summary ─────────────────────────────────────── -->
   <div class="card card-body" style="margin-bottom:1.5rem;">
     <h3 style="font-size:14px;font-weight:700;margin-bottom:1rem;display:flex;align-items:center;gap:8px;">
+      <?php if (!empty($result['time_boxed'])): ?>
+      <i class="fa-solid fa-hourglass-half" style="color:var(--amber);"></i>
+      Import stopped early
+      <?php else: ?>
       <i class="fa-solid fa-circle-check" style="color:var(--green);"></i>
       Import complete
+      <?php endif; ?>
     </h3>
+    <?php if (!empty($result['time_boxed'])): ?>
+    <div class="alert alert-info" style="margin-bottom:1rem;">
+      <i class="fa-solid fa-circle-info alert-icon"></i>
+      Your site has a lot to work through, so we stopped within our safety window rather than risk the
+      page timing out. Everything below was imported successfully — re-run the import to pick up
+      anything we didn't get to; already-imported vehicles won't be duplicated.
+    </div>
+    <?php endif; ?>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1rem;">
       <div style="background:var(--gr-bg);border:1px solid var(--gr-b);border-radius:var(--r-md);padding:12px;text-align:center;">
         <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--green);"><?= (int) $result['imported'] ?></div>
@@ -342,7 +393,8 @@ ob_start();
   <i class="fa-solid fa-circle-notch fa-spin" style="font-size:32px;color:var(--p);"></i>
   <div style="font-size:14px;font-weight:600;color:var(--text);">Reading your website…</div>
   <div style="font-size:12px;color:var(--muted);max-width:320px;text-align:center;">
-    This can take a minute or two depending on how many vehicles your site lists. Please don't close this tab.
+    This usually finishes within about half a minute. For sites with a lot of listings, we import what
+    we can find within a safety window rather than risk timing out — please don't close this tab.
   </div>
 </div>
 <script>

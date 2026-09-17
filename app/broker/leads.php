@@ -14,6 +14,7 @@ require_once '../../includes/security.php';
 require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
+require_once '../../includes/csrf.php';
 
 applyCachePolicy('auth');
 requireLogin();

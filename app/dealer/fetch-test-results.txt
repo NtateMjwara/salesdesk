@@ -1,0 +1,197 @@
+======================================================================
+[A] Plain — old bot UA, nothing else set
+======================================================================
+HTTP Code   : 200
+curl errno  : 0
+curl error  : (none)
+Time taken  : 2035 ms
+Body length : 88790 bytes
+
+--- Response headers ---
+HTTP/2 200 
+date: Fri, 24 Jul 2026 04:47:19 GMT
+content-type: text/html
+server: cloudflare
+content-security-policy: frame-ancestors 'self' https://www.google.com/maps https://chatserver.comm100.com https://insight.adsrvr.org https://js.adsrvr.org https://conexa.r-e-d.co.za;
+strict-transport-security: max-age=31536000; includeSubDomains
+permissions-policy: camera=(),microphone=(),fullscreen=(self)
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: cross-origin
+last-modified: Fri, 24 Jul 2026 04:15:28 GMT
+vary: Accept-Encoding
+cf-cache-status: DYNAMIC
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+x-xss-protection: 1; mode=block
+cf-ray: a200493e3fb9621e-GRU
+
+--- Bot-challenge markers found in body ---
+(none found)
+
+Has 'const VLPData = [' declaration : no
+Has bare word 'VLPData' anywhere     : YES (can be true even without the declaration above — the site's JS references this name on other pages too)
+
+First 300 chars of BODY:
+<!DOCTYPE html>
+<html
+  lang="en-us"
+  dir="ltr"
+><head>
+   
+  
+  
+  <link
+    href="https://www.googletagmanager.com"
+    rel="preconnect"
+    crossorigin="anonymous"
+    as="script"
+  />
+  <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+
+  <script async>
+    var dataLayer = (wi
+
+======================================================================
+[B] Old bot UA + Range header (isolates Range specifically)
+======================================================================
+HTTP Code   : 206
+curl errno  : 0
+curl error  : (none)
+Time taken  : 413 ms
+Body length : 88790 bytes
+
+--- Response headers ---
+HTTP/2 206 
+date: Fri, 24 Jul 2026 04:47:20 GMT
+content-type: text/html
+server: cloudflare
+content-security-policy: frame-ancestors 'self' https://www.google.com/maps https://chatserver.comm100.com https://insight.adsrvr.org https://js.adsrvr.org https://conexa.r-e-d.co.za;
+strict-transport-security: max-age=31536000; includeSubDomains
+permissions-policy: camera=(),microphone=(),fullscreen=(self)
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: cross-origin
+last-modified: Fri, 24 Jul 2026 04:15:28 GMT
+vary: Accept-Encoding
+cf-cache-status: DYNAMIC
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+x-xss-protection: 1; mode=block
+content-range: bytes 0-17255/17256
+etag: W/"15ad6-657539f6cdb88-gzip"
+cf-ray: a20049473a4d6240-GRU
+
+--- Bot-challenge markers found in body ---
+(none found)
+
+Has 'const VLPData = [' declaration : no
+Has bare word 'VLPData' anywhere     : YES (can be true even without the declaration above — the site's JS references this name on other pages too)
+
+First 300 chars of BODY:
+<!DOCTYPE html>
+<html
+  lang="en-us"
+  dir="ltr"
+><head>
+   
+  
+  
+  <link
+    href="https://www.googletagmanager.com"
+    rel="preconnect"
+    crossorigin="anonymous"
+    as="script"
+  />
+  <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+
+  <script async>
+    var dataLayer = (wi
+
+======================================================================
+[C] Browser UA + Referer, no Range
+======================================================================
+HTTP Code   : 200
+curl errno  : 0
+curl error  : (none)
+Time taken  : 1423 ms
+Body length : 89229 bytes
+
+--- Response headers ---
+HTTP/2 200 
+date: Fri, 24 Jul 2026 04:47:21 GMT
+content-type: text/html
+content-length: 89229
+cf-ray: a2004949aea72538-GRU
+cf-cache-status: DYNAMIC
+last-modified: Fri, 24 Jul 2026 04:15:28 GMT
+server: cloudflare
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: Accept-Encoding
+content-security-policy: frame-ancestors 'self' https://www.google.com/maps https://chatserver.comm100.com https://insight.adsrvr.org https://js.adsrvr.org https://conexa.r-e-d.co.za;
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: cross-origin
+permissions-policy: camera=(),microphone=(),fullscreen=(self)
+referrer-policy: strict-origin-when-cross-origin
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+
+--- Bot-challenge markers found in body ---
+(none found)
+
+Has 'const VLPData = [' declaration : no
+Has bare word 'VLPData' anywhere     : YES (can be true even without the declaration above — the site's JS references this name on other pages too)
+
+First 300 chars of BODY:
+<!DOCTYPE html>
+<html
+  lang="en-us"
+  dir="ltr"
+><head><script>(function(w,i,g){w[g]=w[g]||[];if(typeof w[g].push=='function')w[g].push(i)})
+(window,'GTM-MC46P8X','google_tags_first_party');</script><script>(function(w,d,s,l){w[l]=w[l]||[];(function(){w[l].push(arguments);})('set', 'developer_id.dY
+
+======================================================================
+[D] EXACT production fetchPage() config (browser UA + Referer + Accept headers + Range)
+======================================================================
+HTTP Code   : 206
+curl errno  : 0
+curl error  : (none)
+Time taken  : 1409 ms
+Body length : 89229 bytes
+
+--- Response headers ---
+HTTP/2 206 
+date: Fri, 24 Jul 2026 04:47:23 GMT
+content-type: text/html
+content-range: bytes 0-17255/17256
+cf-ray: a20049528d309d69-GRU
+cf-cache-status: DYNAMIC
+x-content-type-options: nosniff
+x-xss-protection: 1; mode=block
+referrer-policy: strict-origin-when-cross-origin
+last-modified: Fri, 24 Jul 2026 04:15:28 GMT
+server: cloudflare
+strict-transport-security: max-age=31536000; includeSubDomains
+vary: Accept-Encoding
+content-security-policy: frame-ancestors 'self' https://www.google.com/maps https://chatserver.comm100.com https://insight.adsrvr.org https://js.adsrvr.org https://conexa.r-e-d.co.za;
+cross-origin-opener-policy: same-origin
+cross-origin-resource-policy: cross-origin
+permissions-policy: camera=(),microphone=(),fullscreen=(self)
+etag: W/"15ad6-657539f6cdb88-gzip"
+
+--- Bot-challenge markers found in body ---
+(none found)
+
+Has 'const VLPData = [' declaration : no
+Has bare word 'VLPData' anywhere     : YES (can be true even without the declaration above — the site's JS references this name on other pages too)
+
+First 300 chars of BODY:
+<!DOCTYPE html>
+<html
+  lang="en-us"
+  dir="ltr"
+><head><script>(function(w,i,g){w[g]=w[g]||[];if(typeof w[g].push=='function')w[g].push(i)})
+(window,'GTM-MC46P8X','google_tags_first_party');</script><script>(function(w,d,s,l){w[l]=w[l]||[];(function(){w[l].push(arguments);})('set', 'developer_id.dY
+
+======================================================================
+DONE. Results also written to: /home/u637509541/domains/salesdesk.co.za/public_html/app/dealer/fetch-test-results.txt
+Please send that whole file back rather than a terminal copy-paste,
+so nothing gets truncated.

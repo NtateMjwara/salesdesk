@@ -13,6 +13,7 @@ require_once '../../includes/security.php';
 require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
+require_once '../../includes/csrf.php';
 
 applyCachePolicy('auth');
 requireLogin();
@@ -25,7 +26,7 @@ $userId = (int) $_SESSION['user_id'];
 // Salesdesk
 $deskStmt = $pdo->prepare("
     SELECT sd.id, sd.slug, sd.display_name, sd.is_active,
-           p.car_limit, p.first_name, p.last_name, p.avatar_url
+           p.first_name, p.last_name, p.avatar_url
     FROM salesdesks sd
     JOIN users u ON u.id = sd.user_id
     LEFT JOIN profiles p ON p.user_id = u.id

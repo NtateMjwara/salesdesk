@@ -3,12 +3,24 @@
  * SalesDesk — Dealer Settings.
  * T3 owns this file.
  *
- * Sections:
- *   - Company profile (name, brand focus, logo)
- *   - CIPC document upload / verification status
- *   - Dealership address
- *   - Account holder profile (first/last name, phone)
- *   - Password change
+ * REFACTORED: All inline style= layout attributes replaced with semantic
+ * CSS classes defined in dealer-settings-patch.css.
+ *
+ * Problems fixed:
+ *   — sidebar nav uses CSS class .settings-nav (was already mostly class-
+ *     based; nav-pill active state and pending dot moved to CSS)
+ *   — outer 2-col grid (200px sidebar + content) was inline → .d-settings-shell,
+ *     stacks to a horizontal scrollable tab strip on tablet/mobile
+ *   — logo upload row (avatar circle + button + hint) → .d-avatar-row,
+ *     wraps on mobile instead of clipping the hint text
+ *   — CIPC verification status block (icon + text + "view doc" button)
+ *     → .cipc-block, stacks vertically on mobile so the button doesn't
+ *     get squeezed to nothing
+ *   — read-only slug / email fields → .d-readonly-field (word-break safe)
+ *   — frow 2-col address/profile rows now rely on the global .frow mobile
+ *     override already shipped in dealer-dashboard-patch.css (≤ 540px)
+ *   — save button gets a JS disabled state on submit to prevent double-post
+ *   — flash alerts get role="alert" + scroll-into-view on load
  */
 require_once '../../includes/security.php';
 require_once '../../includes/session.php';
@@ -236,43 +248,50 @@ $pageTitle = 'Settings';
 ob_start();
 ?>
 
-<div style="display:grid;grid-template-columns:200px 1fr;gap:1.5rem;align-items:start;">
-
-  <!-- ── Nav sidebar ─────────────────────────────────────── -->
-  <div class="card card-body" style="padding:10px;">
-    <nav class="settings-nav">
-      <?php
-      $navItems = [
-        'company'      => ['fa-building',         'Company'],
-        'verification' => ['fa-shield-halved',     'Verification'],
-        'address'      => ['fa-location-dot',      'Address'],
-        'profile'      => ['fa-user',              'Account holder'],
-      ];
-      foreach ($navItems as $key => [$icon, $label]):
-      ?>
-      <a href="?section=<?= $key ?>"
-         class="settings-nav-link <?= $section === $key ? 'active' : '' ?>">
-        <span class="snl-icon"><i class="fa-solid <?= $icon ?>"></i></span>
-        <?= $label ?>
-        <?php if ($key === 'verification' && $data['verification_status'] === 'pending'): ?>
-        <span style="margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--amber);flex-shrink:0;"></span>
-        <?php endif; ?>
-      </a>
-      <?php endforeach; ?>
-    </nav>
+<?php /* ── Page header ──────────────────────────────────────── */ ?>
+<div class="dash-header">
+  <div class="dash-header__text">
+    <h1 class="page-header__title">Dealership <em>settings</em></h1>
+    <p class="dash-header__sub-plain">Manage your dealership profile, verification, and account.</p>
   </div>
+</div>
 
-  <!-- ── Content area ────────────────────────────────────── -->
-  <div>
+<?php /* ── Settings shell: nav + content ─────────────────────── */ ?>
+<div class="d-settings-shell">
+
+  <?php /* ── Nav: sidebar on desktop, scrollable tab strip on mobile ── */ ?>
+  <nav class="settings-nav" aria-label="Settings sections">
+    <?php
+    $navItems = [
+      'company'      => ['fa-building',         'Company'],
+      'verification' => ['fa-shield-halved',     'Verification'],
+      'address'      => ['fa-location-dot',      'Address'],
+      'profile'      => ['fa-user',              'Account holder'],
+    ];
+    foreach ($navItems as $key => [$icon, $label]):
+    ?>
+    <a href="?section=<?= $key ?>"
+       class="settings-nav-link <?= $section === $key ? 'active' : '' ?>">
+      <span class="snl-icon"><i class="fa-solid <?= $icon ?>" aria-hidden="true"></i></span>
+      <?= $label ?>
+      <?php if ($key === 'verification' && $data['verification_status'] === 'pending'): ?>
+      <span class="snl-dot" aria-label="Pending review"></span>
+      <?php endif; ?>
+    </a>
+    <?php endforeach; ?>
+  </nav>
+
+  <?php /* ── Content area ────────────────────────────────────── */ ?>
+  <div class="d-settings-content">
 
     <?php if ($flash): ?>
-    <div class="alert alert-success" style="margin-bottom:1.25rem">
-      <i class="fa-solid fa-circle-check alert-icon"></i> <?= htmlspecialchars($flash) ?>
+    <div class="alert alert-success" id="settings-flash" style="margin-bottom:1.25rem">
+      <i class="fa-solid fa-circle-check alert-icon" aria-hidden="true"></i> <?= htmlspecialchars($flash) ?>
     </div>
     <?php endif; ?>
     <?php if ($flashError): ?>
-    <div class="alert alert-error" style="margin-bottom:1.25rem">
-      <i class="fa-solid fa-circle-exclamation alert-icon"></i> <?= htmlspecialchars($flashError) ?>
+    <div class="alert alert-error" id="settings-flash" style="margin-bottom:1.25rem">
+      <i class="fa-solid fa-circle-exclamation alert-icon" aria-hidden="true"></i> <?= htmlspecialchars($flashError) ?>
     </div>
     <?php endif; ?>
 
@@ -281,38 +300,32 @@ ob_start();
          COMPANY PROFILE
          ══════════════════════════════ -->
     <div class="card card-body">
-      <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:300;margin-bottom:1.25rem;">
-        Company <em style="font-style:italic;">profile</em>
+      <h2 class="d-card-heading">
+        Company <em>profile</em>
       </h2>
 
-      <form method="POST" enctype="multipart/form-data">
+      <form method="POST" enctype="multipart/form-data" id="companyForm" novalidate>
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <input type="hidden" name="action"     value="save_company">
 
         <!-- Logo -->
-        <div style="display:flex;align-items:center;gap:16px;margin-bottom:1.5rem;
-                    padding-bottom:1.5rem;border-bottom:1px solid var(--border);">
-          <div style="width:72px;height:72px;border-radius:var(--r-lg);flex-shrink:0;
-                      background:var(--p-light);color:var(--p);
-                      display:flex;align-items:center;justify-content:center;
-                      font-size:22px;font-weight:700;font-family:var(--mono);
-                      overflow:hidden;border:1px solid var(--p-b);" id="logoPreview">
+        <div class="d-avatar-row d-avatar-row--bordered">
+          <div class="d-avatar-preview d-avatar-preview--square" id="logoPreview">
             <?php if ($data['logo_url']): ?>
-            <img src="<?= htmlspecialchars($data['logo_url']) ?>" alt="Logo"
-                 style="width:100%;height:100%;object-fit:cover;" id="logoImg">
+            <img src="<?= htmlspecialchars($data['logo_url']) ?>" alt="Dealership logo" id="logoImg">
             <?php else: ?>
-            <i class="fa-solid fa-building"></i>
+            <i class="fa-solid fa-building" aria-hidden="true"></i>
             <?php endif; ?>
           </div>
-          <div>
-            <label for="logo" class="btn btn-ghost btn-sm" style="cursor:pointer;display:inline-flex;">
-              <i class="fa-solid fa-camera"></i> Upload logo
+          <div class="d-avatar-upload-info">
+            <label for="logo" class="btn btn-ghost btn-sm" style="cursor:pointer;width:fit-content;">
+              <i class="fa-solid fa-camera" aria-hidden="true"></i> Upload logo
             </label>
             <input type="file" id="logo" name="logo"
                    accept="image/jpeg,image/png,image/webp"
-                   style="display:none;"
+                   class="d-avatar-file-input"
                    onchange="previewLogo(this)">
-            <div style="font-size:11px;color:var(--faint);margin-top:5px;">JPG, PNG, WebP · max 2MB</div>
+            <div class="d-avatar-upload-info__hint">JPG, PNG, WebP · max 2MB</div>
           </div>
         </div>
 
@@ -330,7 +343,7 @@ ob_start();
           <input class="finput" type="text" id="brand_focus" name="brand_focus"
                  maxlength="255" placeholder="e.g. Toyota, Ford, Volkswagen"
                  value="<?= htmlspecialchars($brandFocusDisplay) ?>">
-          <div style="font-size:11px;color:var(--faint);margin-top:5px;">
+          <div class="d-readonly-note">
             Shown to brokers when searching for dealerships to partner with.
           </div>
         </div>
@@ -338,17 +351,16 @@ ob_start();
         <!-- Read-only slug -->
         <div class="fgroup">
           <label class="flabel">Dealer URL slug</label>
-          <div style="padding:10px 13px;border:1px solid var(--border);border-radius:var(--r-md);
-                      font-size:13px;font-family:var(--mono);color:var(--muted);background:var(--bg);">
+          <div class="d-readonly-field">
             salesdesk.co.za/dealers/<?= htmlspecialchars($data['slug']) ?>
           </div>
-          <div style="font-size:11px;color:var(--faint);margin-top:5px;">
+          <div class="d-readonly-note">
             Contact support to change your dealership URL.
           </div>
         </div>
 
-        <button class="btn btn-primary" type="submit">
-          <i class="fa-solid fa-check"></i> Save changes
+        <button class="btn btn-primary" type="submit" id="companySaveBtn">
+          <i class="fa-solid fa-check" aria-hidden="true"></i> Save changes
         </button>
       </form>
     </div>
@@ -358,44 +370,44 @@ ob_start();
          CIPC VERIFICATION
          ══════════════════════════════ -->
     <div class="card card-body">
-      <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:300;margin-bottom:1.25rem;">
-        CIPC <em style="font-style:italic;">verification</em>
+      <h2 class="d-card-heading">
+        CIPC <em>verification</em>
       </h2>
 
       <!-- Status block -->
       <?php
       $vstatus = $data['verification_status'];
       $vConfig = match($vstatus) {
-        'verified'   => ['fa-circle-check', 'var(--gr-bg)',  'var(--green)', 'var(--gr-b)',  'Verified',         'Your dealership is verified and displays a badge in broker search.'],
-        'pending'    => ['fa-clock',         'var(--amb-bg)','var(--amber)', 'var(--amb-b)', 'Under review',     'Your CIPC document is being reviewed. We\'ll notify you by email.'],
-        'rejected'   => ['fa-circle-xmark',  'var(--red-bg)','var(--red)',   'var(--red-b)', 'Rejected',         'Your verification was rejected. Please re-upload a clear document.'],
-        default      => ['fa-circle-info',   'var(--bg)',    'var(--faint)', 'var(--border)','Not verified',     'Upload your CIPC certificate to get verified and rank higher in broker search.'],
+        'verified'   => ['fa-circle-check', 'gr',  'Verified',         'Your dealership is verified and displays a badge in broker search.'],
+        'pending'    => ['fa-clock',         'amb', 'Under review',     'Your CIPC document is being reviewed. We\'ll notify you by email.'],
+        'rejected'   => ['fa-circle-xmark',  'red', 'Rejected',         'Your verification was rejected. Please re-upload a clear document.'],
+        default      => ['fa-circle-info',   'neu', 'Not verified',     'Upload your CIPC certificate to get verified and rank higher in broker search.'],
       };
-      [$vIcon, $vBg, $vColor, $vBorder, $vLabel, $vMsg] = $vConfig;
+      [$vIcon, $vTone, $vLabel, $vMsg] = $vConfig;
       ?>
-      <div class="cipc-block" style="background:<?= $vBg ?>;border-color:<?= $vBorder ?>;margin-bottom:1.5rem;">
-        <div class="cipc-block-icon" style="background:<?= $vBg ?>;color:<?= $vColor ?>;">
-          <i class="fa-solid <?= $vIcon ?>"></i>
+      <div class="cipc-block cipc-block--<?= $vTone ?>">
+        <div class="cipc-block-icon">
+          <i class="fa-solid <?= $vIcon ?>" aria-hidden="true"></i>
         </div>
         <div class="cipc-block-info">
-          <div class="cipc-block-title" style="color:<?= $vColor ?>;"><?= $vLabel ?></div>
+          <div class="cipc-block-title"><?= $vLabel ?></div>
           <div class="cipc-block-sub"><?= $vMsg ?></div>
           <?php if ($vstatus === 'verified' && $data['verified_at']): ?>
-          <div style="font-size:11px;color:var(--faint);margin-top:3px;">
+          <div class="cipc-block-date">
             Verified on <?= date('d F Y', strtotime($data['verified_at'])) ?>
           </div>
           <?php endif; ?>
         </div>
         <?php if ($data['cipc_doc_url']): ?>
         <a href="<?= htmlspecialchars($data['cipc_doc_url']) ?>" target="_blank" rel="noopener"
-           class="btn btn-ghost btn-sm">
+           class="btn btn-ghost btn-sm cipc-block-action">
           View doc ↗
         </a>
         <?php endif; ?>
       </div>
 
       <?php if ($vstatus !== 'verified'): ?>
-      <form method="POST" enctype="multipart/form-data">
+      <form method="POST" enctype="multipart/form-data" id="cipcForm" novalidate>
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="upload_cipc">
 
@@ -405,18 +417,18 @@ ob_start();
           </label>
           <input class="finput" type="file" id="cipc_doc" name="cipc_doc"
                  accept="application/pdf" style="padding:8px 13px;cursor:pointer;" required>
-          <div style="font-size:11px;color:var(--faint);margin-top:5px;">
+          <div class="d-readonly-note">
             PDF only · max 5MB · Company registration certificate from CIPC.co.za
           </div>
         </div>
 
-        <button class="btn btn-primary" type="submit">
-          <i class="fa-solid fa-upload"></i> Submit for verification
+        <button class="btn btn-primary" type="submit" id="cipcSaveBtn">
+          <i class="fa-solid fa-upload" aria-hidden="true"></i> Submit for verification
         </button>
       </form>
       <?php else: ?>
       <div class="alert alert-info">
-        <i class="fa-solid fa-circle-info alert-icon"></i>
+        <i class="fa-solid fa-circle-info alert-icon" aria-hidden="true"></i>
         Your dealership is verified. Contact support if you need to update your CIPC certificate.
       </div>
       <?php endif; ?>
@@ -427,14 +439,14 @@ ob_start();
          DEALERSHIP ADDRESS
          ══════════════════════════════ -->
     <div class="card card-body">
-      <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:300;margin-bottom:1.25rem;">
-        Dealership <em style="font-style:italic;">address</em>
+      <h2 class="d-card-heading">
+        Dealership <em>address</em>
       </h2>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;line-height:1.6;">
+      <p class="d-card-sub">
         Your location is shown to brokers when they search for dealerships and to buyers on your listings.
       </p>
 
-      <form method="POST">
+      <form method="POST" id="addressForm" novalidate>
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="save_address">
 
@@ -489,8 +501,8 @@ ob_start();
           </div>
         </div>
 
-        <button class="btn btn-primary" type="submit">
-          <i class="fa-solid fa-check"></i> Save address
+        <button class="btn btn-primary" type="submit" id="addressSaveBtn">
+          <i class="fa-solid fa-check" aria-hidden="true"></i> Save address
         </button>
       </form>
     </div>
@@ -500,11 +512,11 @@ ob_start();
          ACCOUNT HOLDER PROFILE
          ══════════════════════════════ -->
     <div class="card card-body">
-      <h2 style="font-family:var(--serif);font-size:1.2rem;font-weight:300;margin-bottom:1.25rem;">
-        Account <em style="font-style:italic;">holder</em>
+      <h2 class="d-card-heading">
+        Account <em>holder</em>
       </h2>
 
-      <form method="POST">
+      <form method="POST" id="profileForm" novalidate>
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="save_profile">
 
@@ -533,21 +545,20 @@ ob_start();
         <!-- Email — read only -->
         <div class="fgroup">
           <label class="flabel">Email address</label>
-          <div style="padding:10px 13px;border:1px solid var(--border);border-radius:var(--r-md);
-                      font-size:14px;color:var(--muted);background:var(--bg);font-family:var(--mono);">
+          <div class="d-readonly-field">
             <?= htmlspecialchars($data['email']) ?>
           </div>
-          <div style="font-size:11px;color:var(--faint);margin-top:4px;">
+          <div class="d-readonly-note">
             Contact support to change your email address.
           </div>
         </div>
 
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <button class="btn btn-primary" type="submit">
-            <i class="fa-solid fa-check"></i> Save changes
+        <div class="d-profile-actions">
+          <button class="btn btn-primary" type="submit" id="profileSaveBtn">
+            <i class="fa-solid fa-check" aria-hidden="true"></i> Save changes
           </button>
           <a href="/auth/reset_password.php" class="btn btn-ghost">
-            <i class="fa-solid fa-key"></i> Change password
+            <i class="fa-solid fa-key" aria-hidden="true"></i> Change password
           </a>
         </div>
       </form>
@@ -568,13 +579,39 @@ function previewLogo(input) {
       preview.innerHTML = '';
       img = document.createElement('img');
       img.id = 'logoImg';
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+      img.alt = 'Dealership logo';
       preview.appendChild(img);
     }
     img.src = e.target.result;
   };
   reader.readAsDataURL(input.files[0]);
 }
+
+(function () {
+  'use strict';
+
+  /* Prevent double-submit on every settings form */
+  ['companyForm', 'cipcForm', 'addressForm', 'profileForm'].forEach(function (id) {
+    var form = document.getElementById(id);
+    if (!form) return;
+    form.addEventListener('submit', function () {
+      var btn = form.querySelector('button[type="submit"]');
+      if (btn) {
+        btn.disabled = true;
+        btn.dataset.originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Saving…';
+      }
+    });
+  });
+
+  /* Scroll flash message into view */
+  var flash = document.getElementById('settings-flash');
+  if (flash) {
+    flash.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    flash.setAttribute('role', 'alert');
+    flash.setAttribute('aria-live', 'polite');
+  }
+})();
 </script>
 
 <?php

@@ -249,7 +249,10 @@ ob_start();
       <i class="fa-solid fa-circle-info" style="margin-right:4px;"></i>
       Don't have a CSV handy?
       <a href="/app/dealer/import-website.php" style="color:var(--p);font-weight:600;">Import straight from your website</a>
-      instead — no export needed if your site already publishes vehicle listing data.
+      instead — no export needed if your site already publishes vehicle listing data. On the Motus
+      platform (motusvw.co.za and similar)? Use
+      <a href="/app/dealer/import-motus.php" style="color:var(--p);font-weight:600;">Motus import</a> instead —
+      it's faster and more reliable than either of the above for those sites.
     </p>
   </div>
 

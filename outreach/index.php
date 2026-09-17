@@ -395,16 +395,10 @@ ob_start();
             </div>
 
             <div>
-              <label class="oc-flabel" for="ocId">ID number</label>
-              <input class="oc-finput" type="text" id="ocId" name="id_number" inputmode="numeric" maxlength="13" required>
-              <div class="oc-ferr" data-for="id_number"></div>
-            </div>
-            <div>
               <label class="oc-flabel" for="ocDob">Date of birth</label>
               <input class="oc-finput" type="date" id="ocDob" name="date_of_birth" required>
               <div class="oc-ferr" data-for="date_of_birth"></div>
             </div>
-
             <div>
               <label class="oc-flabel" for="ocPhone">Mobile number</label>
               <input class="oc-finput" type="tel" id="ocPhone" name="mobile" placeholder="082 000 0000" required autocomplete="tel">
@@ -502,7 +496,7 @@ ob_start();
 
           <div class="oc-register__disclaimer">
             <i class="fa-solid fa-shield-halved" style="color:var(--gold-dark);margin-top:1px;"></i>
-            <span>Your ID number is encrypted before storage and is only ever used to confirm eligibility and avoid duplicate entries. See our <a href="/privacy" style="color:var(--gold-dark);text-decoration:underline;">Privacy Policy</a>.</span>
+            <span>We'll only use these details to consider you for this programme. See our <a href="/privacy" style="color:var(--gold-dark);text-decoration:underline;">Privacy Policy</a>.</span>
           </div>
         </form>
       </div>

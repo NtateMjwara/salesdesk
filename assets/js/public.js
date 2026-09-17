@@ -1,36 +1,59 @@
 /**
- * SalesDesk — Public Pages JavaScript
+ * SalesDesk — Public Pages JavaScript  (v2)
  * T1 owns this file.
  *
- * Modules (all IIFE-scoped, no globals except the init functions):
- *   1. Gallery          — thumbnail switching, keyboard nav
- *   2. Nav dropdowns    — Browse menu + Account menu
- *   3. Share sheet      — open/close, copy URL, platform links
- *   4. Wishlist toggle  — API call to api/visitor/wishlist-toggle.php
- *   5. Enquiry form     — async submit to api/leads/submit.php, validation
- *   6. Description clamp — read-more toggle
- *   7. Finance slider   — live monthly estimate update
- *   8. Scroll reveal    — lightweight IntersectionObserver animations
+ * Modules (IIFE-scoped; the only globals are the legacy window.*
+ * share / wishlist functions kept for markup not yet migrated):
+ *   1. Gallery           — thumbnail switching, swipe, keyboard nav
+ *   2. Share sheet       — open/close, copy URL
+ *   3. Wishlist toggle   — API call to api/visitor/wishlist-toggle.php
+ *   4. Enquiry form      — async submit to api/leads/submit.php, validation
+ *   5. Description clamp — read-more toggle
+ *   6. Finance slider    — live monthly estimate update
+ *   7. Scroll reveal     — lightweight IntersectionObserver animations
  *
- * Usage: loaded at bottom of layout-public.php.
- * No external dependencies required (Font Awesome loaded separately).
+ * Loaded with `defer` from layout-public.php, after global.js.
+ * Nav behaviour is NOT here — it lives in public-nav.js.
+ *
+ * v2 (UI consolidation, Phase 1):
+ *   – Removed "Nav dropdowns" (initNavDropdowns). It targeted
+ *     #browseBtn / #accountBtn, which no longer exist, and bound a
+ *     second document-level click listener on every public page.
+ *   – Share sheet: buttons use data-share-open / data-share-copy /
+ *     data-share-close instead of onclick="". window.openShareSheet /
+ *     closeShareSheet / copyShareUrl remain for pages still using
+ *     onclick (car detail — Phase 4).
+ *   – Inline style writes replaced with CSS state classes defined in
+ *     public.css: .is-swapping (gallery), .is-invalid (form field),
+ *     .is-copied (share), .pub-reveal-ready / .pub-revealed (reveal).
+ *     The reveal module no longer injects a <style> tag.
+ *   – Gallery arrow keys ignore typing in inputs/textareas/selects.
+ *   – Boot no longer waits for DOMContentLoaded: with `defer` the DOM
+ *     is already parsed when this runs.
  */
 
 (function () {
   'use strict';
 
+  function isTypingTarget(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+
+
   /* ═══════════════════════════════════════════
      1. GALLERY
      ═══════════════════════════════════════════ */
   function initGallery() {
-    var mainImg   = document.getElementById('galleryMain');
-    var mainWrap  = document.getElementById('galleryMainWrap');
-    var countEl   = document.getElementById('galleryCount');
-    var thumbs    = Array.from(document.querySelectorAll('.pub-gallery__thumb'));
+    var mainImg  = document.getElementById('galleryMain');
+    var mainWrap = document.getElementById('galleryMainWrap');
+    var countEl  = document.getElementById('galleryCount');
+    var thumbs   = Array.from(document.querySelectorAll('.pub-gallery__thumb'));
     if (!mainImg || !thumbs.length) return;
 
     var currentIdx = 0;
-    var images = thumbs.map(function(t) {
+    var images = thumbs.map(function (t) {
       return t.getAttribute('data-src') || t.querySelector('img').src;
     });
 
@@ -39,219 +62,165 @@
       if (idx >= images.length) idx = 0;
       currentIdx = idx;
 
-      mainImg.style.opacity = '0';
-      mainImg.style.transform = 'scale(1.02)';
-
-      setTimeout(function() {
+      mainImg.classList.add('is-swapping');
+      setTimeout(function () {
         mainImg.src = images[idx];
-        mainImg.style.opacity = '1';
-        mainImg.style.transform = 'scale(1)';
+        mainImg.classList.remove('is-swapping');
       }, 120);
 
-      thumbs.forEach(function(t, i) {
+      thumbs.forEach(function (t, i) {
         t.classList.toggle('active', i === idx);
         if (i === idx) {
           t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
         }
       });
 
-      if (countEl) {
-        countEl.textContent = (idx + 1) + ' / ' + images.length;
-      }
+      if (countEl) countEl.textContent = (idx + 1) + ' / ' + images.length;
     }
 
-    // Thumb clicks.
-    thumbs.forEach(function(thumb, i) {
-      thumb.addEventListener('click', function() { goTo(i); });
+    thumbs.forEach(function (thumb, i) {
+      thumb.addEventListener('click', function () { goTo(i); });
     });
 
-    // Main image click — open full screen (native browser trick).
     if (mainWrap) {
-      mainWrap.addEventListener('click', function() {
-        // Open current image in new tab for full-screen view.
+      // Open the current image in a new tab for a full-screen view.
+      mainWrap.addEventListener('click', function () {
         window.open(images[currentIdx], '_blank', 'noopener');
       });
+
+      var touchStartX = 0;
+      mainWrap.addEventListener('touchstart', function (e) {
+        touchStartX = e.touches[0].clientX;
+      }, { passive: true });
+      mainWrap.addEventListener('touchend', function (e) {
+        var diff = touchStartX - e.changedTouches[0].clientX;
+        if (Math.abs(diff) > 40) goTo(diff > 0 ? currentIdx + 1 : currentIdx - 1);
+      }, { passive: true });
     }
 
-    // Touch swipe on main image.
-    var touchStartX = 0;
-    mainWrap && mainWrap.addEventListener('touchstart', function(e) {
-      touchStartX = e.touches[0].clientX;
-    }, { passive: true });
-    mainWrap && mainWrap.addEventListener('touchend', function(e) {
-      var diff = touchStartX - e.changedTouches[0].clientX;
-      if (Math.abs(diff) > 40) goTo(diff > 0 ? currentIdx + 1 : currentIdx - 1);
-    }, { passive: true });
-
-    // Keyboard navigation.
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
+      if (isTypingTarget(e.target)) return;
       if (e.key === 'ArrowLeft')  goTo(currentIdx - 1);
       if (e.key === 'ArrowRight') goTo(currentIdx + 1);
     });
 
-    // Smooth opacity transition on img.
-    mainImg.style.transition = 'opacity .15s ease, transform .15s ease';
-
-    // Init count.
-    if (countEl && images.length > 1) {
-      countEl.textContent = '1 / ' + images.length;
-    } else if (countEl) {
-      countEl.style.display = 'none';
+    if (countEl) {
+      if (images.length > 1) {
+        countEl.textContent = '1 / ' + images.length;
+      } else {
+        countEl.hidden = true;
+      }
     }
   }
 
 
   /* ═══════════════════════════════════════════
-     2. NAV DROPDOWNS
+     2. SHARE SHEET
      ═══════════════════════════════════════════ */
-  function initNavDropdowns() {
-    // Generic dropdown: button toggles panel, click-outside closes.
-    var dropdowns = [
-      { btn: 'browseBtn',   panel: 'browsePanel'   },
-      { btn: 'accountBtn',  panel: 'accountPanel'  },
-    ];
-
-    dropdowns.forEach(function(d) {
-      var btn   = document.getElementById(d.btn);
-      var panel = document.getElementById(d.panel);
-      if (!btn || !panel) return;
-
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var isOpen = panel.classList.contains('open');
-
-        // Close all other dropdowns first.
-        document.querySelectorAll('.pub-nav__dropdown, .pub-nav__browse-panel').forEach(function(p) {
-          p.classList.remove('open');
-        });
-        document.querySelectorAll('.pub-nav__browse-btn, .pub-nav__account-btn').forEach(function(b) {
-          b.classList.remove('open');
-        });
-
-        if (!isOpen) {
-          panel.classList.add('open');
-          btn.classList.add('open');
-        }
-      });
-    });
-
-    // Close on outside click.
-    document.addEventListener('click', function() {
-      document.querySelectorAll('.pub-nav__dropdown, .pub-nav__browse-panel').forEach(function(p) {
-        p.classList.remove('open');
-      });
-      document.querySelectorAll('.pub-nav__browse-btn, .pub-nav__account-btn').forEach(function(b) {
-        b.classList.remove('open');
-      });
-    });
-
-    // Close on Escape.
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        document.querySelectorAll('.pub-nav__dropdown, .pub-nav__browse-panel').forEach(function(p) {
-          p.classList.remove('open');
-        });
-        document.querySelectorAll('.pub-nav__browse-btn, .pub-nav__account-btn').forEach(function(b) {
-          b.classList.remove('open');
-        });
-      }
-    });
-  }
-
-
-  /* ═══════════════════════════════════════════
-     3. SHARE SHEET
-     ═══════════════════════════════════════════ */
-  window.openShareSheet = function() {
+  window.openShareSheet = function () {
     var overlay = document.getElementById('shareOverlay');
     if (overlay) overlay.classList.add('open');
   };
 
-  window.closeShareSheet = function() {
+  window.closeShareSheet = function () {
     var overlay = document.getElementById('shareOverlay');
     if (overlay) overlay.classList.remove('open');
   };
 
-  window.copyShareUrl = function() {
+  window.copyShareUrl = function (triggerEl) {
     var input = document.getElementById('shareUrlInput');
     if (!input) return;
-    navigator.clipboard.writeText(input.value).then(function() {
-      var btn = document.getElementById('copyUrlBtn');
-      if (btn) {
-        var orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-check"></i>';
-        btn.style.color = 'var(--green)';
-        setTimeout(function() {
-          btn.innerHTML = orig;
-          btn.style.color = '';
-        }, 1800);
-      }
-    }).catch(function() {
-      // Fallback for older browsers.
+
+    function flash() {
+      var target = triggerEl || document.querySelector('[data-share-copy]');
+      if (!target) return;
+      var icon     = target.querySelector('i');
+      var origIcon = icon ? icon.className : '';
+
+      target.classList.add('is-copied');
+      if (icon) icon.className = 'fa-solid fa-check';
+
+      setTimeout(function () {
+        target.classList.remove('is-copied');
+        if (icon) icon.className = origIcon;
+      }, 1800);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(flash).catch(function () {
+        input.select();
+        document.execCommand('copy');
+        flash();
+      });
+    } else {
       input.select();
       document.execCommand('copy');
-    });
+      flash();
+    }
   };
 
   function initShareSheet() {
+    document.addEventListener('click', function (e) {
+      var el = e.target.closest('[data-share-open], [data-share-copy], [data-share-close]');
+      if (!el) return;
+
+      if (el.hasAttribute('data-share-open'))  { e.preventDefault(); window.openShareSheet(); }
+      if (el.hasAttribute('data-share-copy'))  { e.preventDefault(); window.copyShareUrl(el); }
+      if (el.hasAttribute('data-share-close')) { e.preventDefault(); window.closeShareSheet(); }
+    });
+
     var overlay = document.getElementById('shareOverlay');
     if (!overlay) return;
 
-    // Close on backdrop click.
-    overlay.addEventListener('click', function(e) {
+    overlay.addEventListener('click', function (e) {
       if (e.target === overlay) window.closeShareSheet();
     });
 
-    // Close on Escape.
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') window.closeShareSheet();
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) window.closeShareSheet();
     });
   }
 
 
   /* ═══════════════════════════════════════════
-     4. WISHLIST TOGGLE
+     3. WISHLIST TOGGLE
      ═══════════════════════════════════════════ */
-  window.toggleWishlist = function(btn, carId) {
+  window.toggleWishlist = function (btn, carId) {
     if (!btn || !carId) return;
 
-    btn.disabled = true;
-    btn.style.opacity = '.5';
+    btn.disabled = true;   // .pub-nav-icon-btn:disabled dims it (public.css §1)
 
     fetch('/api/visitor/wishlist-toggle.php', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'X-Requested-With': 'XMLHttpRequest',
+        'X-Requested-With': 'XMLHttpRequest'
       },
-      body: 'car_id=' + encodeURIComponent(carId),
+      body: 'car_id=' + encodeURIComponent(carId)
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-
-      if (data.wishlisted) {
-        btn.classList.add('wishlisted');
-        btn.title = 'Remove from saved';
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        btn.disabled = false;
         var icon = btn.querySelector('i');
-        if (icon) { icon.className = 'fa-solid fa-heart'; }
-      } else {
-        btn.classList.remove('wishlisted');
-        btn.title = 'Save car';
-        var icon2 = btn.querySelector('i');
-        if (icon2) { icon2.className = 'fa-regular fa-heart'; }
-      }
-    })
-    .catch(function() {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    });
+
+        if (data.wishlisted) {
+          btn.classList.add('wishlisted');
+          btn.title = 'Remove from saved';
+          if (icon) icon.className = 'fa-solid fa-heart';
+        } else {
+          btn.classList.remove('wishlisted');
+          btn.title = 'Save car';
+          if (icon) icon.className = 'fa-regular fa-heart';
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+      });
   };
 
 
   /* ═══════════════════════════════════════════
-     5. ENQUIRY FORM
+     4. ENQUIRY FORM
      ═══════════════════════════════════════════ */
   function initEnquiryForm() {
     var form = document.getElementById('enquiryForm');
@@ -260,11 +229,10 @@
     var submitBtn = form.querySelector('#enquirySubmit');
     var successEl = document.getElementById('enquirySuccess');
 
-    form.addEventListener('submit', function(e) {
+    form.addEventListener('submit', function (e) {
       e.preventDefault();
 
-      // Clear previous errors.
-      form.querySelectorAll('.pub-form-error').forEach(function(el) {
+      form.querySelectorAll('.pub-form-error').forEach(function (el) {
         el.textContent = '';
       });
 
@@ -289,64 +257,62 @@
 
       if (!valid) return;
 
-      // Disable button + show loading.
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Sending…';
       }
 
-      var data = new FormData(form);
-
       fetch('/api/leads/submit.php', {
         method: 'POST',
-        body: data,
+        body: new FormData(form)
       })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (res.success) {
-          // Show success state.
-          form.style.display = 'none';
-          if (successEl) successEl.style.display = 'block';
-        } else if (res.duplicate) {
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res.success) {
+            // NOTE (Phase 4): these two still toggle display inline because
+            // the car-detail markup ships them with style="display:none".
+            form.style.display = 'none';
+            if (successEl) successEl.style.display = 'block';
+            return;
+          }
+
           resetSubmitBtn(submitBtn);
-          showGlobalError(form, 'Your enquiry for this car is already with the dealer. They will contact you shortly.');
-        } else if (res.stale) {
+
+          if (res.duplicate) {
+            showGlobalError('Your enquiry for this car is already with the dealer. They will contact you shortly.');
+          } else if (res.stale) {
+            showGlobalError('This listing is no longer available (' + (res.car_status || 'sold') + ').');
+          } else if (res.not_found) {
+            showGlobalError('This tracking link has expired. Please find the car directly.');
+          } else if (res.error) {
+            showGlobalError(res.error);
+          } else {
+            showGlobalError('Something went wrong. Please try again.');
+          }
+        })
+        .catch(function () {
           resetSubmitBtn(submitBtn);
-          showGlobalError(form, 'This listing is no longer available (' + (res.car_status || 'sold') + ').');
-        } else if (res.not_found) {
-          resetSubmitBtn(submitBtn);
-          showGlobalError(form, 'This tracking link has expired. Please find the car directly.');
-        } else if (res.error) {
-          resetSubmitBtn(submitBtn);
-          showGlobalError(form, res.error);
-        } else {
-          resetSubmitBtn(submitBtn);
-          showGlobalError(form, 'Something went wrong. Please try again.');
-        }
-      })
-      .catch(function() {
-        resetSubmitBtn(submitBtn);
-        showGlobalError(form, 'Connection error. Please check your internet and try again.');
-      });
+          showGlobalError('Connection error. Please check your internet and try again.');
+        });
     });
 
     function showFieldError(input, msg) {
       if (!input) return;
       var err = input.parentElement.querySelector('.pub-form-error');
       if (err) err.textContent = msg;
-      input.style.borderColor = 'var(--red)';
-      input.addEventListener('input', function() {
-        input.style.borderColor = '';
+      input.classList.add('is-invalid');
+      input.addEventListener('input', function () {
+        input.classList.remove('is-invalid');
         if (err) err.textContent = '';
       }, { once: true });
     }
 
-    function showGlobalError(form, msg) {
+    function showGlobalError(msg) {
       var global = document.getElementById('enquiryGlobalError');
-      if (global) {
-        global.textContent = msg;
-        global.style.display = 'block';
-      }
+      if (!global) return;
+      global.textContent = msg;
+      global.hidden = false;
+      global.style.display = 'block';   // Phase 4: drop once markup uses [hidden]
     }
 
     function resetSubmitBtn(btn) {
@@ -358,7 +324,7 @@
 
 
   /* ═══════════════════════════════════════════
-     6. DESCRIPTION CLAMP
+     5. DESCRIPTION CLAMP
      ═══════════════════════════════════════════ */
   function initDescClamp() {
     var toggle = document.getElementById('descToggle');
@@ -366,9 +332,12 @@
     if (!toggle || !text) return;
 
     var expanded = false;
-    toggle.addEventListener('click', function() {
+    toggle.setAttribute('aria-expanded', 'false');
+
+    toggle.addEventListener('click', function () {
       expanded = !expanded;
       text.classList.toggle('clamped', !expanded);
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
       toggle.innerHTML = expanded
         ? '<i class="fa-solid fa-chevron-up"></i> Show less'
         : '<i class="fa-solid fa-chevron-down"></i> Read more';
@@ -377,7 +346,7 @@
 
 
   /* ═══════════════════════════════════════════
-     7. FINANCE SLIDER
+     6. FINANCE SLIDER
      ═══════════════════════════════════════════ */
   function initFinanceSlider() {
     var slider  = document.getElementById('depositSlider');
@@ -385,9 +354,9 @@
     var dispPM  = document.getElementById('monthlyDisplay');
     if (!slider || !dispPM) return;
 
-    var price    = parseFloat(slider.getAttribute('data-price') || '0');
-    var rate     = parseFloat(slider.getAttribute('data-rate')  || '13.25');
-    var term     = parseInt(slider.getAttribute('data-term')    || '60', 10);
+    var price = parseFloat(slider.getAttribute('data-price') || '0');
+    var rate  = parseFloat(slider.getAttribute('data-rate')  || '13.25');
+    var term  = parseInt(slider.getAttribute('data-term')    || '60', 10);
 
     function compute() {
       var depositPct  = parseFloat(slider.value);
@@ -407,20 +376,21 @@
     }
 
     slider.addEventListener('input', compute);
-    compute(); // init
+    compute();
   }
 
 
   /* ═══════════════════════════════════════════
-     8. SCROLL REVEAL
+     7. SCROLL REVEAL
+     Hidden/visible states live in public.css §16.
      ═══════════════════════════════════════════ */
   function initScrollReveal() {
-    if (!window.IntersectionObserver) return;
+    if (!('IntersectionObserver' in window)) return;
     var els = document.querySelectorAll('.pub-reveal');
     if (!els.length) return;
 
-    var obs = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
         if (entry.isIntersecting) {
           entry.target.classList.add('pub-revealed');
           obs.unobserve(entry.target);
@@ -428,31 +398,19 @@
       });
     }, { threshold: 0.1 });
 
-    els.forEach(function(el) {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(16px)';
-      el.style.transition = 'opacity .45s ease, transform .45s ease';
-      obs.observe(el);
-    });
-
-    // Inject revealed class CSS.
-    var style = document.createElement('style');
-    style.textContent = '.pub-revealed { opacity: 1 !important; transform: none !important; }';
-    document.head.appendChild(style);
+    document.documentElement.classList.add('pub-reveal-ready');
+    els.forEach(function (el) { obs.observe(el); });
   }
 
 
   /* ═══════════════════════════════════════════
-     BOOT
+     BOOT (script is deferred — DOM is ready)
      ═══════════════════════════════════════════ */
-  document.addEventListener('DOMContentLoaded', function() {
-    initGallery();
-    initNavDropdowns();
-    initShareSheet();
-    initEnquiryForm();
-    initDescClamp();
-    initFinanceSlider();
-    initScrollReveal();
-  });
+  initGallery();
+  initShareSheet();
+  initEnquiryForm();
+  initDescClamp();
+  initFinanceSlider();
+  initScrollReveal();
 
 })();

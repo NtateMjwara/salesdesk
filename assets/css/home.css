@@ -751,3 +751,71 @@
 
 .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .hide-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ════════════════════════════════════════════════════════════════
+   APPEND TO THE END OF assets/css/home.css
+   (then delete this file — it is a paste-in, not a stylesheet to load)
+
+   Where mobile-hero-nav-fix.css went:
+     NAV INNER / MOBILE NAV / BREADCRUMB → public-shell.css (already live)
+     HERO                               → below, without !important
+     SEARCH CARD (.sd-search-*, .sd-history-btn, .sd-reset-btn,
+     .sd-hero__hints)                   → DROPPED. The hero now renders
+                                          views/partials/hero-search-widget.php,
+                                          which uses .hws-* classes only, so
+                                          those rules styled nothing.
+
+   Why a base .sd-hero rule is included:
+     home.css's own .sd-hero block is commented out, and the live hero
+     rule sits in index.php's bottom inline <style>. That inline block
+     came last in the cascade, which is the only reason the mobile fix
+     needed !important. Moving the base rule here, ahead of the mobile
+     override, lets normal cascade order do the job.
+
+   REQUIRED companion edit in index.php (bottom inline <style>):
+     delete the .sd-hero, .sd-hero__title and .sd-hero__sub rules.
+     Leave the rest of that block for the homepage pass (Phase 2).
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Hero: base (moved from index.php inline <style>) ─────────── */
+.sd-hero {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  min-height: clamp(480px, 70vh, 100vh);
+  display: flex;
+  align-items: flex-start;
+  padding: clamp(70px,10vh,110px) clamp(20px,5vw,80px) clamp(60px,8vh,100px) clamp(24px,10vw,140px);
+  overflow-x: hidden;
+  background-image:
+    linear-gradient(120deg, rgba(8,20,60,.82) 0%, rgba(15,40,100,.55) 50%, rgba(0,0,0,.28) 100%),
+    url('/assets/img/hero.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ── Hero: compact on phones (was mobile-hero-nav-fix.css) ────── */
+@media (max-width: 768px) {
+  .sd-hero {
+    min-height: auto;
+    padding: 36px var(--page-gutter) 32px;
+    align-items: flex-start;
+  }
+
+  .sd-hero__content {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .sd-hero__title {
+    font-size: 22px;
+    margin-bottom: 6px;
+    letter-spacing: -.5px;
+  }
+
+  .sd-hero__sub {
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+}

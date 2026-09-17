@@ -1,535 +1,86 @@
 /**
- * SalesDesk — Browse & Mega-Nav Styles
+ * SalesDesk — Browse Page Styles  (v3)
  * T1 owns this file.
  *
- * Load order: global.css → public-fonts.css → public.css → browse.css → browse-additions.css
+ * Everything for the car browse experience: /cars-for-sale/ and broker
+ * storefronts (same sidebar + grid). Behaviour lives in
+ * assets/js/browse.js and assets/js/search-typeahead.js.
  *
- * CONFLICT AUDIT (vs public.css / global.css):
- *   – .pub-mega-hdivider      defined here ONLY  (removed from public.css §19 duplicate)
- *   – .pub-mega-panel__inner  defined here ONLY  (removed from browse-additions.css §5 duplicate)
- *   – .pub-page-wide          owned by public.css — NOT redefined here
- *   – .pub-breadcrumb         owned by public.css — NOT redefined here
- *   – .sr-only                owned by browse-additions.css — NOT redefined here
+ * Load order: global.css → public-shell.css → public.css → browse.css
  *
- * Patches applied (all original P1–P8 retained):
- *   P1  .browse-sidebar — sticky top 72px, max-height calc(100vh - 92px)
+ * OWNERSHIP:
+ *   – Nav, mega panels, account panel, mobile drawer  → public-shell.css
+ *   – .pub-page-wide / .pub-breadcrumb                → public-shell.css
+ *   – .sr-only                                        → global.css
+ *   – .pub-browse-grid base                           → public.css
+ *     (breakpoints for it live here)
+ *
+ * v3 (UI consolidation, Phase 1):
+ *   – §1–7 mega-nav / account / trigger / mobile-drawer rules removed
+ *     (now public-shell.css). Nav rules removed from the ≤1024px and
+ *     ≤480px blocks too.
+ *   – browse-additions.css merged and deleted. Nothing in it was
+ *     browse-specific: its nav/footer/share/detail rules were already
+ *     duplicated in public.css or now belong to public-shell.css, and
+ *     .sr-only moved to global.css.
+ *   – Page-scoped <style> from cars-for-sale/index.php merged here:
+ *     the .browse-layout margins and reduced-motion guard were exact
+ *     duplicates of rules below (dropped); the typeahead dropdown is
+ *     now §14 (shared with broker/index.php).
+ *   – Classes added for markup that used inline style="" attributes:
+ *     .filter-section--search, .browse-filter-toggle__icon,
+ *     .browse-filter-toggle__chevron.
+ *   – Sidebar sticky offset derives from --nav-h; lateral gutters from
+ *     --page-gutter.
+ *
+ * Patches retained from v2:
+ *   P1  .browse-sidebar — sticky under the nav
  *   P2  .price-pill-row — -webkit-overflow-scrolling: touch
  *   P3  .pagination__page--nav — Prev/Next modifier
  *   P4  .browse-results — min-width: 0
  *   P5  .browse-grid--animated — CSS-only fade, respects prefers-reduced-motion
- *   P6  .browse-sidebar__close — color + font-family added
+ *   P6  .browse-sidebar__close — color + font-family
  *   P7  .sidebar-card__footer i — replaces inline style dependency
- *   P8  @media ≤768px .browse-filter-toggle — display:flex confirmed
+ *   P8  ≤768px .browse-filter-toggle — display:flex
  *
  * Sections:
- *   1.  Mega-nav panels (shared base)
- *   2.  Mega-nav panel width modifiers
- *   3.  Mega-nav column layout
- *   4.  Mega-nav items & icons
- *   5.  Account panel
- *   6.  Nav trigger buttons & account wrap
- *   7.  Mobile nav drawer
- *   8.  Browse layout shell
- *   9.  Browse sidebar card & inputs
- *  10.  Browse filter chips
- *  11.  Browse vehicle card
- *  12.  Browse results bar & sort
- *  13.  Browse active-filter tags
- *  14.  Browse price quick-filter pills
- *  15.  Browse card badges
- *  16.  Browse pagination
- *  17.  Browse empty state
- *  18.  Responsive — tablet (≤ 1024px)
- *  19.  Responsive — tablet portrait (1024px > w > 768px)
- *  20.  Responsive — mobile landscape (≤ 768px)
- *  21.  Responsive — mobile portrait (≤ 480px)
- *  22.  Responsive — small phone (≤ 360px)
- *  23.  Responsive — large screens (≥ 1400px)
- *  24.  Touch / hover overrides
- *  25.  Grid entry animation
- *  26.  Print styles
+ *   1.  Layout shell
+ *   2.  Mobile filter toggle, overlay, drawer close
+ *   3.  Sidebar card & inputs
+ *   4.  Filter chips & price pills
+ *   5.  Vehicle card
+ *   6.  Results bar & sort
+ *   7.  Active-filter tags
+ *   8.  Price quick-filter row
+ *   9.  Card badges
+ *  10.  Pagination
+ *  11.  Empty state
+ *  12.  Grid entry animation
+ *  13.  Responsive
+ *  14.  Search typeahead dropdown
+ *  15.  Touch overrides, print
  */
 
 
 /* ══════════════════════════════════════
-   1. MEGA-NAV PANELS — shared base
-   ══════════════════════════════════════ */
-.pub-mega-panel {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-6px);
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 8px;
-  z-index: var(--z-dropdown);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity .18s ease, transform .18s ease, visibility .18s;
-  white-space: nowrap;
-}
-
-.pub-mega-panel.open {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-
-
-/* ══════════════════════════════════════
-   2. MEGA-NAV PANEL WIDTH MODIFIERS
-   ══════════════════════════════════════ */
-#navBuyPanel   { min-width: 600px; }
-#navSellPanel  { min-width: 380px; }
-#navNewsPanel  { min-width: 460px; }
-#navToolsPanel { min-width: 460px; }
-
-
-/* ══════════════════════════════════════
-   3. MEGA-NAV COLUMN LAYOUT
-   ══════════════════════════════════════ */
-.pub-mega-cols {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-}
-
-.pub-mega-col { min-width: 170px; }
-
-.pub-mega-col-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--faint);
-  padding: 6px 10px 4px;
-}
-
-.pub-mega-col-label + .pub-mega-col-label { margin-top: 8px; }
-
-.pub-mega-divider {
-  width: 1px;
-  background: var(--border);
-  margin: 4px 0;
-  opacity: .5;
-  align-self: stretch;
-}
-
-/* Canonical definition — also covers §3 of browse-additions.css */
-.pub-mega-hdivider {
-  height: 1px;
-  background: var(--border);
-  margin: 8px 0;
-  opacity: .5;
-}
-
-/* Sell panel body — replaces inline style="padding:4px" */
-.pub-mega-panel__inner { padding: 4px; }
-
-
-/* ══════════════════════════════════════
-   4. MEGA-NAV ITEMS & ICONS
-   ══════════════════════════════════════ */
-.pub-mega-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--r-md);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: background .13s, color .13s;
-  cursor: pointer;
-}
-
-.pub-mega-item:hover {
-  background: var(--p-light);
-  color: var(--p);
-  text-decoration: none;
-}
-
-.pub-mega-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  color: var(--muted);
-  flex-shrink: 0;
-  transition: background .13s, border-color .13s, color .13s;
-}
-
-.pub-mega-item:hover .pub-mega-icon {
-  background: var(--p-light);
-  border-color: var(--p-b);
-  color: var(--p);
-}
-
-.pub-mega-item-text { line-height: 1.2; }
-
-.pub-mega-item-sub {
-  display: block;
-  font-size: 11px;
-  color: var(--faint);
-  font-weight: 400;
-  margin-top: 1px;
-}
-
-
-/* ══════════════════════════════════════
-   5. ACCOUNT PANEL
-   ══════════════════════════════════════ */
-.pub-acct-panel {
-  right: 0;
-  left: auto;
-  transform: translateY(-6px);
-  min-width: 220px;
-}
-
-.pub-acct-panel.open {
-  transform: translateY(0);
-}
-
-.pub-acct-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 5px 0;
-  opacity: .6;
-}
-
-.pub-acct-section-label {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--faint);
-  padding: 6px 10px 3px;
-}
-
-.pub-acct-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border-radius: var(--r-md);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: background .13s, color .13s;
-}
-
-.pub-acct-item i {
-  width: 14px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--faint);
-}
-
-.pub-acct-item:hover {
-  background: var(--p-light);
-  color: var(--p);
-  text-decoration: none;
-}
-
-.pub-acct-item:hover i { color: var(--p); }
-
-.pub-acct-item.danger       { color: var(--red); }
-.pub-acct-item.danger i     { color: var(--red); }
-.pub-acct-item.danger:hover { background: var(--red-bg); }
-
-
-/* ══════════════════════════════════════
-   6. NAV TRIGGER BUTTONS & ACCOUNT WRAP
-   ══════════════════════════════════════ */
-.pub-nav__acct-wrap   { position: relative; }
-.pub-nav__signin--guest { margin-right: 10px; }
-
-.pub-nav__trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--sans);
-  padding: 0;
-  transition: color .18s;
-  white-space: nowrap;
-}
-
-.pub-nav__trigger:hover,
-.pub-nav__trigger.open { color: var(--p); }
-
-.pub-nav__trigger .pub-chevron {
-  font-size: 8px;
-  transition: transform .2s ease;
-  display: inline-block;
-  opacity: .6;
-}
-
-.pub-nav__trigger.open .pub-chevron { transform: rotate(180deg); }
-
-.pub-nav__acct-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--p);
-  color: #fff;
-  border-radius: var(--r-md);
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--sans);
-  cursor: pointer;
-  border: none;
-  transition: background .18s;
-  white-space: nowrap;
-}
-
-.pub-nav__acct-btn:hover { background: var(--p-dark); }
-
-.pub-nav__acct-btn .pub-chevron {
-  font-size: 8px;
-  transition: transform .2s ease;
-  display: inline-block;
-  opacity: .7;
-}
-
-.pub-nav__acct-btn.open .pub-chevron { transform: rotate(180deg); }
-
-.pub-nav__signin {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: color .18s;
-  white-space: nowrap;
-}
-
-.pub-nav__signin:hover { color: var(--p); }
-
-
-/* ══════════════════════════════════════
-   7. MOBILE NAV DRAWER
-   Hidden on desktop, shown on ≤ 1024px
-   ══════════════════════════════════════ */
-.pub-nav__hamburger {
-  display: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  width: 36px;
-  height: 36px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  cursor: pointer;
-  padding: 8px;
-  flex-shrink: 0;
-  transition: background .15s, border-color .15s;
-}
-
-.pub-nav__hamburger:hover { background: var(--p-light); border-color: var(--p-b); }
-
-.pub-nav__hamburger span {
-  display: block;
-  width: 100%;
-  height: 2px;
-  background: var(--text);
-  border-radius: 1px;
-  transition: transform .22s ease, opacity .22s ease;
-}
-
-.pub-nav__hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-.pub-nav__hamburger.open span:nth-child(2) { opacity: 0; }
-.pub-nav__hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-.pub-mobile-nav {
-  display: none;
-  position: fixed;
-  inset: 60px 0 0 0;
-  background: var(--white);
-  z-index: calc(var(--z-sticky) + 10);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-top: 1px solid var(--border);
-  box-shadow: 0 8px 32px rgba(0,0,0,.12);
-  transform: translateY(-8px);
-  opacity: 0;
-  transition: transform .22s ease, opacity .22s ease;
-  pointer-events: none;
-}
-
-.pub-mobile-nav.open {
-  display: block;
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.pub-mobile-nav__inner {
-  padding: 12px 16px 32px;
-  max-width: 540px;
-  margin: 0 auto;
-}
-
-.pub-mobile-nav__section {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--faint);
-  padding: 14px 0 6px;
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-}
-
-.pub-mobile-nav__section:first-child { border-top: none; margin-top: 0; }
-
-.pub-mobile-nav__item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 10px;
-  border-radius: var(--r-md);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: background .13s, color .13s;
-}
-
-.pub-mobile-nav__item i {
-  width: 16px;
-  text-align: center;
-  color: var(--faint);
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.pub-mobile-nav__item:hover,
-.pub-mobile-nav__item:active {
-  background: var(--p-light);
-  color: var(--p);
-  text-decoration: none;
-}
-
-.pub-mobile-nav__item:hover i,
-.pub-mobile-nav__item:active i { color: var(--p); }
-
-.pub-mobile-nav__item--danger      { color: var(--red); }
-.pub-mobile-nav__item--danger i    { color: var(--red); }
-.pub-mobile-nav__item--danger:hover,
-.pub-mobile-nav__item--danger:active { background: var(--red-bg); }
-
-/* Mobile filter toggle */
-.browse-filter-toggle {
-  display: none; /* shown only on ≤ 768px */
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px 16px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--sans);
-  cursor: pointer;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
-  transition: border-color .15s, background .15s;
-}
-
-.browse-filter-toggle:hover {
-  border-color: var(--p);
-  background: var(--p-light);
-  color: var(--p);
-}
-
-.browse-filter-toggle__badge {
-  background: var(--p);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: var(--r-full);
-  padding: 1px 7px;
-  min-width: 20px;
-  text-align: center;
-}
-
-/* Sidebar drawer overlay */
-.browse-sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.4);
-  z-index: calc(var(--z-dropdown) + 10);
-  backdrop-filter: blur(2px);
-}
-
-.browse-sidebar-overlay.open { display: block; }
-
-/* P6 — color + font-family were missing */
-.browse-sidebar__close {
-  display: none; /* shown in drawer mode via §20 responsive rule */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--white);
-  border-bottom: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);       /* P6 */
-  cursor: pointer;
-  border-radius: 0;
-  font-family: var(--sans); /* P6 */
-  border-top: none;
-  border-left: none;
-  border-right: none;
-}
-
-
-/* ══════════════════════════════════════
-   8. BROWSE LAYOUT SHELL
+   1. LAYOUT SHELL
    ══════════════════════════════════════ */
 .browse-layout {
   display: grid;
   grid-template-columns: 300px 1fr;
   gap: 24px;
   align-items: start;
-  margin-inline: clamp(16px, 4vw, 48px);
-  padding-inline: clamp(12px, 2vw, 24px);
+  padding-inline: var(--page-gutter);
 }
 
 /* P4 — prevents grid track blowout from wide content */
-.browse-results {
-  min-width: 0;
-}
+.browse-results { min-width: 0; }
 
-/* P1 — sticky top corrected 76px → 72px */
+/* P1 — sticky just below the nav bar */
 .browse-sidebar {
   position: sticky;
-  top: 72px;
-  max-height: calc(100vh - 92px);
+  top: calc(var(--nav-h) + 12px);
+  max-height: calc(100vh - var(--nav-h) - 32px);
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #dde3ef transparent;
@@ -544,7 +95,84 @@
 
 
 /* ══════════════════════════════════════
-   9. BROWSE SIDEBAR CARD & INPUTS
+   2. MOBILE FILTER TOGGLE, OVERLAY, CLOSE
+   ══════════════════════════════════════ */
+.browse-filter-toggle {
+  display: none; /* shown ≤ 768px (§13) */
+  width: calc(100% - (var(--page-gutter) * 2));
+  margin: 0 var(--page-gutter) 16px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 16px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  font-family: var(--sans);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, background .15s;
+}
+
+.browse-filter-toggle:hover {
+  border-color: var(--p);
+  background: var(--p-light);
+  color: var(--p);
+}
+
+.browse-filter-toggle__icon    { margin-right: 6px; }
+.browse-filter-toggle__chevron { font-size: 11px; color: var(--faint); }
+
+.browse-filter-toggle__badge {
+  background: var(--p);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--r-full);
+  padding: 1px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.browse-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.4);
+  z-index: calc(var(--z-dropdown) + 10);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+
+.browse-sidebar-overlay.open { display: block; }
+
+/* P6 */
+.browse-sidebar__close {
+  display: none; /* shown in drawer mode (§13) */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--white);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+
+/* ══════════════════════════════════════
+   3. SIDEBAR CARD & INPUTS
    ══════════════════════════════════════ */
 .sidebar-card {
   background: var(--white);
@@ -598,14 +226,17 @@
   gap: 6px;
 }
 
-/* P7 — replaces inline style on bolt icon */
+/* P7 */
 .sidebar-card__footer i {
   color: var(--amber);
   flex-shrink: 0;
   margin-right: 4px;
 }
 
-.filter-section       { margin-bottom: 18px; }
+.filter-section { margin-bottom: 18px; }
+
+/* Anchors the typeahead dropdown (§14) — was style="position:relative" */
+.filter-section--search { position: relative; }
 
 .filter-section-label {
   font-size: 12px;
@@ -617,7 +248,7 @@
   display: block;
 }
 
-.search-input-wrap   { position: relative; }
+.search-input-wrap { position: relative; }
 
 .search-input-wrap i {
   position: absolute;
@@ -679,7 +310,7 @@
 .min-max-input::-webkit-outer-spin-button,
 .min-max-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-.min-max-input:focus  { border-color: var(--p); background: var(--white); }
+.min-max-input:focus        { border-color: var(--p); background: var(--white); }
 .min-max-input::placeholder { color: var(--faint); }
 
 .filter-select {
@@ -705,7 +336,7 @@
   background-color: var(--white);
 }
 
-.year-row               { display: flex; gap: 8px; }
+.year-row                { display: flex; gap: 8px; }
 .year-row .filter-select { flex: 1; width: auto; }
 
 .filter-apply-btn {
@@ -734,7 +365,7 @@
 
 
 /* ══════════════════════════════════════
-   10. BROWSE FILTER CHIPS
+   4. FILTER CHIPS & PRICE PILLS
    ══════════════════════════════════════ */
 .filter-chip {
   display: inline-flex;
@@ -754,7 +385,13 @@
   min-height: 38px;
 }
 
-.filter-chip:hover  { border-color: var(--p); color: var(--p); }
+.filter-chip:hover { border-color: var(--p); color: var(--p); }
+
+/* Keyboard users tab to the visually hidden input inside the chip */
+.filter-chip:focus-within {
+  outline: 2px solid var(--p);
+  outline-offset: 2px;
+}
 
 .filter-chip.active {
   background: var(--p);
@@ -783,7 +420,7 @@
   white-space: nowrap;
 }
 
-.price-pill:hover  { border-color: var(--p); color: var(--p); text-decoration: none; }
+.price-pill:hover { border-color: var(--p); color: var(--p); text-decoration: none; }
 
 .price-pill.active {
   background: var(--p);
@@ -794,7 +431,7 @@
 
 
 /* ══════════════════════════════════════
-   11. BROWSE VEHICLE CARD
+   5. VEHICLE CARD
    ══════════════════════════════════════ */
 .vehicle-card {
   display: block;
@@ -977,7 +614,7 @@
 
 
 /* ══════════════════════════════════════
-   12. BROWSE RESULTS BAR & SORT
+   6. RESULTS BAR & SORT
    ══════════════════════════════════════ */
 .results-bar {
   display: flex;
@@ -988,7 +625,7 @@
   margin-bottom: 16px;
 }
 
-.results-bar__count     { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0; }
+.results-bar__count { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0; }
 
 .results-bar__count-num {
   font-family: var(--font-d);
@@ -998,7 +635,7 @@
   margin-right: 6px;
 }
 
-.results-bar__heading   { color: var(--faint); font-weight: 400; }
+.results-bar__heading { color: var(--faint); font-weight: 400; }
 
 .sort-form {
   display: flex;
@@ -1028,7 +665,7 @@
 
 
 /* ══════════════════════════════════════
-   13. ACTIVE-FILTER TAGS
+   7. ACTIVE-FILTER TAGS
    ══════════════════════════════════════ */
 .active-filter-tags {
   display: flex;
@@ -1063,8 +700,7 @@
 
 
 /* ══════════════════════════════════════
-   14. PRICE QUICK-FILTER PILLS ROW
-   P2 — added -webkit-overflow-scrolling
+   8. PRICE QUICK-FILTER ROW
    ══════════════════════════════════════ */
 .price-pill-row {
   display: flex;
@@ -1075,7 +711,7 @@
 
 
 /* ══════════════════════════════════════
-   15. BROWSE CARD BADGES
+   9. CARD BADGES
    ══════════════════════════════════════ */
 .salesdesk-badge {
   display: inline-flex;
@@ -1111,7 +747,7 @@
 
 
 /* ══════════════════════════════════════
-   16. BROWSE PAGINATION
+   10. PAGINATION
    ══════════════════════════════════════ */
 .pagination {
   display: flex;
@@ -1144,18 +780,12 @@
   color: #fff;
 }
 
-/* P3 — Prev/Next arrow modifier */
+/* P3 */
 .pagination__page--nav {
   min-width: 36px;
   padding-left: 10px;
   padding-right: 10px;
   font-size: 12px;
-}
-
-.pagination__page--nav:hover {
-  border-color: var(--p);
-  color: var(--p);
-  text-decoration: none;
 }
 
 .pagination__ellipsis {
@@ -1166,7 +796,7 @@
 
 
 /* ══════════════════════════════════════
-   17. BROWSE EMPTY STATE
+   11. EMPTY STATE
    ══════════════════════════════════════ */
 .browse-empty {
   text-align: center;
@@ -1208,24 +838,45 @@
 
 
 /* ══════════════════════════════════════
-   18. RESPONSIVE — TABLET (≤ 1024px)
-   Nav links collapse; hamburger appears.
+   12. GRID ENTRY ANIMATION (P5)
+   animation-fill-mode intentionally omitted
+   so the grid stays visible if animation is
+   skipped (background tab, reduced motion).
    ══════════════════════════════════════ */
-@media (max-width: 1024px) {
-  .pub-nav__links    { display: none; }
-  .pub-nav__hamburger { display: flex; }
+.browse-grid--animated { animation: browseGridIn .25s ease; }
 
-  #navBuyPanel,
-  #navSellPanel,
-  #navNewsPanel,
-  #navToolsPanel { min-width: unset; }
+@keyframes browseGridIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browse-grid--animated { animation: none; }
+  .browse-sidebar,
+  .browse-sidebar-overlay { transition: none; }
 }
 
 
 /* ══════════════════════════════════════
-   19. RESPONSIVE — TABLET PORTRAIT
-       (1024px > width > 768px)
+   13. RESPONSIVE
    ══════════════════════════════════════ */
+
+/* Large screens (≥ 1400px) */
+@media (min-width: 1400px) {
+  .browse-layout {
+    grid-template-columns: 320px 1fr;
+    gap: 32px;
+  }
+
+  .pub-browse-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .vehicle-card__img { height: 215px; }
+}
+
+/* Tablet portrait (769px – 1024px) */
 @media (max-width: 1024px) and (min-width: 769px) {
   .browse-layout {
     grid-template-columns: 260px 1fr;
@@ -1240,23 +891,16 @@
   .results-bar__count-num { font-size: 20px; }
 }
 
-
-/* ══════════════════════════════════════
-   20. RESPONSIVE — MOBILE LANDSCAPE (≤ 768px)
-   Sidebar collapses to drawer; single-col.
-   ══════════════════════════════════════ */
+/* Mobile (≤ 768px): sidebar becomes a left drawer */
 @media (max-width: 768px) {
   .browse-layout {
     grid-template-columns: 1fr;
     gap: 0;
-    margin-inline: 0;
-    padding-inline: 16px;
   }
 
-  /* P8 — show filter toggle on mobile */
+  /* P8 */
   .browse-filter-toggle { display: flex; }
 
-  /* Sidebar becomes fixed left-drawer */
   .browse-sidebar {
     position: fixed;
     top: 0;
@@ -1272,6 +916,7 @@
     transition: transform .28s cubic-bezier(.2,0,0,1);
     max-height: none;
     border-radius: 0 var(--r-xl) var(--r-xl) 0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .browse-sidebar.drawer-open { transform: translateX(0); }
@@ -1294,11 +939,10 @@
     padding: 16px;
   }
 
-  /* Results bar */
   .results-bar__count-num { font-size: 18px; }
-  .results-bar    { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .sort-form      { width: 100%; }
-  .sort-select    { width: 100%; }
+  .results-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .sort-form   { width: 100%; }
+  .sort-select { width: 100%; }
 
   .vehicle-card__img { height: 175px; }
 
@@ -1307,7 +951,7 @@
     gap: 12px;
   }
 
-  /* P2 — price pills: horizontal scroll on mobile */
+  /* P2 — price pills scroll horizontally and bleed to the edge */
   .price-pill-row {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1315,8 +959,8 @@
     padding-bottom: 4px;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    margin-right: -16px;
-    padding-right: 16px;
+    margin-right: calc(var(--page-gutter) * -1);
+    padding-right: var(--page-gutter);
   }
 
   .price-pill-row::-webkit-scrollbar { display: none; }
@@ -1326,15 +970,12 @@
   .pagination__page--nav { min-width: 32px; padding-left: 8px; padding-right: 8px; }
 }
 
-
-/* ══════════════════════════════════════
-   21. RESPONSIVE — MOBILE PORTRAIT (≤ 480px)
-   ══════════════════════════════════════ */
+/* Mobile portrait (≤ 480px) */
 @media (max-width: 480px) {
   .pub-browse-grid { grid-template-columns: 1fr; gap: 12px; }
 
-  .vehicle-card__img  { height: 200px; }
-  .vehicle-card__body { padding: 12px; }
+  .vehicle-card__img   { height: 200px; }
+  .vehicle-card__body  { padding: 12px; }
   .vehicle-card__name  { font-size: 13px; }
   .vehicle-card__price { font-size: 15px; }
 
@@ -1343,44 +984,64 @@
   .price-pill-row                  { gap: 6px; }
   .price-pill                      { font-size: 11px; padding: 5px 10px; }
 
-  .active-filter-tags  { gap: 4px; }
-
-  .pub-nav-label        { display: none; }
-  .pub-nav__acct-btn    { padding: 8px 12px; }
+  .active-filter-tags { gap: 4px; }
 }
 
-
-/* ══════════════════════════════════════
-   22. RESPONSIVE — SMALL PHONE (≤ 360px)
-   ══════════════════════════════════════ */
+/* Small phone (≤ 360px) */
 @media (max-width: 360px) {
-  .sidebar-card          { padding: 12px; }
-  .vehicle-card__img     { height: 180px; }
-  .results-bar__count-num { font-size: 16px; }
+  .sidebar-card            { padding: 12px; }
+  .vehicle-card__img       { height: 180px; }
+  .results-bar__count-num  { font-size: 16px; }
   .vehicle-card__spec-pill { font-size: 10px; padding: 2px 7px; }
 }
 
 
 /* ══════════════════════════════════════
-   23. RESPONSIVE — LARGE SCREENS (≥ 1400px)
+   14. SEARCH TYPEAHEAD DROPDOWN
+   Rendered by assets/js/search-typeahead.js.
+   Shared by /cars-for-sale/ and broker storefronts.
    ══════════════════════════════════════ */
-@media (min-width: 1400px) {
-  .browse-layout {
-    grid-template-columns: 320px 1fr;
-    gap: 32px;
-  }
+.typeahead-box {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 40;
+  overflow: hidden;
+  display: none;
+}
 
-  .pub-browse-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-  }
+.typeahead-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
 
-  .vehicle-card__img { height: 215px; }
+.typeahead-item:hover,
+.typeahead-item.focused { background: var(--bg); }
+
+.typeahead-icon  { font-size: 12px; color: var(--faint); flex-shrink: 0; }
+.typeahead-label { flex: 1; color: var(--text); }
+
+.typeahead-type {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--faint);
+  background: var(--bg);
+  border-radius: var(--r-full);
+  padding: 2px 8px;
 }
 
 
 /* ══════════════════════════════════════
-   24. TOUCH / HOVER CAPABILITY OVERRIDES
+   15. TOUCH OVERRIDES, PRINT
    ══════════════════════════════════════ */
 @media (hover: none) and (pointer: coarse) {
   .vehicle-card:hover {
@@ -1397,33 +1058,7 @@
   .vehicle-card:hover .vehicle-card__img img { transform: none; }
 }
 
-
-/* ══════════════════════════════════════
-   25. GRID ENTRY ANIMATION
-   P5 — CSS-only fade; no FOIC risk.
-   animation-fill-mode intentionally omitted
-   so the grid is always visible if animation
-   is disabled (background tab, reduced-motion).
-   ══════════════════════════════════════ */
-.browse-grid--animated {
-  animation: browseGridIn .25s ease;
-}
-
-@keyframes browseGridIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .browse-grid--animated { animation: none; }
-}
-
-
-/* ══════════════════════════════════════
-   26. PRINT STYLES
-   ══════════════════════════════════════ */
 @media print {
-  .pub-nav,
   .browse-sidebar,
   .browse-filter-toggle,
   .browse-sidebar-overlay,

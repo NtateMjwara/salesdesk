@@ -7,7 +7,24 @@
  *   - If a new variable is needed, T1 adds it here and announces it
  *     in SHARED_CHANGELOG.md.
  *   - Font loading lives here — no page adds a <link> for fonts.
- *   - Base reset only — no component styles (those are in components.css).
+ *   - Base reset + cross-surface utilities only — no component styles
+ *     (those are in components.css / public.css / public-shell.css).
+ *
+ * v2 (UI consolidation, Phase 1):
+ *   TOK-1  --font-d added. Was only ever set inside layout-public.php's
+ *          inline critical <style> block, so any stylesheet using it
+ *          outside the public shell silently fell back to the browser
+ *          default font.
+ *   TOK-2  --nav-h and --page-gutter added. public-shell.css, browse.css
+ *          and public.css all derive nav offsets and lateral page gutters
+ *          from these instead of repeating 60px / clamp() values.
+ *   UTL-1  .sr-only moved here from browse-additions.css (deleted). It is
+ *          a cross-surface accessibility utility, not a browse component.
+ *
+ * NOTE: the Google Fonts @import below is still render-blocking.
+ * layout-app.php depends on it (it has no font <link> of its own), so
+ * it stays until layout-app.php gets the same async font <link> that
+ * layout-public.php already uses. Tracked for the Phase 5 sweep.
  */
 
 /* ── Google Fonts (single load) ────────────────────────── */
@@ -64,6 +81,11 @@
   --mono:        'DM Mono', monospace;
   --serif:       'Fraunces', serif;
   --sans:        'DM Sans', sans-serif;
+  --font-d:      'Sora', 'DM Sans', system-ui, sans-serif;   /* TOK-1 */
+
+  /* Layout (TOK-2) */
+  --nav-h:       60px;
+  --page-gutter: calc(clamp(16px, 4vw, 48px) + clamp(12px, 2vw, 24px));
 
   /* Spacing scale (rem) */
   --sp-1:  0.25rem;
@@ -93,6 +115,12 @@
   --z-sticky:    200;
   --z-modal:     300;
   --z-toast:     400;
+}
+
+/* Phones: one flat 16px gutter everywhere (nav, breadcrumb, browse,
+   detail) instead of the desktop margin + padding clamp pair. */
+@media (max-width: 768px) {
+  :root { --page-gutter: 16px; }
 }
 
 /* ── Base reset ────────────────────────────────────────── */
@@ -141,4 +169,17 @@ strong {
   outline: 2px solid var(--p);
   outline-offset: 2px;
   border-radius: var(--r-sm);
+}
+
+/* ── Screen-reader only (UTL-1) ────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

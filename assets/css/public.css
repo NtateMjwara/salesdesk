@@ -1,334 +1,59 @@
 /**
- * SalesDesk — Public Pages CSS
+ * SalesDesk — Public Pages CSS  (v3)
  * T1 owns this file.
  *
- * Loads after global.css (which defines all :root vars).
- * public-fonts.css must load before this to provide --font-d = Sora.
+ * Shared components for public pages: buttons, car detail (gallery,
+ * header, specs, dealer card, enquiry), related cars, broker hero,
+ * browse card base, share sheet, animations.
  *
- * CONFLICT AUDIT:
- *   – .pub-mega-hdivider      → OWNED by browse.css  (removed from §19 here)
- *   – .pub-mega-panel__inner  → OWNED by browse.css  (removed from browse-additions §5)
- *   – .pub-browse-grid        → defined here (§15) as base 2-col; browse.css
- *                               overrides per breakpoint. No conflict.
- *   – .pub-page-wide          → OWNED here; layout-public.php inline <style>
- *                               block duplicates intentionally for cache-busting.
- *   – .pub-breadcrumb         → OWNED here; layout-public.php inline block
- *                               duplicates intentionally for cache-busting.
+ * Load order: global.css → public-shell.css → public.css → browse.css
+ *
+ * OWNERSHIP (no other file may redeclare these):
+ *   – Nav, mega panels, mobile drawer, breadcrumb,
+ *     .pub-page-wide / .pub-page-narrow, .sd-footer → public-shell.css
+ *   – .sr-only                                     → global.css
+ *   – .pub-browse-grid breakpoints                 → browse.css
+ *
+ * v3 (UI consolidation, Phase 1):
+ *   – §1 nav, §2 breadcrumb and the page-shell rules in §4 removed
+ *     (moved to public-shell.css). Legacy .pub-nav__browse-*,
+ *     .pub-nav__account-*, .pub-nav__dropdown-* rules deleted — no
+ *     markup has used them since the mega-nav shipped.
+ *   – browse-additions.css deleted. Its rules were duplicates of this
+ *     file (share sheet, .pub-btn-full, 960px detail rules); the two
+ *     unique ones (.pub-footer stacking, smaller gallery thumbs on
+ *     phones) are now in §18.
+ *   – State classes added for public.js so it no longer writes inline
+ *     styles: .is-swapping (gallery), .is-invalid (form),
+ *     .is-copied (share), .pub-reveal-ready (scroll reveal).
+ *   – Gutters use --page-gutter from global.css.
  *
  * Sections:
- *   1.  Public nav
- *   2.  Breadcrumb
- *   3.  Utility buttons (public variants)
- *   4.  Layout shells
- *   5.  Gallery
- *   6.  Car header & badges
- *   7.  Spec chips
- *   8.  Spec table
- *   9.  Description block
- *  10.  Dealer card
- *  11.  Sticky enquiry sidebar
- *  12.  Enquiry form elements
- *  13.  Related cars grid
- *  14.  Broker storefront hero
- *  15.  Browse grid (base — browse.css handles breakpoint overrides)
- *  16.  Share sheet overlay
- *  17.  Animations (pub-reveal / pub-revealed)
- *  18.  Responsive breakpoints
- *  19.  Footer utilities
+ *   1.  Icon buttons (wishlist / share)
+ *   2.  Utility buttons (public variants)
+ *   3.  Detail layout + legacy simple footer
+ *   4.  Gallery
+ *   5.  Car header & badges
+ *   6.  Spec chips
+ *   7.  Spec table
+ *   8.  Description block
+ *   9.  Dealer card
+ *  10.  Sticky enquiry sidebar
+ *  11.  Enquiry form elements
+ *  12.  Related cars grid
+ *  13.  Broker storefront hero
+ *  14.  Browse card (base)
+ *  15.  Share sheet overlay
+ *  16.  Animations & scroll reveal
+ *  17.  Responsive
  */
 
 
 /* ══════════════════════════════════════
-   1. PUBLIC NAV
+   1. ICON BUTTONS
+   Used on the detail page header and broker
+   storefront cards (wishlist heart, share).
    ══════════════════════════════════════ */
-.pub-nav {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-  height: 60px;
-  background: rgba(255,255,255,.97);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 4px rgba(0,0,0,.06);
-}
-
-.pub-nav__inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 10px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-/* Brand */
-.pub-nav__brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  flex-shrink: 0;
-  text-decoration: none;
-}
-
-.pub-nav__logo {
-  width: 30px;
-  height: 30px;
-  background: #fff;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.pub-nav__logo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.pub-nav__name {
-  font-family: var(--font-d);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -.02em;
-}
-
-.pub-nav__name span { color: var(--p); }
-
-.pub-nav__badge {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  background: var(--gr-bg);
-  color: var(--green);
-  border: 1px solid var(--gr-b);
-  border-radius: var(--r-full);
-  padding: 2px 7px;
-}
-
-/* Centre links */
-.pub-nav__links {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  flex: 1;
-  justify-content: center;
-}
-
-.pub-nav__link {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  transition: color .18s;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.pub-nav__link:hover { color: var(--p); }
-
-/* Browse dropdown (legacy — mega-nav triggers live in browse.css) */
-.pub-nav__browse { position: relative; }
-
-.pub-nav__browse-btn {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--sans);
-  padding: 0;
-  transition: color .18s;
-}
-
-.pub-nav__browse-btn:hover,
-.pub-nav__browse-btn.open    { color: var(--p); }
-
-.pub-nav__browse-btn .pub-chevron {
-  font-size: 8px;
-  transition: transform .2s ease;
-  display: inline-block;
-  opacity: .6;
-}
-
-.pub-nav__browse-btn.open .pub-chevron { transform: rotate(180deg); }
-
-.pub-nav__browse-panel {
-  position: absolute;
-  top: calc(100% + 14px);
-  left: 50%;
-  transform: translateX(-50%) translateY(-6px);
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lg);
-  min-width: 230px;
-  padding: 6px;
-  z-index: var(--z-dropdown);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity .18s ease, transform .18s ease, visibility .18s;
-}
-
-.pub-nav__browse-panel.open {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) translateY(0);
-}
-
-.pub-nav__browse-panel-title {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  color: var(--faint);
-  padding: 6px 11px 3px;
-}
-
-.pub-nav__browse-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
-  border-radius: var(--r-md);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: background .15s, color .15s;
-}
-
-.pub-nav__browse-item i {
-  font-size: 11px;
-  color: var(--faint);
-  width: 14px;
-  text-align: center;
-}
-
-.pub-nav__browse-item:hover  { background: var(--p-light); color: var(--p); }
-.pub-nav__browse-item:hover i { color: var(--p); }
-
-.pub-nav__browse-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 5px 0;
-  opacity: .5;
-}
-
-/* Right actions */
-.pub-nav__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.pub-nav__signin {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: color .18s;
-}
-
-.pub-nav__signin:hover { color: var(--p); }
-
-/* Account dropdown */
-.pub-nav__account { position: relative; }
-
-.pub-nav__account-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--p);
-  color: #fff;
-  border-radius: var(--r-md);
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--sans);
-  cursor: pointer;
-  border: none;
-  transition: background .18s;
-}
-
-.pub-nav__account-btn:hover { background: var(--p-dark); }
-
-.pub-nav__account-btn .pub-chevron {
-  font-size: 8px;
-  transition: transform .2s ease;
-  display: inline-block;
-  opacity: .7;
-}
-
-.pub-nav__account-btn.open .pub-chevron { transform: rotate(180deg); }
-
-.pub-nav__dropdown {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lg);
-  min-width: 190px;
-  padding: 6px;
-  z-index: var(--z-dropdown);
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-6px);
-  transition: opacity .18s ease, transform .18s ease, visibility .18s;
-}
-
-.pub-nav__dropdown.open {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-
-.pub-nav__dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 11px;
-  border-radius: var(--r-md);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  text-decoration: none;
-  transition: background .15s, color .15s;
-}
-
-.pub-nav__dropdown-item i {
-  font-size: 12px;
-  color: var(--faint);
-  width: 14px;
-  text-align: center;
-}
-
-.pub-nav__dropdown-item:hover  { background: var(--p-light); color: var(--p); }
-.pub-nav__dropdown-item:hover i { color: var(--p); }
-
-.pub-nav__dropdown-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 5px 0;
-  opacity: .5;
-}
-
-.pub-nav__dropdown-item.danger       { color: var(--red); }
-.pub-nav__dropdown-item.danger i     { color: var(--red); }
-.pub-nav__dropdown-item.danger:hover { background: var(--red-bg); }
-
 .pub-nav-icon-btn {
   width: 34px;
   height: 34px;
@@ -345,33 +70,13 @@
   flex-shrink: 0;
 }
 
-.pub-nav-icon-btn:hover     { background: var(--p-light); color: var(--p); border-color: var(--p-b); }
+.pub-nav-icon-btn:hover      { background: var(--p-light); color: var(--p); border-color: var(--p-b); }
 .pub-nav-icon-btn.wishlisted { background: var(--red-bg); color: var(--red); border-color: var(--red-b); }
+.pub-nav-icon-btn:disabled   { opacity: .5; cursor: progress; }
 
 
 /* ══════════════════════════════════════
-   2. BREADCRUMB
-   ══════════════════════════════════════ */
-.pub-breadcrumb {
-  max-width: 1400px;
-  margin: 0 auto 28px;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--faint);
-  border-bottom: 1px solid var(--border);
-}
-
-.pub-breadcrumb a { color: var(--muted); text-decoration: none; transition: color .15s; }
-.pub-breadcrumb a:hover { color: var(--p); }
-.pub-breadcrumb .sep     { color: var(--border2); font-size: 10px; }
-.pub-breadcrumb .current { color: var(--text); font-weight: 500; }
-
-
-/* ══════════════════════════════════════
-   3. UTILITY BUTTONS (public variants)
+   2. UTILITY BUTTONS (public variants)
    ══════════════════════════════════════ */
 .pub-btn {
   display: inline-flex;
@@ -427,30 +132,14 @@
 
 
 /* ══════════════════════════════════════
-   4. LAYOUT SHELLS
+   3. DETAIL LAYOUT + LEGACY SIMPLE FOOTER
    ══════════════════════════════════════ */
-/* Wide: browse, car detail, homepage */
-.pub-page-wide {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 0 0 64px;
-}
-
-/* Narrow: broker storefront */
-.pub-page-narrow {
-  max-width: 100%;
-  margin: 0 auto;
-  padding: 28px 0 64px;
-}
-
-/* Two-column detail grid */
 .pub-detail-grid {
   display: grid;
   grid-template-columns: 1fr 360px;
   gap: 28px;
   align-items: start;
-  margin-inline: clamp(16px, 4vw, 48px);
-  padding-inline: clamp(12px, 2vw, 24px);
+  padding-inline: var(--page-gutter);
 }
 
 /*
@@ -459,7 +148,7 @@
  */
 .pub-detail-grid > div { min-width: 0; }
 
-/* Public footer — simple top-bordered footer */
+/* Simple top-bordered footer (pre-sd-footer pages only) */
 .pub-footer {
   border-top: 1px solid var(--border);
   margin-top: 4rem;
@@ -500,7 +189,7 @@
 
 
 /* ══════════════════════════════════════
-   5. GALLERY
+   4. GALLERY
    ══════════════════════════════════════ */
 .pub-gallery {
   margin-bottom: 24px;
@@ -523,10 +212,16 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform .35s cubic-bezier(.2,0,0,1);
+  transition: opacity .15s ease, transform .35s cubic-bezier(.2,0,0,1);
 }
 
 .pub-gallery__main:hover img { transform: scale(1.03); }
+
+/* public.js toggles this while swapping the main image */
+.pub-gallery__main img.is-swapping {
+  opacity: 0;
+  transform: scale(1.02);
+}
 
 .pub-gallery__badge-row {
   position: absolute;
@@ -580,6 +275,8 @@
   border-radius: var(--r-full);
 }
 
+.pub-gallery__count[hidden] { display: none; }
+
 .pub-gallery__thumbs {
   display: flex;
   gap: 10px;
@@ -621,7 +318,7 @@
 
 
 /* ══════════════════════════════════════
-   6. CAR HEADER & BADGES
+   5. CAR HEADER & BADGES
    ══════════════════════════════════════ */
 .pub-car-header { margin-bottom: 24px; }
 
@@ -693,7 +390,7 @@
 
 
 /* ══════════════════════════════════════
-   7. SPEC CHIPS
+   6. SPEC CHIPS
    ══════════════════════════════════════ */
 .pub-spec-chips {
   display: flex;
@@ -721,7 +418,7 @@
 
 
 /* ══════════════════════════════════════
-   8. SPEC TABLE
+   7. SPEC TABLE
    ══════════════════════════════════════ */
 .pub-spec-section { margin-bottom: 28px; }
 
@@ -781,7 +478,7 @@
 
 
 /* ══════════════════════════════════════
-   9. DESCRIPTION BLOCK
+   8. DESCRIPTION BLOCK
    ══════════════════════════════════════ */
 .pub-desc-block {
   background: var(--white);
@@ -829,7 +526,7 @@
 
 
 /* ══════════════════════════════════════
-   10. DEALER CARD
+   9. DEALER CARD
    ══════════════════════════════════════ */
 .pub-dealer-card {
   background: var(--white);
@@ -884,9 +581,9 @@
 
 
 /* ══════════════════════════════════════
-   11. STICKY ENQUIRY SIDEBAR
+   10. STICKY ENQUIRY SIDEBAR
    ══════════════════════════════════════ */
-.pub-enquiry-sticky { position: sticky; top: 80px; }
+.pub-enquiry-sticky { position: sticky; top: calc(var(--nav-h) + 20px); }
 
 .pub-enquiry-card {
   background: var(--white);
@@ -1027,7 +724,7 @@
 
 
 /* ══════════════════════════════════════
-   12. ENQUIRY FORM ELEMENTS
+   11. ENQUIRY FORM ELEMENTS
    ══════════════════════════════════════ */
 .pub-form-label {
   display: block;
@@ -1061,6 +758,10 @@
 }
 
 .pub-form-input::placeholder { color: var(--faint); }
+
+/* public.js adds this on failed validation (replaces inline border colour) */
+.pub-form-input.is-invalid,
+.pub-form-input.is-invalid:focus { border-color: var(--red); }
 
 textarea.pub-form-input   { resize: none; }
 
@@ -1164,7 +865,7 @@ select.pub-form-input {
 
 
 /* ══════════════════════════════════════
-   13. RELATED CARS GRID
+   12. RELATED CARS GRID
    ══════════════════════════════════════ */
 .pub-related { padding: 36px 0 12px; }
 
@@ -1180,8 +881,7 @@ select.pub-form-input {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 16px;
-  margin-inline: clamp(16px, 4vw, 48px);
-  padding-inline: clamp(12px, 2vw, 24px);
+  padding-inline: var(--page-gutter);
 }
 
 .pub-rel-card {
@@ -1224,7 +924,7 @@ select.pub-form-input {
 
 
 /* ══════════════════════════════════════
-   14. BROKER STOREFRONT HERO
+   13. BROKER STOREFRONT HERO
    ══════════════════════════════════════ */
 .pub-broker-hero {
   background: linear-gradient(140deg, #08143c 0%, var(--p) 100%);
@@ -1288,8 +988,8 @@ select.pub-form-input {
 
 
 /* ══════════════════════════════════════
-   15. BROWSE GRID — base definition
-   browse.css overrides per breakpoint.
+   14. BROWSE CARD — base definition
+   Grid breakpoints are owned by browse.css.
    ══════════════════════════════════════ */
 .pub-browse-grid {
   display: grid;
@@ -1406,7 +1106,8 @@ select.pub-form-input {
 
 
 /* ══════════════════════════════════════
-   16. SHARE SHEET OVERLAY
+   15. SHARE SHEET OVERLAY
+   Behaviour: public.js (data-share-* hooks)
    ══════════════════════════════════════ */
 .pub-share-overlay {
   display: none;
@@ -1426,6 +1127,7 @@ select.pub-form-input {
   background: var(--white);
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   padding: 1.5rem;
+  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
   width: 100%;
   max-width: 480px;
   box-shadow: 0 -8px 40px rgba(0,0,0,.18);
@@ -1499,6 +1201,7 @@ select.pub-form-input {
   transition: all .18s;
   background: var(--bg);
   font-size: 11px;
+  font-family: var(--sans);
   color: var(--muted);
   font-weight: 500;
   text-decoration: none;
@@ -1513,12 +1216,14 @@ select.pub-form-input {
 .pub-share-option.tw i { color: #1da1f2; }
 .pub-share-option.cp i { color: var(--p); }
 
+/* public.js sets this for ~2s after a successful copy */
+.pub-share-option.is-copied,
+.pub-share-option.is-copied i,
+.pub-share-sheet__url .is-copied { color: var(--green); }
+
 
 /* ══════════════════════════════════════
-   17. ANIMATIONS
-   pub-reveal / pub-revealed used by index.php
-   (homepage featured cards) and broker pages.
-   NOT used on browse cards (FIX-7 removed it).
+   16. ANIMATIONS & SCROLL REVEAL
    ══════════════════════════════════════ */
 @keyframes pub-fade-up {
   from { opacity: 0; transform: translateY(14px); }
@@ -1531,18 +1236,35 @@ select.pub-form-input {
 .pub-d3   { animation-delay: .25s; }
 .pub-d4   { animation-delay: .35s; }
 
-/* pub-reveal: IntersectionObserver-driven (public.js) */
-.pub-reveal   { /* opacity set by JS on observe */ }
-.pub-revealed { opacity: 1 !important; transform: none !important; }
+/*
+ * Scroll reveal. public.js adds .pub-reveal-ready to <html> only when
+ * IntersectionObserver exists, so content is never hidden for visitors
+ * without JS. Elements get .pub-revealed as they enter the viewport.
+ */
+.pub-reveal-ready .pub-reveal {
+  transition: opacity .45s ease, transform .45s ease;
+}
+
+.pub-reveal-ready .pub-reveal:not(.pub-revealed) {
+  opacity: 0;
+  transform: translateY(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pub-anim { animation: none; }
+
+  .pub-reveal-ready .pub-reveal,
+  .pub-reveal-ready .pub-reveal:not(.pub-revealed) {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
 
 
 /* ══════════════════════════════════════
-   18. RESPONSIVE BREAKPOINTS
+   17. RESPONSIVE
    ══════════════════════════════════════ */
-@media (max-width: 1024px) {
-  .pub-nav__links { display: none; }
-}
-
 @media (max-width: 960px) {
   .pub-detail-grid { grid-template-columns: 1fr; }
 
@@ -1556,36 +1278,26 @@ select.pub-form-input {
 
   .pub-enquiry-sticky { position: static; }
   .pub-gallery__main  { height: 300px; }
-  .pub-breadcrumb     { display: none; }
 }
 
 @media (max-width: 768px) {
-  .pub-nav__signin   { display: none; }
-
-  /* NOTE: pub-page-wide padding intentionally kept at 0 for the browse
-     page — the .browse-layout inside it owns its own lateral spacing.
-     Other page types (detail, broker) rely on their own inner shells. */
-  .pub-page-wide  { padding: 0 0 48px; }
-  .pub-page-narrow { padding: 16px 16px 48px; }
-
   .pub-gallery__main      { height: 260px; }
   .pub-car-header__name   { font-size: 20px; }
   .pub-car-header__price  { font-size: 22px; }
-  .pub-browse-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+  /* Simple footer stacks (was browse-additions.css §6) */
+  .pub-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 1.25rem 16px;
+  }
 }
 
 @media (max-width: 480px) {
-  .pub-nav__account-btn .pub-nav-label { display: none; }
-  .pub-nav__account-btn { padding: 8px 12px; }
-  .pub-share-options    { grid-template-columns: repeat(2, 1fr); }
+  .pub-share-options      { grid-template-columns: repeat(2, 1fr); }
   .pub-broker-hero__stats { gap: 16px; }
+
+  /* Smaller gallery thumbs (was browse-additions.css §6) */
+  .pub-gallery__thumb { width: 68px; height: 48px; }
 }
-
-
-/* ══════════════════════════════════════
-   19. FOOTER UTILITIES
-   (full sd-footer styles are in layout-public.php
-    inline <style> block — kept inline for
-    cache-busting in production)
-   ══════════════════════════════════════ */
-/* No rules here — avoids conflicting with layout-public.php inline block. */

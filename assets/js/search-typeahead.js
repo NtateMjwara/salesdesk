@@ -15,6 +15,10 @@
  *     suggestion, presses Enter, or clicks "Apply filters" —
  *     never on a bare keystroke.
  *
+ * v2: idempotent init (data-typeahead-ready), combobox ARIA. Loaded
+ * globally by layout-public.php; public-nav.js auto-initialises every
+ * input[data-typeahead-box] — pages no longer need an inline call.
+ *
  * Usage:
  *   <input type="text" name="q" id="sidebarSearch" ...>
  *   <div id="sidebarSearchBox" class="typeahead-box"></div>
@@ -41,6 +45,15 @@
       return;
     }
 
+    // v2: idempotent — public-nav.js initialises every [data-typeahead-box]
+    // input, and older pages may still call this inline for the same input.
+    if (input.getAttribute('data-typeahead-ready') === '1') return;
+    input.setAttribute('data-typeahead-ready', '1');
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-controls', box.id);
+
     var endpoint    = opts.endpoint    || '/api/cars/suggest.php';
     var extraParams = opts.extraParams || {};
     var debounceMs  = opts.debounceMs  || 200;
@@ -63,6 +76,7 @@
       if (!items.length) {
         box.style.display = 'none';
         box.innerHTML = '';
+        input.setAttribute('aria-expanded', 'false');
         return;
       }
 
@@ -78,6 +92,7 @@
       }).join('');
 
       box.style.display = 'block';
+      input.setAttribute('aria-expanded', 'true');
 
       Array.from(box.querySelectorAll('.typeahead-item')).forEach(function (el) {
         el.addEventListener('mousedown', function (e) {

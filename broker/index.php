@@ -1,9 +1,32 @@
 <?php
 /**
- * SalesDesk — Broker Public Storefront  (v4)
+ * SalesDesk — Broker Public Storefront  (v5)
  * Route: /{broker-slug}/   (via .htaccess → broker/index.php?slug=…)
  *
- * v4 CHANGES (this pass):
+ * v5 CHANGES (public UX/UI overhaul — desk pages pass):
+ *   DS-1  Page rebuilt on the shared design system: ink desk hero with
+ *         stats and contact actions, About + contact panels, then the
+ *         inventory section using the SAME browse UI as /cars-for-sale/
+ *         (collapsible filters, mobile filter sheet, sticky results
+ *         toolbar, sort, grid/list toggle, removable filter chips).
+ *   DS-2  Cars render through views/partials/vehicle-card.php — the one
+ *         shared card used on the homepage, browse and car detail — so a
+ *         desk's listings look and behave exactly like everywhere else
+ *         (save button, monthly estimate, photo count, verified seller).
+ *         The desk's own bi.tracking_code is still passed as ?ref= so
+ *         attribution is unchanged.
+ *   DS-3  ALL inline <style>, <script>, style="" and onchange="" removed,
+ *         including the duplicate filter-drawer script (browse.js owns
+ *         it) and the inline typeahead init (public-nav.js owns it).
+ *         Page CSS: assets/css/desks.css (+ browse.css). Page JS: browse.js.
+ *   DS-4  Filter chips are built from one canonical param set (same
+ *         helper shape as /cars-for-sale/), replacing the regex-based
+ *         dismissal links.
+ *   DS-5  Stats strip: "total views" replaced with "cars sold / deals
+ *         closed" first — a buyer cares about completed deals, and view
+ *         counts on a public page are vanity metrics.
+ *
+ * v4 CHANGES:
  *   ROUTE-2   Every car-detail link on this page now points at
  *              /cars-for-sale/{desk-slug}/{car-slug}/ instead of the
  *              retired /c/{desk-slug}/{car-slug}/ path — this file was
@@ -288,7 +311,7 @@ $totalPages = max(1, (int) ceil($total / $perPage));
 $listParams = array_merge($params, [$perPage, $offset]);
 $carsStmt = $pdo->prepare("
     SELECT
-        c.id, c.slug AS car_slug, c.make, c.model, c.year, c.price,
+        c.id, c.slug AS car_slug, c.make, c.model, c.variant, c.year, c.price,
         c.mileage, c.condition_type, c.body_type, c.colour,
         c.transmission, c.fuel_type, c.drivetrain,
         c.commission_type, c.commission_value,
@@ -448,862 +471,603 @@ $brokerInitials = strtoupper(
 $location = implode(', ', array_filter([$desk['suburb'], $desk['city'], $desk['province']]));
 
 $siteUrl       = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
-$pageTitle     = htmlspecialchars($desk['display_name']) . ' | SalesDesk';
+$pageTitle     = $desk['display_name'] . ' — Cars for sale | SalesDesk';
 $ogTitle       = $desk['display_name'] . ' — Car Broker on SalesDesk';
 $ogDescription = ($desk['tagline'] ?: 'Browse ' . (int) ($stats['cars_on_desk'] ?? 0) . ' cars listed by '
     . $brokerName . ' on SalesDesk South Africa.');
 $ogImage       = $desk['logo_url'] ?: '';
 $canonicalUrl  = $siteUrl . $deskPath;
 $layoutVariant  = 'wide';
-$showBreadcrumb = false;
+$showBreadcrumb = true;
+$breadcrumbs    = [['Find a SalesDesk', '/desks/'], [$desk['display_name'], null]];
 
 $shareUrl   = $canonicalUrl;
 $shareTitle = $desk['display_name'] . ' — Car Broker on SalesDesk';
 
-// ── Page-scoped CSS ──────────────────────────────────────────────
-// WIDE-2 (this pass): the previous fixed max-width overrides on
-// .broker-container / .broker-inventory-head / .browse-layout have
-// been removed. .browse-layout is no longer overridden at all here —
-// it now inherits browse.css's own clamp()-based full-bleed sizing
-// directly, which is the exact same rule /cars-for-sale/index.php
-// uses untouched, so this page now matches that page's width exactly
-// instead of guessing a pixel value. .broker-container and
-// .broker-inventory-head (hero/bio/CTA wrapper — not shared with
-// cars-for-sale) use the same clamp(16px, 4vw, 48px) margin-inline /
-// clamp(12px, 2vw, 24px) padding-inline rhythm already used elsewhere
-// in this codebase (see .pub-detail-grid / .pub-related-grid in
-// public.css) so the hero lines up edge-to-edge with the sidebar+grid
-// below it.
-// CARD-1 (this pass): vehicle cards were capped at 3 columns via the
-// media rule below, but #carGrid also had an *inline* style attribute
-// (grid-template-columns:repeat(auto-fill,minmax(240px,1fr))) in the
-// markup, which — since inline styles always win over stylesheet
-// rules regardless of media query — was silently overriding this rule
-// on desktop. That inline style has been removed from the markup below
-// so this rule now actually governs the grid, giving a true 3-per-row
-// cap with each card getting more width as the page widens.
-// CARD-2 (this pass): the location/province pill and the wishlist
-// heart button were both anchored to the same top-right corner of the
-// card image, so they rendered on top of each other. The province pill
-// is nudged left inline (see the loop below) to clear the wishlist
-// button.
-// SEARCH-1: .typeahead-box / .typeahead-item styles added here too,
-// shared visually with cars-for-sale/index.php's own copy.
-$extraCss = '<style>
-.broker-container {
-  margin-inline: clamp(16px, 4vw, 48px);
-  padding: 28px clamp(12px, 2vw, 24px) 0;
-}
-.broker-inventory-head {
-  margin-inline: clamp(16px, 4vw, 48px);
-  margin-bottom: 14px;
-  padding-inline: clamp(12px, 2vw, 24px);
-}
+// ── DS-4: canonical param set + URL builder for every link here ──
+$currentParams = array_filter([
+    'q'            => $q ?: null,
+    'make'         => $make ?: null,
+    'condition'    => $condition ?: null,
+    'body_type'    => $bodyTypesSelected ?: null,
+    'fuel_type'    => $fuelTypes ?: null,
+    'transmission' => $transmissions ?: null,
+    'drivetrain'   => $drivetrains ?: null,
+    'province'     => $province ?: null,
+    'price_min'    => $priceMin,
+    'price_max'    => $priceMax,
+    'mileage_min'  => $mileageMin,
+    'mileage_max'  => $mileageMax,
+    'year_min'     => $yearMin,
+    'year_max'     => $yearMax,
+    'sort'         => $sort !== 'newest' ? $sort : null,
+], fn($v) => $v !== null && $v !== '' && $v !== []);
 
-/* Desktop: cap the vehicle grid at exactly 3 columns (was auto-fill,
-   which could produce 4-5 narrow columns on wide screens) so each card
-   gets noticeably more width. Applies from tablet-landscape up;
-   browse.css\'s own ≤768px single/2-column mobile rules are untouched.
-   NOTE: this rule only takes effect now that the conflicting inline
-   style has been removed from #carGrid — see CARD-1 above. */
-@media (min-width: 769px) {
-  .pub-browse-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 24px;
-  }
-}
+$deskUrlFor = static function (array $set = [], array $remove = []) use ($currentParams, $deskPath): string {
+    $p = $currentParams;
+    unset($p['page']);
+    foreach ($set as $k => $v) {
+        if ($v === null) unset($p[$k]); else $p[$k] = $v;
+    }
+    foreach ($remove as $k => $v) {
+        if (isset($p[$k]) && is_array($p[$k])) {
+            $p[$k] = array_values(array_filter($p[$k], fn($x) => $x !== $v));
+            if (!$p[$k]) unset($p[$k]);
+        }
+    }
+    $qs = http_build_query($p);
+    return $deskPath . ($qs !== '' ? '?' . $qs : '');
+};
 
-/* SEARCH-1: search suggestion dropdown, shared with cars-for-sale/index.php */
-.typeahead-box {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg, 0 12px 32px rgba(0,0,0,.12));
-  z-index: 40;
-  overflow: hidden;
-  display: none;
+$fmtR  = static fn(int $n): string => $n >= 1000000
+    ? 'R' . rtrim(rtrim(number_format($n / 1000000, 2), '0'), '.') . 'm'
+    : 'R' . number_format($n / 1000) . 'k';
+$fmtKm = static fn(int $n): string => number_format($n / 1000) . 'k km';
+
+$chips = [];
+if ($q)         $chips[] = ['“' . $q . '”', $deskUrlFor(['q' => null])];
+if ($condition) $chips[] = [ucfirst($condition), $deskUrlFor(['condition' => null])];
+if ($make)      $chips[] = [$make, $deskUrlFor(['make' => null])];
+foreach ($bodyTypesSelected as $v) $chips[] = [$v, $deskUrlFor([], ['body_type' => $v])];
+if ($priceMin !== null || $priceMax !== null) {
+    $chips[] = [
+        $priceMin !== null && $priceMax !== null ? $fmtR($priceMin) . ' – ' . $fmtR($priceMax)
+            : ($priceMax !== null ? 'Under ' . $fmtR($priceMax) : 'From ' . $fmtR($priceMin)),
+        $deskUrlFor(['price_min' => null, 'price_max' => null]),
+    ];
 }
-.typeahead-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
-  cursor: pointer;
+if ($yearMin !== null || $yearMax !== null) {
+    $chips[] = [
+        $yearMin !== null && $yearMax !== null ? $yearMin . ' – ' . $yearMax : ($yearMin !== null ? $yearMin . ' or newer' : $yearMax . ' or older'),
+        $deskUrlFor(['year_min' => null, 'year_max' => null]),
+    ];
 }
-.typeahead-item:hover,
-.typeahead-item.focused { background: var(--bg); }
-.typeahead-icon { font-size: 12px; color: var(--faint); flex-shrink: 0; }
-.typeahead-label { flex: 1; color: var(--text); }
-.typeahead-type {
-  font-size: 10px; font-weight: 600; color: var(--faint);
-  background: var(--bg); border-radius: var(--r-full);
-  padding: 2px 8px;
+if ($mileageMin !== null || $mileageMax !== null) {
+    $chips[] = [
+        $mileageMax !== null ? 'Under ' . $fmtKm($mileageMax) : 'Over ' . $fmtKm((int) $mileageMin),
+        $deskUrlFor(['mileage_min' => null, 'mileage_max' => null]),
+    ];
 }
-</style>';
+foreach ($fuelTypes as $v)     $chips[] = [$v, $deskUrlFor([], ['fuel_type' => $v])];
+foreach ($transmissions as $v) $chips[] = [$v, $deskUrlFor([], ['transmission' => $v])];
+foreach ($drivetrains as $v)   $chips[] = [$v, $deskUrlFor([], ['drivetrain' => $v])];
+if ($province) $chips[] = [$province, $deskUrlFor(['province' => null])];
+
+// ── Filter presets / open sections (same shape as /cars-for-sale/) ──
+$pricePresets   = [50000, 100000, 150000, 200000, 250000, 300000, 400000, 500000, 600000, 750000, 1000000, 1500000, 2000000];
+$mileagePresets = [10000, 30000, 50000, 80000, 100000, 150000, 200000];
+foreach ([$priceMin, $priceMax] as $v)     if ($v !== null && !in_array($v, $pricePresets, true))   $pricePresets[] = $v;
+foreach ([$mileageMin, $mileageMax] as $v) if ($v !== null && !in_array($v, $mileagePresets, true)) $mileagePresets[] = $v;
+sort($pricePresets);
+sort($mileagePresets);
+
+$openSection = [
+    'condition' => true,
+    'price'     => true,
+    'make'      => !empty($makes),
+    'body'      => !empty($bodyTypes),
+    'year'      => $yearMin !== null || $yearMax !== null,
+    'mileage'   => $mileageMin !== null || $mileageMax !== null,
+    'fuel'      => !empty($fuelTypes),
+    'trans'     => !empty($transmissions),
+    'drive'     => !empty($drivetrains),
+    'province'  => (bool) $province,
+];
+
+$firstShown  = $total > 0 ? $offset + 1 : 0;
+$lastShown   = min($offset + $perPage, $total);
+$deskCars    = (int) ($stats['cars_on_desk'] ?? 0);
+$phoneDigits = $desk['phone'] ? preg_replace('/\D/', '', (string) $desk['phone']) : '';
+$waNumber    = $phoneDigits !== ''
+    ? (str_starts_with($phoneDigits, '27') ? $phoneDigits : '27' . ltrim($phoneDigits, '0'))
+    : '';
+$waLink      = $waNumber !== ''
+    ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode("Hi {$brokerName}, I found your SalesDesk ({$canonicalUrl}) and I'm looking for a car.")
+    : '';
+$isOrgVerified = $org && ($org['verification_status'] ?? '') === 'verified';
+
+$assetVersion         = $assetVersion ?? date('Ymd');
+$extraCss             = '<link rel="stylesheet" href="/assets/css/desks.css?v=' . $assetVersion . '">' . "\n";
+$extraJs              = ['/assets/js/browse.js'];
+$includeHowItWorksCss = false;
+
+require_once __DIR__ . '/../views/partials/vehicle-card.php';
+require_once __DIR__ . '/../views/partials/body-type-icon.php';
+
+$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 
 ob_start();
 ?>
 
-<div class="broker-container">
+<div class="sd-container ds">
 
-  <!-- ── Broker hero ───────────────────────────────────────────── -->
-  <div class="pub-broker-hero pub-anim">
+  <!-- ══════════════════════════════════
+       DESK HERO
+       ══════════════════════════════════ -->
+  <section class="ds-hero pub-anim" aria-labelledby="dsName">
+    <div class="ds-hero__grid">
+      <div class="ds-hero__id">
+        <span class="ds-avatar">
+          <?php if ($desk['avatar_url']): ?>
+          <img src="<?= $e($desk['avatar_url']) ?>" alt="" width="84" height="84">
+          <?php elseif ($desk['logo_url']): ?>
+          <img src="<?= $e($desk['logo_url']) ?>" alt="" width="84" height="84">
+          <?php else: ?>
+          <?= $e($brokerInitials) ?>
+          <?php endif; ?>
+        </span>
 
-    <div class="pub-broker-hero__avatar">
-      <?php if ($desk['avatar_url']): ?>
-      <img src="<?= htmlspecialchars($desk['avatar_url']) ?>"
-           alt="<?= htmlspecialchars($brokerName) ?>"
-           style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
-      <?php else: ?>
-      <?= htmlspecialchars($brokerInitials) ?>
-      <?php endif; ?>
+        <div>
+          <h1 class="ds-hero__name" id="dsName"><?= $e($desk['display_name']) ?></h1>
+          <p class="ds-hero__broker">
+            <?= $e($brokerName) ?> · Independent SalesDesk broker
+          </p>
+          <div class="ds-hero__tags">
+            <?php if ($location): ?>
+            <span class="ds-tag"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($location) ?></span>
+            <?php endif; ?>
+            <?php if ($isOrgVerified): ?>
+            <span class="ds-tag ds-tag--verified"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <?= $e($org['name']) ?></span>
+            <?php endif; ?>
+            <span class="ds-tag"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Commission-protected</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ds-hero__actions">
+        <?php if ($waLink): ?>
+        <a class="pub-btn pub-btn-whatsapp" href="<?= $e($waLink) ?>" target="_blank" rel="noopener">
+          <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> WhatsApp
+        </a>
+        <?php endif; ?>
+        <?php if ($desk['phone']): ?>
+        <a class="pub-btn pub-btn-on-ink" href="tel:<?= $e($phoneDigits) ?>">
+          <i class="fa-solid fa-phone" aria-hidden="true"></i> Call
+        </a>
+        <?php endif; ?>
+        <button class="pub-btn pub-btn-on-ink" type="button" data-share-open>
+          <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i> Share desk
+        </button>
+      </div>
     </div>
-
-    <div class="pub-broker-hero__name"><?= htmlspecialchars($desk['display_name']) ?></div>
 
     <?php if ($desk['tagline']): ?>
-    <div class="pub-broker-hero__tagline"><?= htmlspecialchars($desk['tagline']) ?></div>
-    <?php elseif ($desk['bio']): ?>
-    <div class="pub-broker-hero__tagline">
-      <?= htmlspecialchars(mb_strimwidth($desk['bio'], 0, 120, '…')) ?>
-    </div>
+    <p class="ds-hero__tagline"><?= $e($desk['tagline']) ?></p>
     <?php endif; ?>
 
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;position:relative;z-index:1;">
-      <?php if ($location): ?>
-      <span style="font-size:11px;color:rgba(255,255,255,.55);display:flex;align-items:center;gap:4px;">
-        <i class="fa-solid fa-location-dot"></i> <?= htmlspecialchars($location) ?>
-      </span>
-      <?php endif; ?>
-      <?php if ($org && $org['verification_status'] === 'verified'): ?>
-      <span style="font-size:11px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.8);
-                   border:1px solid rgba(255,255,255,.2);border-radius:var(--r-full);padding:2px 10px;">
-        <i class="fa-solid fa-building" style="font-size:9px;margin-right:3px;"></i>
-        <?= htmlspecialchars($org['name']) ?>
-      </span>
-      <?php endif; ?>
-    </div>
+    <ul class="ds-hero__stats">
+      <li><strong><?= $deskCars ?></strong><span>Car<?= $deskCars === 1 ? '' : 's' ?> on this desk</span></li>
+      <li><strong><?= (int) ($stats['deals_closed'] ?? 0) ?></strong><span>Deals closed</span></li>
+      <li><strong><?= (int) ($stats['total_leads'] ?? 0) ?></strong><span>Buyer enquiries</span></li>
+      <li><strong><?= number_format((int) ($stats['total_views'] ?? 0)) ?></strong><span>Listing views</span></li>
+    </ul>
+  </section>
 
-    <div class="pub-broker-hero__stats">
-      <div>
-        <div class="pub-broker-hero__stat-num"><?= (int) ($stats['cars_on_desk'] ?? 0) ?></div>
-        <div class="pub-broker-hero__stat-lbl">Cars listed</div>
-      </div>
-      <div>
-        <div class="pub-broker-hero__stat-num"><?= number_format((int) ($stats['total_views'] ?? 0)) ?></div>
-        <div class="pub-broker-hero__stat-lbl">Total views</div>
-      </div>
-      <div>
-        <div class="pub-broker-hero__stat-num"><?= (int) ($stats['deals_closed'] ?? 0) ?></div>
-        <div class="pub-broker-hero__stat-lbl">Deals closed</div>
-      </div>
-    </div>
-
-    <div style="position:absolute;top:20px;right:20px;z-index:2;">
-      <button onclick="openShareSheet()" type="button"
-              style="width:36px;height:36px;border-radius:50%;
-                     background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
-                     color:#fff;display:flex;align-items:center;justify-content:center;
-                     cursor:pointer;font-size:14px;transition:background .18s;">
-        <i class="fa-solid fa-share-nodes"></i>
+  <!-- ══════════════════════════════════
+       ABOUT + CONTACT
+       ══════════════════════════════════ -->
+  <div class="ds-about ds-about--split">
+    <?php if ($desk['bio']): ?>
+    <section class="ds-panel" aria-labelledby="dsAboutTitle">
+      <h2 class="ds-panel__title" id="dsAboutTitle">About <?= $e($brokerName) ?></h2>
+      <div class="ds-panel__text is-clamped" id="deskBio" data-clamp><?= $e($desk['bio']) ?></div>
+      <button class="pub-link" type="button" data-clamp-toggle="deskBio" aria-expanded="false" aria-controls="deskBio">
+        <span>Read more</span> <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
       </button>
-    </div>
+    </section>
+    <?php else: ?>
+    <!-- No bio yet: explain the model instead of leaving a half-empty row -->
+    <section class="ds-panel" aria-labelledby="dsHowTitle">
+      <h2 class="ds-panel__title" id="dsHowTitle">Buying through a SalesDesk broker</h2>
+      <ol class="ds-steps">
+        <li><span class="ds-steps__n">1</span><span><strong>Pick a car</strong> from this desk — every listing comes from a verified dealership.</span></li>
+        <li><span class="ds-steps__n">2</span><span><strong>Enquire once.</strong> <?= $e(explode(' ', $brokerName)[0]) ?> handles the dealer, the viewing and the paperwork with you.</span></li>
+        <li><span class="ds-steps__n">3</span><span><strong>Pay nothing extra.</strong> The dealer pays the commission — the price you see is the price you pay.</span></li>
+      </ol>
+    </section>
+    <?php endif; ?>
 
+    <section class="ds-panel ds-contact" aria-labelledby="dsContactTitle">
+      <h2 class="ds-panel__title" id="dsContactTitle">Talk to <?= $e(explode(' ', $brokerName)[0]) ?></h2>
+      <div class="ds-contact__row">
+        <span class="ds-contact__icon"><i class="fa-solid fa-user-tie" aria-hidden="true"></i></span>
+        <span>
+          <strong><?= $e($brokerName) ?></strong><br>
+          <?= $e($location ?: 'South Africa') ?>
+        </span>
+      </div>
+      <div class="ds-contact__actions">
+        <?php if ($waLink): ?>
+        <a class="pub-btn pub-btn-whatsapp pub-btn-full" href="<?= $e($waLink) ?>" target="_blank" rel="noopener">
+          <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> Message on WhatsApp
+        </a>
+        <?php endif; ?>
+        <?php if ($desk['phone']): ?>
+        <a class="pub-btn pub-btn-ghost pub-btn-full" href="tel:<?= $e($phoneDigits) ?>">
+          <i class="fa-solid fa-phone" aria-hidden="true"></i> <?= $e($desk['phone']) ?>
+        </a>
+        <?php else: ?>
+        <a class="pub-btn pub-btn-primary pub-btn-full" href="#inventory">
+          <i class="fa-solid fa-car" aria-hidden="true"></i> Enquire on a car
+        </a>
+        <?php endif; ?>
+      </div>
+      <ul class="ds-trust">
+        <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Enquiries are tracked and commission-protected</li>
+        <li><i class="fa-solid fa-lock" aria-hidden="true"></i> POPIA compliant · free for buyers</li>
+      </ul>
+    </section>
   </div>
 
-  <!-- ── Contact strip ──────────────────────────────────────────── -->
-  <?php if ($desk['phone']): ?>
-  <div style="background:white;border:1px solid var(--border);border-radius:var(--r-lg);
-              padding:14px 18px;margin-bottom:1.5rem;display:flex;align-items:center;
-              justify-content:space-between;gap:12px;flex-wrap:wrap;
-              box-shadow:var(--shadow-sm);" class="pub-anim pub-d1">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div style="width:36px;height:36px;border-radius:50%;background:var(--p-light);
-                  color:var(--p);display:flex;align-items:center;justify-content:center;">
-        <i class="fa-solid fa-user-tie" style="font-size:13px;"></i>
-      </div>
+  <!-- ══════════════════════════════════
+       INVENTORY
+       ══════════════════════════════════ -->
+  <section class="ds-inventory" id="inventory" aria-labelledby="dsInvTitle">
+    <div class="ds-inventory__head">
       <div>
-        <div style="font-size:13px;font-weight:600;color:var(--text);"><?= htmlspecialchars($brokerName) ?></div>
-        <div style="font-size:11px;color:var(--faint);">Independent auto broker</div>
+        <h2 class="ds-inventory__title" id="dsInvTitle">Cars on this desk</h2>
+        <p class="ds-inventory__sub">
+          <?php if ($deskCars > 0): ?>
+          <strong><?= number_format($deskCars) ?></strong> car<?= $deskCars === 1 ? '' : 's' ?> from verified dealerships, listed by <?= $e($brokerName) ?>
+          <?php else: ?>
+          <?= $e($brokerName) ?> is still adding cars to this desk
+          <?php endif; ?>
+        </p>
       </div>
     </div>
-    <div style="display:flex;gap:8px;">
-      <a href="tel:<?= htmlspecialchars(preg_replace('/\D/', '', $desk['phone'])) ?>"
-         class="pub-btn pub-btn-ghost" style="padding:8px 16px;font-size:12px;">
-        <i class="fa-solid fa-phone"></i> Call
-      </a>
-      <a href="https://wa.me/27<?= ltrim(preg_replace('/\D/', '', $desk['phone']), '0') ?>"
-         target="_blank" rel="noopener"
-         style="display:inline-flex;align-items:center;gap:7px;padding:8px 16px;
-                background:#25d366;color:#fff;border-radius:var(--r-md);font-size:12px;
-                font-weight:600;font-family:var(--sans);text-decoration:none;">
-        <i class="fa-brands fa-whatsapp"></i> WhatsApp
-      </a>
-    </div>
-  </div>
-  <?php endif; ?>
 
-</div><!-- /broker-container (hero + contact strip) -->
-
-
-<!-- ══════════════════════════════════════════════════════
-     INVENTORY — same sidebar filters + vehicle-card grid as /cars-for-sale/
-     ══════════════════════════════════════════════════════ -->
-
-<div class="broker-inventory-head pub-anim pub-d2">
-  <span style="font-family:var(--font-d);font-size:16px;font-weight:700;">Available cars</span>
-</div>
-
-<button class="browse-filter-toggle" id="browseFilterToggle" type="button"
-        aria-expanded="false" aria-controls="browseSidebar">
-  <span>
-    <i class="fa-solid fa-sliders" style="margin-right:6px;"></i>
-    Filters
-    <?php if ($activeFilterCount > 0): ?>
-    <span class="browse-filter-toggle__badge"><?= $activeFilterCount ?></span>
-    <?php endif; ?>
-  </span>
-  <i class="fa-solid fa-chevron-right" style="font-size:11px;color:var(--faint);"></i>
-</button>
-
-<div class="browse-sidebar-overlay" id="browseSidebarOverlay" aria-hidden="true"></div>
-
-<div class="browse-layout">
-
-  <!-- ══════════════════════════════
-       FILTER SIDEBAR
-       ══════════════════════════════ -->
-  <aside class="browse-sidebar" id="browseSidebar"
-         role="complementary" aria-label="Filter vehicles">
-
-    <button class="browse-sidebar__close" id="browseSidebarClose" type="button"
-            aria-label="Close filters">
-      <span>Filters</span>
-      <i class="fa-solid fa-xmark"></i>
-    </button>
-
-    <form method="GET" action="" id="filterForm">
-      <div class="sidebar-card">
-
-        <div class="sidebar-card__header">
-          <span class="sidebar-card__title"><i class="fa-solid fa-sliders"></i> Filters</span>
-          <a href="<?= htmlspecialchars($deskPath) ?>" class="sidebar-card__reset">Reset all</a>
-        </div>
-
-        <!-- Search -->
-        <div class="filter-section" style="position:relative;">
-          <span class="filter-section-label">Search</span>
-          <div class="search-input-wrap">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input class="search-input-sidebar" type="text" name="q" id="sidebarSearch"
-                   placeholder="Make, model, year…"
-                   value="<?= htmlspecialchars($q) ?>" autocomplete="off">
-          </div>
-          <!-- SEARCH-1: live suggestions, scoped to this desk's own
-               inventory via salesdesk_id (see script block below). -->
-          <div id="sidebarSearchBox" class="typeahead-box" role="listbox"
-               aria-label="Search suggestions"></div>
-        </div>
-
-        <!-- Condition -->
-        <div class="filter-section">
-          <span class="filter-section-label">Condition</span>
-          <div class="condition-chip-row">
-            <?php foreach (['new' => 'New', 'demo' => 'Demo', 'used' => 'Pre-Owned'] as $val => $label): ?>
-            <label class="filter-chip <?= $condition === $val ? 'active' : '' ?>">
-              <input class="sr-only" type="radio" name="condition" value="<?= $val ?>"
-                     <?= $condition === $val ? 'checked' : '' ?>
-                     onchange="this.form.submit()">
-              <?= $label ?>
-            </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-
-        <!-- Budget -->
-        <div class="filter-section">
-          <span class="filter-section-label">Budget (ZAR)</span>
-          <div class="min-max-row">
-            <input class="min-max-input" type="number" name="price_min" placeholder="Min"
-                   value="<?= $priceMin !== null ? $priceMin : '' ?>" min="0" step="1">
-            <span class="min-max-sep">—</span>
-            <input class="min-max-input" type="number" name="price_max" placeholder="Max"
-                   value="<?= $priceMax !== null ? $priceMax : '' ?>" min="0" step="1">
-          </div>
-        </div>
-
-        <!-- Mileage -->
-        <div class="filter-section">
-          <span class="filter-section-label">Mileage (km)</span>
-          <div class="min-max-row">
-            <input class="min-max-input" type="number" name="mileage_min" placeholder="Min"
-                   value="<?= $mileageMin !== null ? $mileageMin : '' ?>" min="0" step="1">
-            <span class="min-max-sep">—</span>
-            <input class="min-max-input" type="number" name="mileage_max" placeholder="Max"
-                   value="<?= $mileageMax !== null ? $mileageMax : '' ?>" min="0" step="1">
-          </div>
-        </div>
-
-        <!-- Year of manufacture -->
-        <div class="filter-section">
-          <span class="filter-section-label">Year of manufacture</span>
-          <div class="year-row">
-            <select class="filter-select" name="year_min" onchange="this.form.submit()">
-              <option value="">From</option>
-              <?php for ($y = $yearFloor; $y <= $yearCeiling; $y++): ?>
-              <option value="<?= $y ?>" <?= $yearMin === $y ? 'selected' : '' ?>><?= $y ?></option>
-              <?php endfor; ?>
-            </select>
-            <select class="filter-select" name="year_max" onchange="this.form.submit()">
-              <option value="">To</option>
-              <?php for ($y = $yearFloor; $y <= $yearCeiling; $y++): ?>
-              <option value="<?= $y ?>" <?= $yearMax === $y ? 'selected' : '' ?>><?= $y ?></option>
-              <?php endfor; ?>
-            </select>
-          </div>
-        </div>
-
-        <!-- Make -->
-        <?php if (!empty($makes)): ?>
-        <div class="filter-section">
-          <span class="filter-section-label">Brand / Make</span>
-          <select class="filter-select" name="make" onchange="this.form.submit()">
-            <option value="">All brands</option>
-            <?php foreach ($makes as $m): ?>
-            <option value="<?= htmlspecialchars($m) ?>" <?= $make === $m ? 'selected' : '' ?>>
-              <?= htmlspecialchars($m) ?>
-            </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <?php endif; ?>
-
-        <!-- Body Style -->
-        <?php if (!empty($bodyTypes)): ?>
-        <div class="filter-section">
-          <span class="filter-section-label">Body Style</span>
-          <div class="chip-row">
-            <?php foreach ($bodyTypes as $bt): ?>
-            <label class="filter-chip <?= in_array($bt, $bodyTypesSelected, true) ? 'active' : '' ?>">
-              <input class="sr-only" type="checkbox" name="body_type[]"
-                     value="<?= htmlspecialchars($bt) ?>"
-                     <?= in_array($bt, $bodyTypesSelected, true) ? 'checked' : '' ?>
-                     onchange="this.form.submit()">
-              <?= htmlspecialchars($bt) ?>
-            </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- Fuel / Powertrain -->
-        <div class="filter-section">
-          <span class="filter-section-label">Fuel / Powertrain</span>
-          <div class="chip-row">
-            <?php foreach ($fuelTypeWhitelist as $ft): ?>
-            <label class="filter-chip <?= in_array($ft, $fuelTypes, true) ? 'active' : '' ?>">
-              <input class="sr-only" type="checkbox" name="fuel_type[]"
-                     value="<?= htmlspecialchars($ft) ?>"
-                     <?= in_array($ft, $fuelTypes, true) ? 'checked' : '' ?>
-                     onchange="this.form.submit()">
-              <?= htmlspecialchars($ft) ?>
-            </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-
-        <!-- Transmission -->
-        <div class="filter-section">
-          <span class="filter-section-label">Transmission</span>
-          <div class="chip-row">
-            <?php foreach ($transmissionWhitelist as $tr): ?>
-            <label class="filter-chip <?= in_array($tr, $transmissions, true) ? 'active' : '' ?>">
-              <input class="sr-only" type="checkbox" name="transmission[]"
-                     value="<?= htmlspecialchars($tr) ?>"
-                     <?= in_array($tr, $transmissions, true) ? 'checked' : '' ?>
-                     onchange="this.form.submit()">
-              <?= htmlspecialchars($tr) ?>
-            </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-
-        <!-- Drivetrain -->
-        <div class="filter-section">
-          <span class="filter-section-label">Drivetrain</span>
-          <div class="chip-row">
-            <?php foreach ($drivetrainWhitelist as $dr): ?>
-            <label class="filter-chip <?= in_array($dr, $drivetrains, true) ? 'active' : '' ?>">
-              <input class="sr-only" type="checkbox" name="drivetrain[]"
-                     value="<?= htmlspecialchars($dr) ?>"
-                     <?= in_array($dr, $drivetrains, true) ? 'checked' : '' ?>
-                     onchange="this.form.submit()">
-              <?= htmlspecialchars($dr) ?>
-            </label>
-            <?php endforeach; ?>
-          </div>
-        </div>
-
-        <!-- Province -->
-        <?php if (!empty($provinces)): ?>
-        <div class="filter-section">
-          <span class="filter-section-label">Province</span>
-          <select class="filter-select" name="province" onchange="this.form.submit()">
-            <option value="">All provinces</option>
-            <?php foreach ($provinces as $pv): ?>
-            <option value="<?= htmlspecialchars($pv) ?>" <?= $province === $pv ? 'selected' : '' ?>>
-              <?= htmlspecialchars($pv) ?>
-            </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <?php endif; ?>
-
-        <button type="submit" class="filter-apply-btn">Apply filters</button>
-
-        <div class="sidebar-card__footer">
-          <i class="fa-solid fa-bolt"></i>
-          Filters submit instantly on select changes
-        </div>
-
-      </div><!-- /sidebar-card -->
-    </form>
-
-    <!-- SEARCH-1: search typeahead — replaces the old debounce-then-submit
-         script. Scoped to THIS desk via salesdesk_id so suggestions can
-         never surface a car outside this broker's own inventory. -->
-    <script src="/assets/js/search-typeahead.js"></script>
-    <script>
-      initSearchTypeahead({
-        inputId: 'sidebarSearch',
-        boxId:   'sidebarSearchBox',
-        extraParams: { salesdesk_id: <?= (int) $salesdeskId ?> }
-      });
-    </script>
-
-  </aside><!-- /browseSidebar -->
-
-
-  <!-- ══════════════════════════════
-       MAIN RESULTS COLUMN
-       ══════════════════════════════ -->
-  <div class="browse-results">
-
-    <div class="results-bar">
-      <p class="results-bar__count">
-        <span class="results-bar__count-num"><?= number_format($total) ?></span>
-        vehicle<?= $total !== 1 ? 's' : '' ?> found
+    <?php if ($deskCars === 0): ?>
+    <!-- Nothing on the desk yet: filters would be an empty control panel -->
+    <div class="pub-empty">
+      <span class="pub-empty__icon"><i class="fa-solid fa-car-side" aria-hidden="true"></i></span>
+      <h3 class="pub-empty__title">No cars on this desk yet</h3>
+      <p class="pub-empty__sub">
+        <?= $e($brokerName) ?> is still adding stock. Browse every car on SalesDesk in the meantime —
+        <?= $e(explode(' ', $brokerName)[0]) ?> can still help you buy any of them.
       </p>
-
-      <?php
-      $sortPreserve = array_filter([
-          'q'           => $q ?: null,
-          'make'        => $make ?: null,
-          'condition'   => $condition ?: null,
-          'province'    => $province ?: null,
-          'price_min'   => $priceMin,
-          'price_max'   => $priceMax,
-          'mileage_min' => $mileageMin,
-          'mileage_max' => $mileageMax,
-          'year_min'    => $yearMin,
-          'year_max'    => $yearMax,
-      ], fn ($v) => $v !== null && $v !== '');
-      ?>
-      <form method="GET" action="" class="sort-form">
-        <?php foreach ($sortPreserve as $k => $v): ?>
-        <input type="hidden" name="<?= htmlspecialchars($k) ?>"
-               value="<?= htmlspecialchars((string) $v) ?>">
-        <?php endforeach; ?>
-        <?php foreach ($bodyTypesSelected as $bt): ?>
-        <input type="hidden" name="body_type[]" value="<?= htmlspecialchars($bt) ?>">
-        <?php endforeach; ?>
-        <?php foreach ($fuelTypes as $ft): ?>
-        <input type="hidden" name="fuel_type[]" value="<?= htmlspecialchars($ft) ?>">
-        <?php endforeach; ?>
-        <?php foreach ($transmissions as $tr): ?>
-        <input type="hidden" name="transmission[]" value="<?= htmlspecialchars($tr) ?>">
-        <?php endforeach; ?>
-        <?php foreach ($drivetrains as $dr): ?>
-        <input type="hidden" name="drivetrain[]" value="<?= htmlspecialchars($dr) ?>">
-        <?php endforeach; ?>
-
-        <select class="sort-select" name="sort" onchange="this.form.submit()"
-                aria-label="Sort vehicles">
-          <option value="newest"      <?= $sort === 'newest'      ? 'selected' : '' ?>>Newest first</option>
-          <option value="price_asc"   <?= $sort === 'price_asc'   ? 'selected' : '' ?>>Price: low → high</option>
-          <option value="price_desc"  <?= $sort === 'price_desc'  ? 'selected' : '' ?>>Price: high → low</option>
-          <option value="mileage_asc" <?= $sort === 'mileage_asc' ? 'selected' : '' ?>>Lowest mileage</option>
-        </select>
-      </form>
-    </div><!-- /results-bar -->
-
-    <!-- Active filter dismissal tags -->
-    <?php if ($hasAnyActiveFilter): ?>
-    <div class="active-filter-tags">
-
-      <?php if ($q): ?>
-      <span class="active-filter-tag">
-        "<?= htmlspecialchars($q) ?>"
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)q=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove search filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($make): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($make) ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)make=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove make filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($condition): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars(ucfirst($condition)) ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)condition=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove condition filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($province): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($province) ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)province=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove province filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($priceMin !== null || $priceMax !== null): ?>
-      <span class="active-filter-tag">
-        <?= $priceMin !== null ? 'R ' . number_format($priceMin) : '' ?>
-        <?= ($priceMin !== null && $priceMax !== null) ? ' – ' : '' ?>
-        <?= $priceMax !== null ? 'R ' . number_format($priceMax) : '' ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)price_(?:min|max)=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove price filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($mileageMin !== null || $mileageMax !== null): ?>
-      <span class="active-filter-tag">
-        <?= $mileageMin !== null ? number_format($mileageMin) . ' km' : '' ?>
-        <?= ($mileageMin !== null && $mileageMax !== null) ? ' – ' : '' ?>
-        <?= $mileageMax !== null ? number_format($mileageMax) . ' km' : '' ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)mileage_(?:min|max)=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove mileage filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php if ($yearMin !== null || $yearMax !== null): ?>
-      <span class="active-filter-tag">
-        <?= $yearMin ?? '?' ?> – <?= $yearMax ?? '?' ?>
-        <a href="?<?= htmlspecialchars(preg_replace('/(?:^|&)year_(?:min|max)=[^&]*/', '', $filterQs)) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove year filter">✕</a>
-      </span>
-      <?php endif; ?>
-
-      <?php foreach ($bodyTypesSelected as $bt): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($bt) ?>
-        <a href="?<?= brokerDismissQs('body_type', $bt, $bodyTypesSelected, $fuelTypes, $transmissions, $drivetrains, $q, $make, $condition, $province, $priceMin, $priceMax, $mileageMin, $mileageMax, $yearMin, $yearMax, $sort) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove body type filter">✕</a>
-      </span>
-      <?php endforeach; ?>
-
-      <?php foreach ($fuelTypes as $ft): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($ft) ?>
-        <a href="?<?= brokerDismissQs('fuel_type', $ft, $bodyTypesSelected, $fuelTypes, $transmissions, $drivetrains, $q, $make, $condition, $province, $priceMin, $priceMax, $mileageMin, $mileageMax, $yearMin, $yearMax, $sort) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove fuel type filter">✕</a>
-      </span>
-      <?php endforeach; ?>
-
-      <?php foreach ($transmissions as $tr): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($tr) ?>
-        <a href="?<?= brokerDismissQs('transmission', $tr, $bodyTypesSelected, $fuelTypes, $transmissions, $drivetrains, $q, $make, $condition, $province, $priceMin, $priceMax, $mileageMin, $mileageMax, $yearMin, $yearMax, $sort) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove transmission filter">✕</a>
-      </span>
-      <?php endforeach; ?>
-
-      <?php foreach ($drivetrains as $dr): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($dr) ?>
-        <a href="?<?= brokerDismissQs('drivetrain', $dr, $bodyTypesSelected, $fuelTypes, $transmissions, $drivetrains, $q, $make, $condition, $province, $priceMin, $priceMax, $mileageMin, $mileageMax, $yearMin, $yearMax, $sort) ?>"
-           class="active-filter-tag__dismiss" aria-label="Remove drivetrain filter">✕</a>
-      </span>
-      <?php endforeach; ?>
-
-    </div><!-- /active-filter-tags -->
-    <?php endif; ?>
-
-
-    <!-- ── Car Grid ──────────────────────────────────────── -->
-    <?php if (empty($inventory)): ?>
-
-      <?php if ((int) ($stats['cars_on_desk'] ?? 0) === 0): ?>
-      <div class="empty">
-        <i class="fa-solid fa-car empty-icon"></i>
-        <div style="font-family:var(--font-d);font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">
-          No listings yet
-        </div>
-        <div>Check back soon — <?= htmlspecialchars($brokerName) ?> is adding cars to their desk.</div>
+      <div class="pub-empty__actions">
+        <a class="pub-btn pub-btn-primary" href="/cars-for-sale/">Browse all cars</a>
+        <?php if ($waLink): ?>
+        <a class="pub-btn pub-btn-whatsapp" href="<?= $e($waLink) ?>" target="_blank" rel="noopener">
+          <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> WhatsApp <?= $e(explode(' ', $brokerName)[0]) ?>
+        </a>
+        <?php endif; ?>
       </div>
-      <?php else: ?>
-      <div class="browse-empty">
-        <i class="fa-regular fa-face-meh-blank browse-empty__icon"></i>
-        <div class="browse-empty__title">No vehicles match your filters</div>
-        <div class="browse-empty__sub">Try adjusting your budget, province, or body type.</div>
-        <a href="<?= htmlspecialchars($deskPath) ?>" class="browse-empty__reset">Reset all filters</a>
-      </div>
-      <?php endif; ?>
-
+    </div>
     <?php else: ?>
 
-    <div class="pub-browse-grid" id="carGrid">
-      <?php foreach ($inventory as $car):
-        $imgs   = json_decode($car['image_urls'] ?? '[]', true) ?: [];
-        $thumb  = $imgs[0] ?? null;
-        // ROUTE-2: was '/c/' . slug . '/' . slug . '/' — the retired
-        // pre-rename path. Every car-detail link elsewhere in the
-        // codebase already builds /cars-for-sale/{desk}/{car}/; this
-        // was the last holdout still generating the old form. The
-        // .htaccess legacy redirect still catches any bookmarked /c/
-        // links, but new links generated here skip that extra hop.
-        $carUrl = '/cars-for-sale/' . htmlspecialchars($desk['slug']) . '/'
-                . htmlspecialchars($car['car_slug']) . '/'
-                . '?ref=' . urlencode($car['tracking_code']);
-        $priceStr = 'R ' . number_format((float) $car['price'], 0, '.', ' ');
-        $prov     = $provAbbr[$car['dealer_province'] ?? ''] ?? ($car['dealer_province'] ?? '');
-        $isNew    = $car['condition_type'] === 'new';
-        $isEV     = strtolower($car['fuel_type'] ?? '') === 'electric';
-        $isWl     = in_array((int) $car['id'], $wishlistedIds, true);
-      ?>
-      <div class="vehicle-card" style="position:relative;">
+    <div class="browse-sidebar-overlay" id="browseSidebarOverlay" aria-hidden="true"></div>
 
-        <!-- Wishlist toggle (kept — sits above the card link) -->
-        <button onclick="toggleWishlist(this, <?= (int) $car['id'] ?>); event.preventDefault();"
-                type="button"
-                class="pub-nav-icon-btn <?= $isWl ? 'wishlisted' : '' ?>"
-                title="<?= $isWl ? 'Remove from saved' : 'Save car' ?>"
-                style="position:absolute;top:10px;right:10px;z-index:2;background:rgba(255,255,255,.92);">
-          <i class="fa-<?= $isWl ? 'solid' : 'regular' ?> fa-heart"></i>
-        </button>
+    <div class="browse-layout browse-layout--flush">
 
-        <a href="<?= $carUrl ?>" style="display:contents;">
-
-          <!-- Image block -->
-          <div class="vehicle-card__img">
-            <?php if ($thumb): ?>
-            <img src="<?= htmlspecialchars($thumb) ?>"
-                 alt="<?= htmlspecialchars("{$car['year']} {$car['make']} {$car['model']}") ?>"
-                 loading="lazy" width="400" height="225">
-            <?php else: ?>
-            <div class="vehicle-card__img-placeholder">
-              <i class="fa-solid fa-car-side"></i>
-            </div>
-            <?php endif; ?>
-
-            <span class="vehicle-card__pill vehicle-card__pill--year">
-              <?= (int) $car['year'] ?>
-            </span>
-
-            <?php if ($prov): ?>
-            <!-- CARD-2: inline `right` offset clears the wishlist heart
-                 button, which shares this top-right corner (see
-                 .pub-nav-icon-btn below, position:absolute top:10px;right:10px). -->
-            <span class="vehicle-card__pill vehicle-card__pill--province" style="right:54px;">
-              <i class="fa-solid fa-location-dot pill-icon"></i><?= htmlspecialchars($prov) ?>
-            </span>
-            <?php endif; ?>
-
-            <?php if ($car['mileage']): ?>
-            <span class="vehicle-card__pill vehicle-card__pill--mileage">
-              <i class="fa-solid fa-road pill-icon"></i><?= number_format((int) $car['mileage']) ?> km
-            </span>
-            <?php endif; ?>
-
-            <?php if ($isNew): ?>
-            <span class="vehicle-card__pill vehicle-card__pill--new">NEW</span>
-            <?php elseif ($isEV): ?>
-            <span class="vehicle-card__pill vehicle-card__pill--ev">EV</span>
-            <?php endif; ?>
-          </div><!-- /vehicle-card__img -->
-
-          <!-- Card body -->
-          <div class="vehicle-card__body">
-            <div class="vehicle-card__name-row">
-              <div class="vehicle-card__name-group">
-                <div class="vehicle-card__name">
-                  <?= htmlspecialchars("{$car['make']} {$car['model']}") ?>
-                </div>
-                <div class="vehicle-card__dealer">
-                  <i class="fa-regular fa-building"></i><?= htmlspecialchars($car['dealer_name']) ?>
-                </div>
-              </div>
-              <span class="vehicle-card__price"><?= $priceStr ?></span>
-            </div>
-
-            <?php if ($car['dealer_verified'] === 'verified'): ?>
-            <div class="vehicle-card__meta-row">
-              <span class="verified-badge">
-                <i class="fa-solid fa-circle-check"></i> Verified
-              </span>
-            </div>
-            <?php endif; ?>
-
-            <!-- Spec pills with icons -->
-            <div class="vehicle-card__specs">
-              <?php if ($car['fuel_type']): ?>
-              <span class="vehicle-card__spec-pill">
-                <i class="fa-solid <?= brokerFuelIcon($car['fuel_type']) ?>"></i><?= htmlspecialchars($car['fuel_type']) ?>
-              </span>
-              <?php endif; ?>
-              <?php if ($car['transmission']): ?>
-              <span class="vehicle-card__spec-pill">
-                <i class="fa-solid fa-gear"></i><?= htmlspecialchars($car['transmission']) ?>
-              </span>
-              <?php endif; ?>
-              <?php if ($car['drivetrain']): ?>
-              <span class="vehicle-card__spec-pill"><?= htmlspecialchars($car['drivetrain']) ?></span>
-              <?php endif; ?>
-              <?php if ($car['body_type']): ?>
-              <span class="vehicle-card__spec-pill"><?= htmlspecialchars($car['body_type']) ?></span>
-              <?php endif; ?>
-            </div>
-          </div><!-- /vehicle-card__body -->
-
-        </a><!-- /vehicle-card link -->
-      </div><!-- /vehicle-card -->
-      <?php endforeach; ?>
-    </div><!-- /carGrid -->
-
-
-    <!-- ── Pagination ─────────────────────────────────────── -->
-    <?php if ($totalPages > 1): ?>
-    <nav class="pagination" aria-label="Browse pages">
-
-      <?php if ($page > 1): ?>
-      <a href="?<?= $filterQs ?>&page=<?= $page - 1 ?>"
-         class="pagination__page pagination__page--nav"
-         aria-label="Previous page">
-        <i class="fa-solid fa-chevron-left"></i>
-      </a>
-      <?php endif; ?>
-
-      <?php
-      $prev      = null;
-      $pageRange = [];
-      for ($p = 1; $p <= $totalPages; $p++) {
-          if ($p === 1 || $p === $totalPages || abs($p - $page) <= 2) $pageRange[] = $p;
-      }
-      foreach ($pageRange as $p):
-          if ($prev !== null && $p - $prev > 1): ?>
-          <span class="pagination__ellipsis">…</span>
+      <!-- Filters -->
+      <aside class="browse-sidebar" id="browseSidebar" aria-label="Filter this desk">
+        <form method="GET" action="<?= $e($deskPath) ?>" id="filterForm" class="sidebar-card"
+              data-browse-filters data-desk-scoped>
+          <?php if ($sort !== 'newest'): ?>
+          <input type="hidden" name="sort" value="<?= $e($sort) ?>">
           <?php endif; ?>
-          <a href="?<?= $filterQs ?>&page=<?= $p ?>"
-             class="pagination__page <?= $p === $page ? 'active' : '' ?>"
-             <?= $p === $page ? 'aria-current="page"' : '' ?>>
-            <?= $p ?>
+
+          <div class="sidebar-card__header">
+            <span class="sidebar-card__title">Filters<?php if ($activeFilterCount): ?> <span class="sidebar-card__count"><?= $activeFilterCount ?></span><?php endif; ?></span>
+            <a href="<?= $e($deskPath) ?>" class="sidebar-card__reset" <?= $activeFilterCount ? '' : 'hidden' ?>>Reset</a>
+            <button class="browse-sidebar__close" id="browseSidebarClose" type="button" aria-label="Close filters">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div class="sidebar-card__body">
+
+            <div class="filter-section filter-section--static">
+              <label class="filter-section-label" for="sidebarSearch">Keyword</label>
+              <div class="search-input-wrap">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                <input class="search-input-sidebar" type="search" name="q" id="sidebarSearch"
+                       placeholder="Make, model, year…" value="<?= $e($q) ?>"
+                       autocomplete="off" enterkeyhint="search"
+                       data-typeahead-box="sidebarSearchBox"
+                       data-typeahead-params='{"salesdesk_id": <?= (int) $salesdeskId ?>}'>
+                <div id="sidebarSearchBox" class="typeahead-box" role="listbox" aria-label="Search suggestions"></div>
+              </div>
+            </div>
+
+            <details class="filter-section" <?= $openSection['condition'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Condition</summary>
+              <div class="pub-segment filter-segment" role="radiogroup" aria-label="Condition">
+                <?php foreach (['' => 'Any', 'used' => 'Used', 'new' => 'New', 'demo' => 'Demo'] as $val => $label): ?>
+                <label class="pub-segment__opt">
+                  <input type="radio" name="condition" value="<?= $val ?>" data-autosubmit <?= $condition === $val ? 'checked' : '' ?>>
+                  <span><?= $label ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+
+            <details class="filter-section" <?= $openSection['price'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Price</summary>
+              <div class="min-max-row">
+                <select class="filter-select" name="price_min" aria-label="Minimum price" data-autosubmit>
+                  <option value="">No min</option>
+                  <?php foreach ($pricePresets as $pp): ?>
+                  <option value="<?= $pp ?>" <?= $priceMin === $pp ? 'selected' : '' ?>><?= $fmtR($pp) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <span class="min-max-sep" aria-hidden="true">–</span>
+                <select class="filter-select" name="price_max" aria-label="Maximum price" data-autosubmit>
+                  <option value="">No max</option>
+                  <?php foreach ($pricePresets as $pp): ?>
+                  <option value="<?= $pp ?>" <?= $priceMax === $pp ? 'selected' : '' ?>><?= $fmtR($pp) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </details>
+
+            <?php if (!empty($makes)): ?>
+            <details class="filter-section" <?= $openSection['make'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Make</summary>
+              <select class="filter-select" name="make" aria-label="Make" data-autosubmit>
+                <option value="">All makes</option>
+                <?php foreach ($makes as $m): ?>
+                <option value="<?= $e($m) ?>" <?= $make === $m ? 'selected' : '' ?>><?= $e($m) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </details>
+            <?php endif; ?>
+
+            <?php if (!empty($bodyTypes)): ?>
+            <details class="filter-section" <?= $openSection['body'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Body type</summary>
+              <div class="body-tile-grid">
+                <?php foreach ($bodyTypes as $bt): $on = in_array($bt, $bodyTypesSelected, true); ?>
+                <label class="body-tile <?= $on ? 'active' : '' ?>">
+                  <input class="sr-only" type="checkbox" name="body_type[]" value="<?= $e($bt) ?>" data-autosubmit <?= $on ? 'checked' : '' ?>>
+                  <?= sdBodyTypeIcon($bt, 'body-tile__icon') ?>
+                  <span><?= $e($bt) ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+            <?php endif; ?>
+
+            <details class="filter-section" <?= $openSection['year'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Year</summary>
+              <div class="min-max-row">
+                <select class="filter-select" name="year_min" aria-label="Year from" data-autosubmit>
+                  <option value="">From</option>
+                  <?php for ($y = $yearCeiling; $y >= $yearFloor; $y--): ?>
+                  <option value="<?= $y ?>" <?= $yearMin === $y ? 'selected' : '' ?>><?= $y ?></option>
+                  <?php endfor; ?>
+                </select>
+                <span class="min-max-sep" aria-hidden="true">–</span>
+                <select class="filter-select" name="year_max" aria-label="Year to" data-autosubmit>
+                  <option value="">To</option>
+                  <?php for ($y = $yearCeiling; $y >= $yearFloor; $y--): ?>
+                  <option value="<?= $y ?>" <?= $yearMax === $y ? 'selected' : '' ?>><?= $y ?></option>
+                  <?php endfor; ?>
+                </select>
+              </div>
+            </details>
+
+            <details class="filter-section" <?= $openSection['mileage'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Mileage</summary>
+              <div class="min-max-row">
+                <select class="filter-select" name="mileage_min" aria-label="Minimum mileage" data-autosubmit>
+                  <option value="">No min</option>
+                  <?php foreach ($mileagePresets as $mm): ?>
+                  <option value="<?= $mm ?>" <?= $mileageMin === $mm ? 'selected' : '' ?>><?= $fmtKm($mm) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <span class="min-max-sep" aria-hidden="true">–</span>
+                <select class="filter-select" name="mileage_max" aria-label="Maximum mileage" data-autosubmit>
+                  <option value="">No max</option>
+                  <?php foreach ($mileagePresets as $mm): ?>
+                  <option value="<?= $mm ?>" <?= $mileageMax === $mm ? 'selected' : '' ?>><?= $fmtKm($mm) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+            </details>
+
+            <?php
+            $chipGroups = [
+                ['fuel',  'Fuel type',    'fuel_type[]',    $fuelTypeWhitelist,     $fuelTypes],
+                ['trans', 'Transmission', 'transmission[]', $transmissionWhitelist, $transmissions],
+                ['drive', 'Drivetrain',   'drivetrain[]',   $drivetrainWhitelist,   $drivetrains],
+            ];
+            foreach ($chipGroups as [$key, $title, $name, $options, $selected]): ?>
+            <details class="filter-section" <?= $openSection[$key] ? 'open' : '' ?>>
+              <summary class="filter-section-label"><?= $title ?><?php if ($selected): ?> <span class="filter-section__count"><?= count($selected) ?></span><?php endif; ?></summary>
+              <div class="chip-row">
+                <?php foreach ($options as $opt): $on = in_array($opt, $selected, true); ?>
+                <label class="filter-chip <?= $on ? 'active' : '' ?>">
+                  <input class="sr-only" type="checkbox" name="<?= $name ?>" value="<?= $e($opt) ?>" data-autosubmit <?= $on ? 'checked' : '' ?>>
+                  <?= $e($opt) ?>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </details>
+            <?php endforeach; ?>
+
+            <?php if (!empty($provinces)): ?>
+            <details class="filter-section" <?= $openSection['province'] ? 'open' : '' ?>>
+              <summary class="filter-section-label">Province</summary>
+              <select class="filter-select" name="province" aria-label="Province" data-autosubmit>
+                <option value="">All provinces</option>
+                <?php foreach ($provinces as $pv): ?>
+                <option value="<?= $e($pv) ?>" <?= $province === $pv ? 'selected' : '' ?>><?= $e($pv) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </details>
+            <?php endif; ?>
+          </div>
+
+          <div class="sidebar-card__footer">
+            <button type="submit" class="pub-btn pub-btn-primary pub-btn-full filter-apply-btn">
+              <span data-filter-apply-label>Show <?= number_format($total) ?> <?= $total === 1 ? 'car' : 'cars' ?></span>
+            </button>
+          </div>
+        </form>
+      </aside>
+
+      <!-- Results -->
+      <div class="browse-results">
+
+        <div class="results-bar">
+          <button class="browse-filter-toggle" id="browseFilterToggle" type="button"
+                  aria-expanded="false" aria-controls="browseSidebar">
+            <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+            Filters
+            <?php if ($activeFilterCount > 0): ?>
+            <span class="browse-filter-toggle__badge"><?= $activeFilterCount ?></span>
+            <?php endif; ?>
+          </button>
+
+          <p class="results-bar__count">
+            <?php if ($total > 0): ?>
+            <span class="results-bar__count-num"><?= number_format($firstShown) ?>–<?= number_format($lastShown) ?></span>
+            of <?= number_format($total) ?>
+            <?php else: ?>
+            No results
+            <?php endif; ?>
+          </p>
+
+          <form method="GET" action="<?= $e($deskPath) ?>" class="sort-form">
+            <?php foreach ($currentParams as $k => $v):
+              if ($k === 'sort') continue;
+              foreach ((array) $v as $vv): ?>
+            <input type="hidden" name="<?= $e($k) . (is_array($v) ? '[]' : '') ?>" value="<?= $e((string) $vv) ?>">
+            <?php endforeach; endforeach; ?>
+            <label class="sr-only" for="sortSelect">Sort by</label>
+            <i class="fa-solid fa-arrow-down-wide-short sort-form__icon" aria-hidden="true"></i>
+            <select class="sort-select" id="sortSelect" name="sort" data-autosubmit>
+              <option value="newest"      <?= $sort === 'newest'      ? 'selected' : '' ?>>Newest on desk</option>
+              <option value="price_asc"   <?= $sort === 'price_asc'   ? 'selected' : '' ?>>Lowest price</option>
+              <option value="price_desc"  <?= $sort === 'price_desc'  ? 'selected' : '' ?>>Highest price</option>
+              <option value="mileage_asc" <?= $sort === 'mileage_asc' ? 'selected' : '' ?>>Lowest mileage</option>
+            </select>
+            <noscript><button class="pub-btn pub-btn-ghost pub-btn-sm" type="submit">Sort</button></noscript>
+          </form>
+
+          <div class="view-toggle" role="group" aria-label="Layout">
+            <button class="view-toggle__btn" type="button" data-view="grid" aria-pressed="true" aria-label="Grid view"><i class="fa-solid fa-grip" aria-hidden="true"></i></button>
+            <button class="view-toggle__btn" type="button" data-view="list" aria-pressed="false" aria-label="List view"><i class="fa-solid fa-list" aria-hidden="true"></i></button>
+          </div>
+        </div>
+
+        <?php if ($chips): ?>
+        <div class="active-filter-tags" aria-label="Active filters">
+          <?php foreach ($chips as [$label, $url]): ?>
+          <a class="active-filter-tag" href="<?= $e($url) ?>" aria-label="Remove filter: <?= $e($label) ?>">
+            <?= $e($label) ?> <i class="fa-solid fa-xmark active-filter-tag__dismiss" aria-hidden="true"></i>
           </a>
-      <?php $prev = $p; endforeach; ?>
+          <?php endforeach; ?>
+          <a class="active-filter-clear" href="<?= $e($deskPath) ?>">Clear all</a>
+        </div>
+        <?php endif; ?>
 
-      <?php if ($page < $totalPages): ?>
-      <a href="?<?= $filterQs ?>&page=<?= $page + 1 ?>"
-         class="pagination__page pagination__page--nav"
-         aria-label="Next page">
-        <i class="fa-solid fa-chevron-right"></i>
-      </a>
-      <?php endif; ?>
+        <?php if (empty($inventory)): ?>
 
-    </nav>
+          <div class="pub-empty">
+            <span class="pub-empty__icon"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span>
+            <h3 class="pub-empty__title">No cars on this desk match those filters</h3>
+            <p class="pub-empty__sub">Try removing one — or search every desk on SalesDesk.</p>
+            <div class="pub-empty__actions">
+              <?php foreach (array_slice($chips, 0, 5) as [$label, $url]): ?>
+              <a class="pub-chip" href="<?= $e($url) ?>"><i class="fa-solid fa-xmark"></i> <?= $e($label) ?></a>
+              <?php endforeach; ?>
+            </div>
+            <a href="<?= $e($deskPath) ?>" class="pub-btn pub-btn-primary browse-empty__reset">Show all <?= $deskCars ?> cars</a>
+          </div>
+
+        <?php else: ?>
+
+        <div class="pub-browse-grid" id="carGrid" data-view-root>
+          <?php foreach ($inventory as $i => $car) {
+              // desk_slug keeps the attributed URL; desk_name is left unset
+              // so the card's seller line shows the DEALERSHIP — on this
+              // page every car is already "listed by this desk".
+              $car['desk_slug'] = $desk['slug'];
+              echo sdVehicleCard($car, [
+                  'ref'        => (string) ($car['tracking_code'] ?? ''),
+                  'wishlisted' => in_array((int) $car['id'], array_map('intval', $wishlistedIds), true),
+                  'eager'      => $i < 3,
+                  'heading'    => 'h3',
+              ]);
+          } ?>
+        </div>
+
+        <?php if ($totalPages > 1): ?>
+        <nav class="pagination" aria-label="Pages">
+          <?php
+          $pageUrl = static function (int $p) use ($deskUrlFor): string {
+              $u = $deskUrlFor();
+              return $p === 1 ? $u : $u . (str_contains($u, '?') ? '&' : '?') . 'page=' . $p;
+          };
+          ?>
+          <?php if ($page > 1): ?>
+          <a href="<?= $e($pageUrl($page - 1)) ?>" class="pagination__page pagination__page--nav" rel="prev">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i><span class="pagination__label">Previous</span>
+          </a>
+          <?php endif; ?>
+
+          <?php
+          $prev = null;
+          for ($p = 1; $p <= $totalPages; $p++):
+              if (!($p === 1 || $p === $totalPages || abs($p - $page) <= 1)) continue;
+              if ($prev !== null && $p - $prev > 1): ?>
+          <span class="pagination__ellipsis" aria-hidden="true">…</span>
+              <?php endif; ?>
+          <a href="<?= $e($pageUrl($p)) ?>" class="pagination__page <?= $p === $page ? 'active' : '' ?>"
+             <?= $p === $page ? 'aria-current="page"' : '' ?> aria-label="Page <?= $p ?>"><?= $p ?></a>
+          <?php $prev = $p; endfor; ?>
+
+          <?php if ($page < $totalPages): ?>
+          <a href="<?= $e($pageUrl($page + 1)) ?>" class="pagination__page pagination__page--nav" rel="next">
+            <span class="pagination__label">Next</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </a>
+          <?php endif; ?>
+        </nav>
+        <?php endif; ?>
+
+        <?php endif; ?>
+      </div>
+    </div>
     <?php endif; ?>
+  </section>
 
-    <?php endif; // end inventory not empty ?>
-
-  </div><!-- /browse-results -->
-</div><!-- /browse-layout -->
-
-
-<div class="broker-container">
-
-  <!-- ── Bio section ───────────────────────────────────────────── -->
-  <?php if ($desk['bio']): ?>
-  <div style="margin-top:2rem;background:white;border:1px solid var(--border);
-              border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow-sm);" class="pub-reveal">
-    <div style="font-family:var(--font-d);font-size:14px;font-weight:700;margin-bottom:10px;">
-      About <?= htmlspecialchars($brokerName) ?>
+  <!-- ══════════════════════════════════
+       CTA
+       ══════════════════════════════════ -->
+  <section class="ds-cta pub-reveal">
+    <div>
+      <h2 class="ds-cta__title">Looking for something <?= $e($brokerName) ?> doesn't have yet?</h2>
+      <p class="ds-cta__sub">Search every car on SalesDesk — <?= $e(explode(' ', $brokerName)[0]) ?> can still help you buy it.</p>
     </div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.75;">
-      <?= nl2br(htmlspecialchars($desk['bio'])) ?>
-    </div>
-  </div>
-  <?php endif; ?>
-
-  <!-- ── CTA ───────────────────────────────────────────────────── -->
-  <div class="pub-reveal" style="margin-top:2rem;text-align:center;
-       background:linear-gradient(135deg,#08143c,var(--p));
-       border-radius:var(--r-xl);padding:2rem 1.5rem;color:#fff;">
-    <div style="font-family:var(--font-d);font-size:18px;font-weight:700;margin-bottom:6px;">
-      Looking for a specific car?
-    </div>
-    <p style="font-size:13px;color:rgba(255,255,255,.65);margin-bottom:1.25rem;">
-      Browse our full catalogue across all broker desks.
-    </p>
-    <!-- ROUTE-2: was href="/c/" — updated to the current browse route. -->
-    <a href="/cars-for-sale/" class="pub-btn pub-btn-ghost"
-       style="display:inline-flex;padding:10px 24px;font-size:13px;
-              background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);color:#fff;">
-      Browse all cars →
+    <a href="/cars-for-sale/" class="pub-btn pub-btn-primary pub-btn-lg">
+      Browse all cars <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
     </a>
-  </div>
+  </section>
 
-</div><!-- /broker-container (bio + cta) -->
-
-<script>
-(function () {
-  'use strict';
-
-  /* ── Filter sidebar drawer (mobile) ────────────────────────── */
-  var sidebar   = document.getElementById('browseSidebar');
-  var overlay   = document.getElementById('browseSidebarOverlay');
-  var toggleBtn = document.getElementById('browseFilterToggle');
-  var closeBtn  = document.getElementById('browseSidebarClose');
-
-  function openDrawer() {
-    if (!sidebar || !overlay) return;
-    sidebar.classList.add('drawer-open');
-    overlay.classList.add('open');
-    overlay.removeAttribute('aria-hidden');
-    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeDrawer() {
-    if (!sidebar || !overlay) return;
-    sidebar.classList.remove('drawer-open');
-    overlay.classList.remove('open');
-    overlay.setAttribute('aria-hidden', 'true');
-    if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'false');
-    document.body.style.overflow = '';
-  }
-
-  if (toggleBtn) toggleBtn.addEventListener('click', openDrawer);
-  if (closeBtn)  closeBtn.addEventListener('click', closeDrawer);
-  if (overlay)   overlay.addEventListener('click', closeDrawer);
-
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && sidebar && sidebar.classList.contains('drawer-open')) {
-      closeDrawer();
-    }
-  });
-
-})();
-</script>
+</div>
 
 <?php
 $pageContent = ob_get_clean();

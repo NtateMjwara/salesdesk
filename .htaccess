@@ -1,137 +1,272 @@
 # ============================================================
-# SalesDesk — Apache URL Rewriting
+# SalesDesk — Apache configuration & URL routing  (v3)
 # Place this file in the web root (public_html/ or equivalent).
-#
-# Route map:
-#   /cars-for-sale/                          → cars-for-sale/index.php         (browse all)
-#   /cars-for-sale/{desk-slug}/{car-slug}/   → cars-for-sale/car-detail/index.php   (detail)
-#   /{broker-slug}/                          → broker/index.php         (storefront)
-#   /news/{slug}/                            → news/article.php         (blog article)
-#   /newsletter/confirmed.php                → newsletter/newsletter-confirmed.php
-#   /newsletter/unsubscribe/                 → newsletter/newsletter-unsubscribe.php
-#
-# ROUTE RENAME (this pass): /c/ → /cars-for-sale/
-#   The browse and car-detail routes were previously served from the
-#   c/ directory at /c/ and /c/{desk-slug}/{car-slug}/. Both the
-#   directory and every route below have moved to cars-for-sale/.
-#   A legacy 301 redirect block is included further down so any
-#   previously indexed or shared /c/... URL still resolves correctly
-#   instead of 404ing.
-#
-# Attribution model (v2):
-#   Every car detail URL now carries the desk slug in the path.
-#   ?ref={tracking_code} is still appended for externally shared links
-#   but is optional — the desk slug alone is sufficient for attribution.
-#
-# Reserved paths must come BEFORE the broker storefront catch-all.
-#
 # Stack: Apache 2.4 + mod_rewrite + PHP 8.x
+#
+# ── v3: EXTENSIONLESS URLS PLATFORM-WIDE ──────────────────────
+#   Every PHP page is served without ".php":
+#     /brokers.php                    → /brokers
+#     /auth/login.php?next=/app       → /auth/login?next=/app
+#     /how-it-works/sales-exec.php    → /how-it-works/sales-exec
+#     /app/dealer/settings.php        → /app/dealer/settings
+#   How:
+#     1. GET/HEAD requests for *.php get a 301 to the clean URL
+#        (query string preserved). POST/PUT/DELETE are NEVER
+#        redirected — browsers turn a redirected POST into a GET and
+#        silently drop the form body — so old forms keep working.
+#     2. Clean URLs are internally rewritten to the matching .php
+#        file when that file exists.
+#     3. /api/ is exempt from step 1: fetch() calls to /api/*.php keep
+#        working with no redirect hop. Clean /api/ URLs also resolve.
+#   Canonical form: no trailing slash for pages (/brokers). A trailing
+#   slash is reserved for real directories (/cars-for-sale/, /news/)
+#   and slug routes (/{broker-slug}/, /news/{slug}/).
+#
+# ── Route map ──────────────────────────────────────────────────
+#   /                                        → index.php
+#   /{any/page}                              → {any/page}.php  (if it exists)
+#   /cars-for-sale/                          → cars-for-sale/index.php
+#   /cars-for-sale/car/{car-slug}/           → cars-for-sale/car-detail/index.php  (platform)
+#   /cars-for-sale/{desk-slug}/{car-slug}/   → cars-for-sale/car-detail/index.php  (desk)
+#   /news/{slug}/                            → news/article.php
+#   /newsletter/confirmed                    → newsletter/newsletter-confirmed.php
+#   /newsletter/unsubscribe/                 → newsletter/newsletter-unsubscribe.php
+#   /sitemap.xml, /sitemap-*.xml             → sitemap/*.php
+#   /{broker-slug}/                          → broker/index.php  (catch-all, LAST)
+#
+# ── Legacy redirects (301) ─────────────────────────────────────
+#   /c/…            → /cars-for-sale/…   (route rename)
+#   …/index.php     → …/
+#   *.php           → extensionless
+#
+# ── Rule order matters ─────────────────────────────────────────
+#   security → external redirects → real files/dirs → named routes
+#   → extensionless pages → reserved words → broker catch-all.
+#   Redirects must run BEFORE the "real file" pass-through, otherwise
+#   /brokers.php would be served directly and never redirected.
 # ============================================================
 
-Options -Indexes
+Options -Indexes -MultiViews
 Options +FollowSymLinks
+DirectoryIndex index.php index.html
+
+# MultiViews MUST stay off: it content-negotiates /brokers → brokers.php
+# on its own, bypassing every rule below and creating duplicate URLs.
+
+
+# ════════════════════════════════════════════════════════════
+#  HEADERS & PERFORMANCE
+# ════════════════════════════════════════════════════════════
 
 # ── PERF-1: Browser cache headers ───────────────────────────
-# Versioned assets (?v=YYYYMMDD) are immutable — cache 1 year.
-# Images cache 30 days. Fonts cache 1 year.
-<IfModule mod_expires.c>
-  ExpiresActive On
-
+# CACHE-1 (cache fix): "immutable, 1 year" is ONLY safe for URLs that
+# change when the file changes. PHP pages build those URLs with
+# sdAsset() (includes/assets.php) → /assets/css/home.css?v=3f9a1c2e.
+#
+#   CSS/JS WITH ?v=     → 1 year, immutable (the URL changes on every deploy)
+#   CSS/JS without ?v=  → no-cache: the browser keeps a copy but must ask
+#                          the server first (a 304 when unchanged), so it
+#                          can never be served stale
+#   Images              → 1 day, then revalidated in the background
+#   Fonts               → 1 year (font files never change in place)
+#
+# Previously ALL CSS/JS was immutable for a year, so any file served
+# without a fresh ?v= (or with a reused date-based ?v=) got stuck.
+<IfModule mod_headers.c>
   <FilesMatch "\.(css|js)$">
-    ExpiresDefault "access plus 1 year"
-    Header set Cache-Control "public, max-age=31536000, immutable"
+    <If "%{QUERY_STRING} =~ /(^|&)v=[^&]+/">
+      Header set Cache-Control "public, max-age=31536000, immutable"
+    </If>
+    <Else>
+      Header set Cache-Control "no-cache"
+    </Else>
   </FilesMatch>
 
-  <FilesMatch "\.(png|jpg|jpeg|webp|svg|ico|gif)$">
-    ExpiresDefault "access plus 30 days"
-    Header set Cache-Control "public, max-age=2592000"
+  <FilesMatch "\.(png|jpe?g|webp|avif|svg|ico|gif)$">
+    Header set Cache-Control "public, max-age=86400, stale-while-revalidate=604800"
   </FilesMatch>
 
-  <FilesMatch "\.(woff2|woff|ttf)$">
-    ExpiresDefault "access plus 1 year"
+  <FilesMatch "\.(woff2?|ttf|otf)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
+</IfModule>
+
+# Let Cache-Control (above) decide freshness. mod_expires would otherwise
+# add a competing Expires header on unversioned files.
+<IfModule mod_expires.c>
+  ExpiresActive Off
 </IfModule>
 
 # ── PERF-2: Gzip compression ────────────────────────────────
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css application/javascript text/plain application/json
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml application/javascript application/json application/xml image/svg+xml
 </IfModule>
 
 # ── PERF-3: Vary header for proxy/CDN correctness ───────────
 <IfModule mod_headers.c>
-  <FilesMatch "\.(css|js)$">
+  <FilesMatch "\.(css|js|svg)$">
     Header append Vary Accept-Encoding
   </FilesMatch>
+
+  # ── SEC-1: Baseline security headers ───────────────────────
+  # "setifempty" (not "always set"): PHP pages already send these via
+  # includes/security.php. Sending a second, different X-Frame-Options
+  # value makes browsers discard the header entirely, which silently
+  # removed clickjacking protection. These now only fill the gap for
+  # static files and any script that didn't set its own.
+  Header setifempty X-Content-Type-Options "nosniff"
+  Header setifempty Referrer-Policy "strict-origin-when-cross-origin"
+  Header setifempty X-Frame-Options "DENY"
+  Header always unset X-Powered-By
+  Header unset X-Powered-By
 </IfModule>
 
+# ── SEC-2: Never serve source, config, dumps or docs ────────
+<FilesMatch "\.(env|ini|log|sql|sqlite|bak|swp|dist|md|lock|yml|yaml|sh)$">
+  Require all denied
+</FilesMatch>
+
+# ── Errors ───────────────────────────────────────────────────
+ErrorDocument 403 /broker/404.php
+ErrorDocument 404 /broker/404.php
+ErrorDocument 500 /broker/404.php
+
+
+# ════════════════════════════════════════════════════════════
+#  REWRITING
+# ════════════════════════════════════════════════════════════
+
 RewriteEngine On
+RewriteBase /
 
-# ── Security: block direct access to sensitive directories ──
-RewriteRule ^(includes|vendor|db|views)/      - [F,L]
-RewriteRule ^\.                               - [F,L]
-RewriteRule ^(config\.php|composer\.(json|lock))$ - [F,L]
+# ── 1. SECURITY: block sensitive paths ──────────────────────
+# .well-known/ stays reachable — cPanel AutoSSL / Let's Encrypt need it.
+RewriteRule ^(includes|vendor|db|views|sitemap/includes)(/|$)  - [F,L]
+RewriteRule ^\.well-known/                                     - [L]
+RewriteRule (^|/)\.                                            - [F,L]
+RewriteRule ^(config|composer)\.(php|json|lock)$               - [F,L]
 
-# ── Remove trailing index.php ────────────────────────────────
-RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+(.+/)?index\.php [NC]
-RewriteRule ^ /%1 [R=301,L]
-
-# ── Enforce HTTPS in production ──────────────────────────────
-# Uncomment when SSL certificate is active:
+# ── 2. HTTPS / host canonicalisation ────────────────────────
+# Uncomment when the SSL certificate is active.
 # RewriteCond %{HTTPS} off
-# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
+# RewriteCond %{HTTP:X-Forwarded-Proto} !https
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
+#
+# Pick ONE host and uncomment (example: drop "www.").
+# RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+# RewriteRule ^ https://%1%{REQUEST_URI} [R=301,L,NE]
 
-# ── Static assets — serve directly ──────────────────────────
-RewriteCond %{REQUEST_FILENAME} -f
-RewriteRule ^ - [L]
 
+# ════════════════════════════════════════════════════════════
+#  3. EXTERNAL REDIRECTS (301) — GET/HEAD only
+#     Checked against THE_REQUEST (what the browser actually asked
+#     for), so internal rewrites to .php below can never loop back.
+#     REDIRECT_STATUS is empty only on the browser's original request.
+#     Without that guard, an ErrorDocument hop (e.g. a 403 on
+#     /includes/config.php) re-runs these rules against the ORIGINAL
+#     request line and turns the 403 into a 301.
+# ════════════════════════════════════════════════════════════
+
+# ── 3a. LEGACY /c/ → /cars-for-sale/ ────────────────────────
+# Runs before the directory pass-through so Apache redirects without
+# touching PHP. c/index.php and c/car-detail/index.php remain as PHP
+# shims for the direct-file forms (they also preserve ?ref=).
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteRule ^c/?$ /cars-for-sale/ [R=301,L]
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteRule ^c/([a-z0-9][a-z0-9\-]{1,59})/([a-z0-9][a-z0-9\-]{1,99})/?$ /cars-for-sale/$1/$2/ [R=301,L]
+
+# ── 3b. Strip index.php → directory ─────────────────────────
+#   /index.php → /    /cars-for-sale/index.php?x=1 → /cars-for-sale/?x=1
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{THE_REQUEST} \s/+((?:[^?\s]*/)?)index\.php[?\s] [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+
+# ── 3c. Strip .php from every page (except /api/) ───────────
+#   /auth/login.php?next=x → /auth/login?next=x
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{THE_REQUEST} \s/+([^?\s]+?)\.php[?\s] [NC]
+RewriteCond %1 !^api/ [NC]
+RewriteRule ^ /%1 [R=301,L,NE]
+
+# ── 3d. Trailing slash on a page → no slash ─────────────────
+#   /brokers/ → /brokers   (only when brokers.php exists and there is
+#   no real brokers/ directory — broker storefront slugs are untouched)
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{DOCUMENT_ROOT}/$1.php -f
+RewriteRule ^(.+)/$ /$1 [R=301,L]
+
+
+# ════════════════════════════════════════════════════════════
+#  4. REAL FILES & DIRECTORIES — serve as-is
+#     (assets, uploads, directory index.php files, and the .php
+#      targets of the internal rewrites below)
+# ════════════════════════════════════════════════════════════
+RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# ── LEGACY: /c/ → /cars-for-sale/ (301 redirect) ─────────────
-# Preserves previously indexed/shared links after the route rename.
-# Must come before the new cars-for-sale rules so old links redirect
-# instead of falling through to a 404.
-RewriteRule ^c/?$ /cars-for-sale/ [R=301,L]
-RewriteRule ^c/([a-z0-9][a-z0-9\-]{1,59})/([a-z0-9][a-z0-9\-]{1,99})/?$ /cars-for-sale/$1/$2/ [R=301,L,QSA]
 
-# ── /cars-for-sale/ — Browse all cars ────────────────────────
-RewriteRule ^cars-for-sale/?$ cars-for-sale/index.php [L]
+# ════════════════════════════════════════════════════════════
+#  5. NAMED ROUTES (URL shape differs from the file path)
+# ════════════════════════════════════════════════════════════
 
-# ── /cars-for-sale/car/{car-slug}/ — Car detail, PLATFORM-attributed (no desk) ──
-# Migration 0012: cars shown on the platform browse page that are not
-# on any broker's desk resolve through this route instead. Must come
-# BEFORE the desk-slug two-segment rule below, otherwise "car" would
-# be interpreted as a desk-slug and 404.
+# ── Sitemaps ─────────────────────────────────────────────────
+RewriteRule ^sitemap\.xml$                        sitemap/index.php                  [L]
+RewriteRule ^sitemap-static\.xml$                 sitemap/static.php                 [L]
+RewriteRule ^sitemap-desks\.xml$                  sitemap/desks.php                  [L]
+RewriteRule ^sitemap-news\.xml$                   sitemap/news.php                   [L]
+RewriteRule ^sitemap-cars-for-sale-([0-9]{1,4})\.xml$ sitemap/cars-for-sale.php?page=$1 [L]
+# Legacy chunk URLs (possibly still indexed) — kept on the old generator.
+RewriteRule ^sitemap-cars-([0-9]{1,4})\.xml$      sitemap/cars.php?page=$1           [L]
+
+# ── /cars-for-sale/car/{car-slug}/ — platform-attributed detail ──
+# Must come BEFORE the two-segment desk rule, or "car" is read as a desk slug.
 RewriteRule ^cars-for-sale/car/([a-z0-9][a-z0-9\-]{1,99})/?$ cars-for-sale/car-detail/index.php?car_slug=$1 [L,QSA]
 
-# ── /cars-for-sale/{desk-slug}/{car-slug}/ — Car detail (v2, desk-attributed) ──
-# Both slugs: lowercase letters, digits, hyphens only.
-# desk-slug: 2–60 chars | car-slug: 2–100 chars
-# QSA preserves ?ref= for externally shared tracked links.
+# ── /cars-for-sale/{desk-slug}/{car-slug}/ — desk-attributed detail ──
+# desk-slug: 2–60 chars | car-slug: 2–100 chars. QSA keeps ?ref=.
 RewriteRule ^cars-for-sale/([a-z0-9][a-z0-9\-]{1,59})/([a-z0-9][a-z0-9\-]{1,99})/?$ cars-for-sale/car-detail/index.php?desk_slug=$1&car_slug=$2 [L,QSA]
 
-# ── Reserved top-level paths — route directly ────────────────
-# Must come BEFORE the broker storefront catch-all below.
-RewriteRule ^(app|api|auth|assets|uploads|public|includes|views|vendor|db|cars-for-sale)(/.*)?$ $0 [L]
-RewriteRule ^(brokers|dealers|privacy|terms|sitemap)(\.php)?$ $0 [L]
-
-# ── /news/{slug}/ — Blog article detail ──────────────────────
-# slug: lowercase letters, digits, hyphens (2–150 chars)
+# ── /news/{slug}/ — blog article ─────────────────────────────
 RewriteRule ^news/([a-z0-9][a-z0-9\-]{1,149})/?$ news/article.php?slug=$1 [L,QSA]
 
-# ── /newsletter/confirmed.php — Confirm / error state page ───
-# Actual file is newsletter/newsletter-confirmed.php (name differs from route).
-RewriteRule ^newsletter/confirmed\.php$ newsletter/newsletter-confirmed.php [L,QSA]
-
-# ── /newsletter/unsubscribe/ — One-click unsubscribe ──────────
-# Actual file is newsletter/newsletter-unsubscribe.php (name differs from route).
+# ── Newsletter (route name ≠ file name) ──────────────────────
+# Old emails linking to /newsletter/confirmed.php are 301'd by 3c.
+RewriteRule ^newsletter/confirmed/?$   newsletter/newsletter-confirmed.php   [L,QSA]
 RewriteRule ^newsletter/unsubscribe/?$ newsletter/newsletter-unsubscribe.php [L,QSA]
 
-# ── /{broker-slug}/ — Broker public storefront ───────────────
-# Catch-all: any remaining slug-like path routes to the storefront.
-RewriteRule ^([a-z][a-z0-9\-]{1,59})/?$ broker/index.php?slug=$1 [L,QSA]
 
-# ── 404 fallback ─────────────────────────────────────────────
-ErrorDocument 404 /broker/404.php
-ErrorDocument 500 /broker/404.php
+# ════════════════════════════════════════════════════════════
+#  6. EXTENSIONLESS PAGES → .php  (internal, any depth, any method)
+#     /brokers → brokers.php     /app/dealer/settings → app/dealer/settings.php
+#     Runs before the broker catch-all, so any top-level page file
+#     automatically outranks a broker slug with the same name.
+# ════════════════════════════════════════════════════════════
+RewriteCond %{DOCUMENT_ROOT}/$1.php -f
+RewriteRule ^(.+?)/?$ $1.php [L]
+
+
+# ════════════════════════════════════════════════════════════
+#  7. RESERVED TOP-LEVEL WORDS — never a broker storefront
+#     Platform sections and planned pages that don't have a .php file
+#     yet return a real 404 instead of "SalesDesk not found".
+#     Keep in sync with the slug blocklist used at desk registration.
+# ════════════════════════════════════════════════════════════
+RewriteRule ^(app|api|auth|assets|uploads|public|broker|c|cars-for-sale|sitemap|news|newsletter|how-it-works|tools|sell|guides|reviews|compare|account|desks|about|careers|outreach|contact|help|privacy|terms|popia|brokers|dealers|login|register|admin|dashboard|search)/?$ - [R=404,L]
+
+
+# ════════════════════════════════════════════════════════════
+#  8. /{broker-slug}/ — broker storefront (catch-all, LAST)
+#     Canonical form has a trailing slash (matches sitemap-desks.xml),
+#     so /sfiso-desk → 301 /sfiso-desk/ instead of serving a duplicate.
+# ════════════════════════════════════════════════════════════
+RewriteCond %{ENV:REDIRECT_STATUS} ^$
+RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+RewriteRule ^([a-z][a-z0-9\-]{1,59})$ /$1/ [R=301,L]
+
+RewriteRule ^([a-z][a-z0-9\-]{1,59})/?$ broker/index.php?slug=$1 [L,QSA]

@@ -16,7 +16,28 @@
  *        desk_slug, use that desk's tracking_code for this car
  *     3. Desk doesn't have the car → 404 (the car is not on that desk)
  *
- * CHANGES IN v3 (this pass):
+ * v4 (public UX/UI overhaul):
+ *   UX-A  Layout rebuilt: title + key facts first, photo mosaic (desktop)
+ *         / swipe carousel (mobile) opening a full-screen lightbox with
+ *         keyboard + swipe (replaces window.open() on the raw image).
+ *   UX-B  One scrolling page with a sticky section nav (Overview, Specs,
+ *         Features, History, Finance, Seller) instead of hidden tabs;
+ *         key-spec tiles and highlight badges up top.
+ *   UX-C  Sticky price + enquiry card on desktop; on phones a sticky
+ *         bottom bar (price, monthly, Enquire, WhatsApp) — previously the
+ *         form sat below every other section, several screens down.
+ *   UX-D  Enquiry form: 2-up name/phone, intent as tappable chips,
+ *         inline validation, accessible success state.
+ *   UX-E  Finance estimator gains term, balloon and rate controls.
+ *   UX-F  "Broker earns R…" is shown only to signed-in trade users
+ *         (broker / sales exec / dealer / admin). Buyers no longer see
+ *         the commission figure next to the price.
+ *   UX-G  ALL inline <style>, <script>, style="" and onclick="" removed.
+ *         Page CSS: assets/css/car-detail.css. Behaviour: public.js.
+ *   DATA-3 "More from this dealer" no longer drops cars that aren't on a
+ *         desk (links them via the platform route instead).
+ *
+ * CHANGES IN v3:
  *   DATA-1  Car SELECT expanded to pull every buyer-relevant column the
  *           schema already has (variant, VIN, engine/drivetrain specs,
  *           ownership/warranty/service data) — previously only a small
@@ -282,8 +303,9 @@ $categoryIcons = [
 // ── Related cars (same dealer, same status, exclude current) ──
 $relStmt = $pdo->prepare("
     SELECT
-        c2.id, c2.slug AS car_slug, c2.make, c2.model, c2.year,
+        c2.id, c2.slug AS car_slug, c2.make, c2.model, c2.variant, c2.year,
         c2.price, c2.mileage, c2.image_urls, c2.condition_type,
+        c2.fuel_type, c2.transmission,
         -- For related cards, use the first-listed desk for each related car
         first_rel.desk_slug AS rel_desk_slug,
         first_rel.tracking_code AS rel_tracking_code
@@ -301,7 +323,6 @@ $relStmt = $pdo->prepare("
     WHERE c2.dealer_id = ?
       AND c2.status    = 'active'
       AND c2.id       != ?
-      AND first_rel.desk_slug IS NOT NULL
     ORDER BY c2.created_at DESC
     LIMIT 4
 ");
@@ -423,7 +444,7 @@ $ogImage = $coverImg;
 
 $showBreadcrumb = true;
 $breadcrumbs    = [
-    ['Browse',       '/cars-for-sale/'],
+    ['Cars for sale', '/cars-for-sale/'],
     [$car['make'],   '/cars-for-sale/?make=' . urlencode($car['make'])],
     ["{$carTitle}",  null],
 ];
@@ -535,1105 +556,584 @@ $vehicleJsonLd = [
 $vehicleJsonLd['offers'] = array_filter($vehicleJsonLd['offers'], fn($v) => $v !== null);
 $vehicleJsonLd = array_filter($vehicleJsonLd, fn($v) => $v !== null);
 
+// ── v4 view-model ──────────────────────────────────────────────
+require_once __DIR__ . '/../../views/partials/vehicle-card.php';
+
+$isTradeViewer = !empty($_SESSION['user_id'])
+    && in_array($_SESSION['user_role'] ?? '', ['broker', 'sales_exec', 'dealer', 'admin'], true);
+
+$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
+
+$mileageDisp = $car['mileage'] !== null && $car['mileage'] !== ''
+    ? number_format((int) $car['mileage'], 0, '.', ' ') . ' km' : null;
+
+$brokerPhoneDigits = !empty($deskRow['broker_phone']) ? preg_replace('/\D/', '', (string) $deskRow['broker_phone']) : '';
+$waNumber = $brokerPhoneDigits !== ''
+    ? (str_starts_with($brokerPhoneDigits, '27') ? $brokerPhoneDigits : '27' . ltrim($brokerPhoneDigits, '0'))
+    : '';
+$waMsg  = "Hi, I'm interested in the {$carTitle} listed on SalesDesk for {$priceDisp}. {$shareUrl}";
+$waLink = $waNumber !== '' ? 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($waMsg) : '';
+
+$sellerName = $isPlatformCar ? $car['dealer_name'] : $deskRow['desk_name'];
+
+// Key spec tiles (first 8 that have data)
+$keyTiles = array_values(array_filter([
+    $mileageDisp               ? ['fa-road',              'Mileage',      $mileageDisp] : null,
+    ['fa-calendar',            'Year',         (string) $car['year']],
+    $car['transmission']       ? ['fa-gear',              'Transmission', $car['transmission']] : null,
+    $car['fuel_type']          ? [sdFuelIconClass($car['fuel_type']), 'Fuel', $car['fuel_type']] : null,
+    $car['body_type']          ? ['fa-car-side',          'Body',         $car['body_type']] : null,
+    $car['drivetrain']         ? ['fa-circle-nodes',      'Drivetrain',   $car['drivetrain']] : null,
+    $car['engine_capacity_cc'] ? ['fa-gauge-high',        'Engine',       number_format((int) $car['engine_capacity_cc'] / 1000, 1) . ' L'] : null,
+    $car['power_kw']           ? ['fa-bolt',              'Power',        (int) $car['power_kw'] . ' kW'] : null,
+    $car['fuel_consumption_l100km'] ? ['fa-gas-pump',     'Consumption',  $car['fuel_consumption_l100km'] . ' L/100km'] : null,
+    $car['seats']              ? ['fa-users',             'Seats',        (int) $car['seats']] : null,
+    $car['colour']             ? ['fa-palette',           'Colour',       $car['colour']] : null,
+]));
+$keyTiles = array_slice($keyTiles, 0, 8);
+
+// Highlights
+$highlights = array_values(array_filter([
+    $car['dealer_verification'] === 'verified' ? ['fa-circle-check', 'Verified dealer', 'good'] : null,
+    ($car['service_history'] ?? '') === 'full' ? ['fa-file-circle-check', 'Full service history', 'good'] : null,
+    !empty($car['has_service_book'])           ? ['fa-book', 'Service book', 'good'] : null,
+    ($car['warranty_type'] ?? 'none') !== 'none' ? ['fa-shield-halved', $warrantyTypeLabel . ($car['warranty_expiry_date'] ? ' to ' . date('M Y', strtotime($car['warranty_expiry_date'])) : ''), 'good'] : null,
+    $servicePlanDisplay !== '—'                ? ['fa-screwdriver-wrench', 'Service plan', 'good'] : null,
+    $car['previous_owners'] !== null && (int) $car['previous_owners'] <= 1 && $car['condition_type'] !== 'new'
+                                               ? ['fa-user', (int) $car['previous_owners'] === 0 ? 'No previous owners' : 'One previous owner', 'good'] : null,
+    !empty($car['is_written_off'])             ? ['fa-triangle-exclamation', 'Insurance write-off', 'warn'] : null,
+]));
+
+// Spec rows (full table)
+$specs = array_filter([
+    ['Make',             $car['make']],
+    ['Model',            $car['model']],
+    ['Variant',          $car['variant'] ?: null],
+    ['Year',             $car['year']],
+    ['Condition',        $conditionLabel],
+    ['Mileage',          $mileageDisp],
+    ['Body type',        $car['body_type'] ?: null],
+    ['Exterior colour',  $car['colour'] ?: null],
+    ['Interior colour',  $car['interior_colour'] ?: null],
+    ['Doors',            $car['doors'] ?: null],
+    ['Seats',            $car['seats'] ?: null],
+    ['Transmission',     $car['transmission'] ?: null],
+    ['Gears',            $car['gears'] ?: null],
+    ['Fuel type',        $car['fuel_type'] ?: null],
+    ['Drivetrain',       $car['drivetrain'] ?: null],
+    ['Engine capacity',  $car['engine_capacity_cc'] ? number_format((int) $car['engine_capacity_cc']) . ' cc' : null],
+    ['Cylinders',        $car['cylinders'] ?: null],
+    ['Induction',        $car['induction'] ? ucwords(str_replace('_', ' ', $car['induction'])) : null],
+    ['Power',            $car['power_kw'] ? (int) $car['power_kw'] . ' kW' : null],
+    ['Torque',           $car['torque_nm'] ? (int) $car['torque_nm'] . ' Nm' : null],
+    ['Fuel consumption', $car['fuel_consumption_l100km'] ? $car['fuel_consumption_l100km'] . ' L/100km' : null],
+    ['CO₂ emissions',    $car['co2_emissions_gkm'] ? (int) $car['co2_emissions_gkm'] . ' g/km' : null],
+    ['VAT',              $car['vat_inclusive'] ? 'VAT inclusive' : 'Second-hand goods scheme (margin VAT)'],
+], fn($row) => $row[1] !== null && $row[1] !== '');
+
+$sectionNav = array_filter([
+    'overview' => 'Overview',
+    'specs'    => 'Specs',
+    'features' => 'Features',
+    'history'  => 'History',
+    'finance'  => 'Finance',
+    'seller'   => 'Seller',
+]);
+
+$galleryImages = array_values(array_filter($images, 'is_string'));
+$wishIds       = array_map('intval', getWishlistCarIds((int) $visitor['id']));
+
+$assetVersion         = $assetVersion ?? date('Ymd');
+$extraCss             = '<link rel="stylesheet" href="/assets/css/car-detail.css?v=' . $assetVersion . '">' . "\n"
+                      . ($coverImg ? '<link rel="preload" as="image" href="' . $e($coverImg) . '">' . "\n" : '');
+$includeBrowseCss     = false;
+$includeHowItWorksCss = false;
+$bodyClass            = 'cd-page';
+
 ob_start();
 ?>
 
 <script type="application/ld+json">
-<?= json_encode($vehicleJsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>
+<?= json_encode($vehicleJsonLd, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>
 </script>
 
-<?php if (!$isAvailable): ?>
-<div style="background:#fffbeb;border-bottom:1px solid #fde68a;padding:10px 0;text-align:center;
-            font-size:13px;color:#b45309;font-weight:500;">
-  <i class="fa-solid fa-circle-exclamation" style="margin-right:6px;"></i>
-  This listing is currently <?= htmlspecialchars($car['status']) ?>.
-  <a href="/cars-for-sale/" style="color:#0f4c9e;margin-left:8px;">Browse available cars →</a>
-</div>
-<?php endif; ?>
+<div class="cd sd-container">
 
-<?php if (!empty($car['is_written_off'])): ?>
-<div style="background:#fef2f2;border-bottom:1px solid #fecaca;padding:10px 0;text-align:center;
-            font-size:13px;color:#dc2626;font-weight:600;">
-  <i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>
-  This vehicle has been declared an insurance write-off. See the History &amp; Warranty tab for details.
-</div>
-<?php endif; ?>
+  <?php if (!$isAvailable): ?>
+  <div class="pub-alert pub-alert--warn cd-banner" role="status">
+    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+    <span>This listing is currently <strong><?= $e($car['status']) ?></strong> — enquiries are paused.
+      <a href="/cars-for-sale/?make=<?= urlencode($car['make']) ?>">See similar <?= $e($car['make']) ?> cars</a></span>
+  </div>
+  <?php endif; ?>
 
-<div class="pub-detail-grid pub-anim">
+  <?php if (!empty($car['is_written_off'])): ?>
+  <div class="pub-alert pub-alert--error cd-banner" role="note">
+    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+    <span><strong>Insurance write-off disclosed.</strong> This vehicle was previously declared a write-off — see <a href="#history">History</a> before you proceed.</span>
+  </div>
+  <?php endif; ?>
 
-  <!-- ═══════════════════════════════════
-       LEFT COLUMN
-       ═══════════════════════════════════ -->
-  <div>
-
-    <!-- Gallery -->
-    <div class="pub-gallery pub-anim pub-d1">
-      <div class="pub-gallery__hero" id="galleryHero">
-        <div class="pub-gallery__main" id="galleryMainWrap">
-          <?php if ($coverImg): ?>
-          <img src="<?= htmlspecialchars($coverImg) ?>"
-               id="galleryMain" alt="<?= htmlspecialchars($carTitle) ?>" loading="eager">
-          <?php else: ?>
-          <div class="pub-gallery__placeholder">
-            <i class="fa-solid fa-car-side"></i>
-          </div>
-          <?php endif; ?>
-          <div class="pub-gallery__badge-row">
-            <span class="pub-gallery__year"><?= (int)$car['year'] ?></span>
-            <span class="pub-gallery__prov"><?= htmlspecialchars($conditionLabel) ?></span>
-          </div>
-          <?php if ($car['mileage']): ?>
-          <span class="pub-gallery__km">
-            <i class="fa-solid fa-gauge" style="font-size:10px;margin-right:4px;"></i>
-            <?= number_format((int)$car['mileage']) ?> km
-          </span>
-          <?php endif; ?>
-          <?php if (count($images) > 1): ?>
-          <span class="pub-gallery__count" id="galleryCount">1 / <?= count($images) ?></span>
-          <?php endif; ?>
-        </div>
-        <?php if (count($images) > 2): ?>
-        <div class="pub-gallery__side" id="gallerySide">
-          <div class="pub-gallery__side-item" id="sideThumb1" data-idx="1">
-            <img id="sideImg1" src="<?= htmlspecialchars($images[1]) ?>"
-                 alt="<?= htmlspecialchars($carTitle) ?> image 2" loading="lazy">
-            <button class="pub-gallery__side-btn pub-gallery__side-btn--up"
-                    id="gallerySideUp" type="button" aria-label="Previous photos">
-              <i class="fa-solid fa-chevron-up"></i>
-            </button>
-          </div>
-          <div class="pub-gallery__side-item" id="sideThumb2" data-idx="2">
-            <img id="sideImg2" src="<?= htmlspecialchars($images[2] ?? $images[0]) ?>"
-                 alt="<?= htmlspecialchars($carTitle) ?> image 3" loading="lazy">
-            <button class="pub-gallery__side-btn pub-gallery__side-btn--down"
-                    id="gallerySideDown" type="button" aria-label="Next photos">
-              <i class="fa-solid fa-chevron-down"></i>
-            </button>
-          </div>
-        </div>
-        <?php endif; ?>
-      </div>
-      <?php if (count($images) > 1): ?>
-      <div class="pub-gallery__thumbs">
-        <?php foreach ($images as $i => $url): ?>
-        <div class="pub-gallery__thumb <?= $i === 0 ? 'active' : '' ?>"
-             data-src="<?= htmlspecialchars($url) ?>">
-          <img src="<?= htmlspecialchars($url) ?>"
-               alt="<?= htmlspecialchars($carTitle) ?> image <?= $i + 1 ?>"
-               loading="lazy">
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <?php endif; ?>
-    </div>
-
-    <!-- Car header -->
-    <div class="pub-car-header pub-anim pub-d2">
-      <div class="pub-car-header__top">
-        <div>
-          <h1 class="pub-car-header__name"><?= htmlspecialchars($carNameOnly) ?></h1>
-          <?php if ($car['variant']): ?>
-          <div class="pub-car-header__variant"><?= htmlspecialchars($car['variant']) ?></div>
-          <?php endif; ?>
-          <div class="pub-car-header__dealer">
-            <i class="fa-solid fa-building-user"></i>
-            <?= htmlspecialchars($car['dealer_name']) ?>
-            <?php if ($dealerLoc): ?>
-            · <i class="fa-solid fa-location-dot"></i>
-            <?= htmlspecialchars($dealerLoc) ?>
-            <?php endif; ?>
-          </div>
-        </div>
-        <div>
-          <div class="pub-car-header__price"><?= $priceDisp ?></div>
-          <div class="pub-car-header__pm">~<?= $monthlyDisp ?> est.</div>
-        </div>
-      </div>
-      <div class="pub-car-header__badges">
+  <!-- ══════════ HEADER ══════════ -->
+  <header class="cd-head">
+    <div class="cd-head__main">
+      <div class="cd-head__tags">
+        <span class="pub-badge <?= $car['condition_type'] === 'new' ? 'pub-badge-desk' : '' ?>"><?= $e($conditionLabel) ?></span>
         <?php if ($isAvailable): ?>
-        <span class="pub-badge pub-badge-avail"><i class="fa-solid fa-circle-check"></i> Available</span>
+        <span class="pub-badge pub-badge-avail"><i class="fa-solid fa-circle" aria-hidden="true"></i> Available</span>
         <?php else: ?>
-        <span class="pub-badge pub-badge-<?= $car['status'] ?>"><?= ucfirst($car['status']) ?></span>
+        <span class="pub-badge pub-badge-<?= $e($car['status']) ?>"><?= $e(ucfirst($car['status'])) ?></span>
         <?php endif; ?>
         <?php if ($car['dealer_verification'] === 'verified'): ?>
-        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-circle-check"></i> Verified Dealer</span>
+        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Verified dealer</span>
         <?php endif; ?>
-        <?php if ($serviceHistoryLabel === 'Full service history'): ?>
-        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-file-circle-check"></i> Full Service History</span>
-        <?php endif; ?>
-        <!-- v2: desk attribution badge always visible -->
-        <?php if (!$isPlatformCar): ?>
-        <span class="pub-badge pub-badge-desk">
-          <i class="fa-solid fa-id-card"></i>
-          Listed by <?= htmlspecialchars($deskRow['desk_name']) ?>
-        </span>
-        <?php else: ?>
-        <span class="pub-badge pub-badge-desk">
-          <i class="fa-solid fa-shop"></i>
-          Direct from SalesDesk
-        </span>
-        <?php endif; ?>
-        <button class="pub-nav-icon-btn <?= $isWishlisted ? 'wishlisted' : '' ?>"
-                onclick="toggleWishlist(this, <?= (int)$car['id'] ?>)"
-                title="<?= $isWishlisted ? 'Remove from saved' : 'Save car' ?>"
-                style="margin-left:auto;">
-          <i class="fa-<?= $isWishlisted ? 'solid' : 'regular' ?> fa-heart"></i>
-        </button>
-        <button class="pub-nav-icon-btn" onclick="openShareSheet()" title="Share listing">
-          <i class="fa-solid fa-share-nodes"></i>
-        </button>
+      </div>
+
+      <h1 class="cd-head__title">
+        <?= $e($carNameOnly) ?>
+        <?php if ($car['variant']): ?><span class="cd-head__variant"><?= $e($car['variant']) ?></span><?php endif; ?>
+      </h1>
+
+      <ul class="cd-head__facts">
+        <?php if ($mileageDisp): ?><li><i class="fa-solid fa-road" aria-hidden="true"></i><?= $e($mileageDisp) ?></li><?php endif; ?>
+        <?php if ($car['transmission']): ?><li><i class="fa-solid fa-gear" aria-hidden="true"></i><?= $e($car['transmission']) ?></li><?php endif; ?>
+        <?php if ($car['fuel_type']): ?><li><i class="fa-solid <?= sdFuelIconClass($car['fuel_type']) ?>" aria-hidden="true"></i><?= $e($car['fuel_type']) ?></li><?php endif; ?>
+        <?php if ($dealerLoc): ?><li><i class="fa-solid fa-location-dot" aria-hidden="true"></i><?= $e($dealerLoc) ?></li><?php endif; ?>
+      </ul>
+
+      <div class="cd-head__price">
+        <strong><?= $e(sdRand((float) $car['price'])) ?></strong>
+        <a href="#finance">est. <span data-fin-mirror><?= $e(sdRand(round($monthlyEst))) ?></span> p/m</a>
       </div>
     </div>
 
-    <!-- Spec chips -->
-    <?php
-    $chips = array_filter([
-        $car['transmission'] ? ['fa-gears',              $car['transmission']]                       : null,
-        $car['fuel_type']    ? ['fa-gas-pump',            $car['fuel_type']]                          : null,
-        $car['body_type']    ? ['fa-car-side',            $car['body_type']]                          : null,
-        $car['colour']       ? ['fa-palette',             $car['colour']]                             : null,
-        $car['drivetrain']   ? ['fa-arrow-rotate-right',  $car['drivetrain']]                         : null,
-        $car['mileage']      ? ['fa-gauge',               number_format((int)$car['mileage']) . ' km'] : null,
-    ]);
-    ?>
-    <?php if ($chips): ?>
-    <div class="pub-spec-chips pub-anim pub-d2">
-      <?php foreach ($chips as [$icon, $value]): ?>
-      <span class="pub-spec-chip">
-        <i class="fa-solid <?= $icon ?>"></i>
-        <?= htmlspecialchars($value) ?>
-      </span>
-      <?php endforeach; ?>
-    </div>
-    <?php endif; ?>
-
-    <!-- Description -->
-    <?php if ($car['description']): ?>
-    <div class="pub-desc-block pub-reveal">
-      <div class="pub-desc-block__title">About this car</div>
-      <div class="pub-desc-block__text clamped" id="descText">
-        <?= nl2br(htmlspecialchars($car['description'])) ?>
-      </div>
-      <button class="pub-desc-block__toggle" id="descToggle" type="button">
-        <i class="fa-solid fa-chevron-down"></i> Read more
+    <div class="cd-head__actions">
+      <button class="pub-btn pub-btn-ghost pub-btn-sm cd-save" type="button"
+              data-wishlist="<?= (int) $car['id'] ?>" aria-pressed="<?= $isWishlisted ? 'true' : 'false' ?>"
+              aria-label="<?= $isWishlisted ? 'Remove ' . $e($carNameOnly) . ' from saved cars' : 'Save ' . $e($carNameOnly) ?>">
+        <i class="fa-<?= $isWishlisted ? 'solid' : 'regular' ?> fa-heart" aria-hidden="true"></i>
+        <span data-wishlist-label><?= $isWishlisted ? 'Saved' : 'Save' ?></span>
+      </button>
+      <button class="pub-btn pub-btn-ghost pub-btn-sm" type="button" data-share-open>
+        <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i> Share
       </button>
     </div>
+  </header>
+
+  <!-- ══════════ GALLERY ══════════ -->
+  <section class="cd-gallery<?= count($galleryImages) <= 1 ? ' cd-gallery--single' : '' ?>" aria-label="Photos"
+           data-lightbox-images="<?= $e(json_encode($galleryImages, JSON_UNESCAPED_SLASHES)) ?>"
+           data-lightbox-title="<?= $e($carTitle) ?>"
+           data-carousel>
+    <?php if ($galleryImages): ?>
+    <div class="cd-gallery__track" data-carousel-track>
+      <?php foreach ($galleryImages as $i => $src): ?>
+      <button class="cd-gallery__item cd-gallery__item--<?= $i ?>" type="button" data-lightbox-open="<?= $i ?>"
+              aria-label="Open photo <?= $i + 1 ?> of <?= count($galleryImages) ?>">
+        <img src="<?= $e($src) ?>" alt="<?= $e($carTitle) ?> — photo <?= $i + 1 ?>"
+             width="1200" height="800" decoding="async"
+             loading="<?= $i === 0 ? 'eager' : 'lazy' ?>" <?= $i === 0 ? 'fetchpriority="high"' : '' ?>>
+        <?php if ($i === 4 && count($galleryImages) > 5): ?>
+        <span class="cd-gallery__more">+<?= count($galleryImages) - 5 ?> photos</span>
+        <?php endif; ?>
+      </button>
+      <?php endforeach; ?>
+    </div>
+    <?php if (count($galleryImages) > 1): ?>
+    <span class="cd-gallery__count" data-carousel-count aria-hidden="true">1 / <?= count($galleryImages) ?></span>
+    <button class="pub-btn pub-btn-ghost pub-btn-sm cd-gallery__all" type="button" data-lightbox-open="0">
+      <i class="fa-solid fa-images" aria-hidden="true"></i> All <?= count($galleryImages) ?> photos
+    </button>
     <?php endif; ?>
+    <?php else: ?>
+    <div class="cd-gallery__empty"><i class="fa-solid fa-car-side" aria-hidden="true"></i><span>Photos coming soon</span></div>
+    <?php endif; ?>
+  </section>
 
-    <!-- ═══════════════════════════════════
-         UX-1: Specifications / Features / History tab group
-         Replaces the old single long spec table — same data plus
-         car_features (grouped by category) and ownership/warranty
-         disclosure, all reachable without endless scrolling.
-         ═══════════════════════════════════ -->
-    <div class="pub-tabs pub-reveal" id="specTabs">
-      <div class="pub-tabs__nav" role="tablist" aria-label="Vehicle details">
-        <button class="pub-tabs__btn active" type="button" data-tab="specs" role="tab" aria-selected="true">
-          <i class="fa-solid fa-list-check"></i> Specifications
-        </button>
-        <button class="pub-tabs__btn" type="button" data-tab="features" role="tab" aria-selected="false">
-          <i class="fa-solid fa-star"></i> Features
-          <?php if ($totalFeatureCount): ?>
-          <span class="pub-tabs__count"><?= $totalFeatureCount ?></span>
-          <?php endif; ?>
-        </button>
-        <button class="pub-tabs__btn" type="button" data-tab="history" role="tab" aria-selected="false">
-          <i class="fa-solid fa-shield-halved"></i> History &amp; Warranty
-          <?php if (!empty($car['is_written_off'])): ?>
-          <span class="pub-tabs__count pub-tabs__count--warn"><i class="fa-solid fa-triangle-exclamation"></i></span>
-          <?php endif; ?>
-        </button>
-      </div>
+  <div class="cd-layout">
 
-      <!-- ── Specifications panel ── -->
-      <div class="pub-tabs__panel active" data-panel="specs" role="tabpanel">
-        <div class="pub-spec-table">
-          <?php
-          $specs = array_filter([
-              ['Make',            $car['make']],
-              ['Model',           $car['model']],
-              ['Variant',         $car['variant'] ?: null],
-              ['Year',            $car['year']],
-              ['Condition',       ucfirst($car['condition_type'])],
-              ['Body type',       $car['body_type']    ?: null],
-              ['Exterior colour', $car['colour']       ?: null],
-              ['Interior colour', $car['interior_colour'] ?: null],
-              ['Doors',           $car['doors']        ?: null],
-              ['Seats',           $car['seats']        ?: null],
-              ['Transmission',    $car['transmission'] ?: null],
-              ['Gears',           $car['gears']        ?: null],
-              ['Fuel type',       $car['fuel_type']    ?: null],
-              ['Drivetrain',      $car['drivetrain']   ?: null],
-              ['Engine capacity', $car['engine_capacity_cc'] ? number_format((int)$car['engine_capacity_cc']) . ' cc' : null],
-              ['Cylinders',       $car['cylinders']    ?: null],
-              ['Induction',       $car['induction'] ? ucwords(str_replace('_', ' ', $car['induction'])) : null],
-              ['Power',           $car['power_kw']  ? (int)$car['power_kw'] . ' kW' : null],
-              ['Torque',          $car['torque_nm'] ? (int)$car['torque_nm'] . ' Nm' : null],
-              ['Fuel consumption',$car['fuel_consumption_l100km'] ? $car['fuel_consumption_l100km'] . ' L/100km' : null],
-              ['CO₂ emissions',   $car['co2_emissions_gkm'] ? (int)$car['co2_emissions_gkm'] . ' g/km' : null],
-              ['Mileage',         $car['mileage'] ? number_format((int)$car['mileage']) . ' km' : null],
-              ['VAT',             $car['vat_inclusive'] ? 'VAT inclusive' : 'Second-hand goods scheme (margin VAT)'],
-              ['Price',           $priceDisp, true],
-          ], fn($row) => $row[1] !== null);
-          foreach ($specs as $row):
-              [$key, $val, $highlight] = array_pad($row, 3, false);
-          ?>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key"><?= htmlspecialchars($key) ?></span>
-            <span class="pub-spec-table__val <?= $highlight ? 'highlight' : '' ?>">
-              <?= htmlspecialchars((string)$val) ?>
-            </span>
+    <!-- ══════════ MAIN ══════════ -->
+    <div class="cd-main">
+
+      <nav class="cd-subnav" aria-label="On this page" data-scrollspy>
+        <?php foreach ($sectionNav as $id => $label): ?>
+        <a href="#<?= $id ?>"><?= $label ?><?php if ($id === 'features' && $totalFeatureCount): ?> <span><?= $totalFeatureCount ?></span><?php endif; ?></a>
+        <?php endforeach; ?>
+      </nav>
+
+      <!-- Overview -->
+      <section class="cd-card" id="overview" aria-labelledby="cdOverviewTitle">
+        <h2 class="cd-card__title" id="cdOverviewTitle">Overview</h2>
+
+        <div class="cd-tiles">
+          <?php foreach ($keyTiles as [$icon, $label, $value]): ?>
+          <div class="cd-tile">
+            <i class="fa-solid <?= $e($icon) ?>" aria-hidden="true"></i>
+            <span class="cd-tile__label"><?= $e($label) ?></span>
+            <span class="cd-tile__value"><?= $e($value) ?></span>
           </div>
           <?php endforeach; ?>
         </div>
-      </div>
 
-      <!-- ── Features panel ── -->
-      <div class="pub-tabs__panel" data-panel="features" role="tabpanel">
+        <?php if ($highlights): ?>
+        <ul class="cd-highlights" aria-label="Highlights">
+          <?php foreach ($highlights as [$icon, $label, $tone]): ?>
+          <li class="cd-highlight cd-highlight--<?= $tone ?>"><i class="fa-solid <?= $icon ?>" aria-hidden="true"></i><?= $e($label) ?></li>
+          <?php endforeach; ?>
+        </ul>
+        <?php endif; ?>
+
+        <?php if ($car['description']): ?>
+        <div class="cd-desc">
+          <h3 class="cd-card__subtitle">Seller’s description</h3>
+          <div class="cd-desc__text is-clamped" id="descText" data-clamp><?= nl2br($e($car['description'])) ?></div>
+          <button class="pub-link cd-desc__toggle" type="button" data-clamp-toggle="descText" aria-expanded="false" aria-controls="descText">
+            <span>Read more</span> <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+        </div>
+        <?php endif; ?>
+      </section>
+
+      <!-- Specs -->
+      <section class="cd-card" id="specs" aria-labelledby="cdSpecsTitle">
+        <h2 class="cd-card__title" id="cdSpecsTitle">Specifications</h2>
+        <dl class="cd-specs">
+          <?php foreach ($specs as [$k, $v]): ?>
+          <div class="cd-specs__row"><dt><?= $e($k) ?></dt><dd><?= $e($v) ?></dd></div>
+          <?php endforeach; ?>
+        </dl>
+      </section>
+
+      <!-- Features -->
+      <section class="cd-card" id="features" aria-labelledby="cdFeatTitle">
+        <h2 class="cd-card__title" id="cdFeatTitle">Features <?php if ($totalFeatureCount): ?><span class="cd-card__count"><?= $totalFeatureCount ?></span><?php endif; ?></h2>
         <?php if ($totalFeatureCount): ?>
-        <div class="pub-feat-groups">
-          <?php foreach ($featuresByCategory as $category => $items):
-              $catIcon = $categoryIcons[$category] ?? 'fa-tag';
-          ?>
-          <div class="pub-feat-group">
-            <div class="pub-feat-group__title">
-              <i class="fa-solid <?= $catIcon ?>"></i>
-              <?= htmlspecialchars($category) ?>
-              <span class="pub-feat-group__count"><?= count($items) ?></span>
-            </div>
-            <ul class="pub-feat-list">
+        <div class="cd-feats">
+          <?php foreach ($featuresByCategory as $category => $items): ?>
+          <div class="cd-feat-group">
+            <h3 class="cd-feat-group__title">
+              <i class="fa-solid <?= $e($categoryIcons[$category] ?? 'fa-tag') ?>" aria-hidden="true"></i>
+              <?= $e($category) ?> <span><?= count($items) ?></span>
+            </h3>
+            <ul class="cd-feat-list">
               <?php foreach ($items as $item): ?>
-              <li class="pub-feat-item">
-                <i class="fa-solid fa-check"></i>
-                <?= htmlspecialchars($item['name']) ?>
-              </li>
+              <li><i class="fa-solid fa-check" aria-hidden="true"></i><?= $e($item['name']) ?></li>
               <?php endforeach; ?>
             </ul>
           </div>
           <?php endforeach; ?>
         </div>
         <?php else: ?>
-        <div class="pub-feat-empty">
-          <i class="fa-solid fa-circle-info"></i>
-          The dealer hasn't listed detailed features for this car yet.
-          Ask <?= htmlspecialchars($brokerDisplayName) ?> about specific options via the enquiry form.
-        </div>
+        <p class="cd-muted-box"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          The seller hasn’t listed detailed features yet — ask <?= $e($brokerDisplayName) ?> about specific options when you enquire.</p>
         <?php endif; ?>
-      </div>
+      </section>
 
-      <!-- ── History & Warranty panel ── -->
-      <div class="pub-tabs__panel" data-panel="history" role="tabpanel">
-
+      <!-- History -->
+      <section class="cd-card" id="history" aria-labelledby="cdHistTitle">
+        <h2 class="cd-card__title" id="cdHistTitle">History &amp; warranty</h2>
         <?php if (!empty($car['is_written_off'])): ?>
-        <div class="pub-history-alert">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <div>
-            <strong>Insurance write-off disclosed.</strong>
-            This vehicle has previously been declared an insurance write-off.
-            Ask the dealer for the full assessment report before proceeding.
-          </div>
+        <div class="pub-alert pub-alert--error cd-hist-alert">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          <span><strong>Insurance write-off disclosed.</strong> Ask the dealer for the full assessment report before proceeding.</span>
         </div>
         <?php endif; ?>
-
-        <div class="pub-spec-table">
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Previous owners</span>
-            <span class="pub-spec-table__val"><?= $car['previous_owners'] !== null ? (int)$car['previous_owners'] : 'Not disclosed' ?></span>
-          </div>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Service history</span>
-            <span class="pub-spec-table__val"><?= htmlspecialchars($serviceHistoryLabel) ?></span>
-          </div>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Service book</span>
-            <span class="pub-spec-table__val"><?= !empty($car['has_service_book']) ? 'Present' : 'Not available' ?></span>
-          </div>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Warranty</span>
-            <span class="pub-spec-table__val"><?= htmlspecialchars($warrantyTypeLabel) ?></span>
-          </div>
+        <dl class="cd-specs">
+          <div class="cd-specs__row"><dt>Previous owners</dt><dd><?= $car['previous_owners'] !== null ? (int) $car['previous_owners'] : 'Not disclosed' ?></dd></div>
+          <div class="cd-specs__row"><dt>Service history</dt><dd><?= $e($serviceHistoryLabel) ?></dd></div>
+          <div class="cd-specs__row"><dt>Service book</dt><dd><?= !empty($car['has_service_book']) ? 'Present' : 'Not available' ?></dd></div>
+          <div class="cd-specs__row"><dt>Warranty</dt><dd><?= $e($warrantyTypeLabel) ?></dd></div>
           <?php if (($car['warranty_type'] ?? 'none') !== 'none'): ?>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Warranty expires</span>
-            <span class="pub-spec-table__val"><?= htmlspecialchars($warrantyDisplay) ?></span>
-          </div>
+          <div class="cd-specs__row"><dt>Warranty expires</dt><dd><?= $e($warrantyDisplay) ?></dd></div>
           <?php endif; ?>
           <?php if ($servicePlanDisplay !== '—'): ?>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">Service plan expires</span>
-            <span class="pub-spec-table__val"><?= htmlspecialchars($servicePlanDisplay) ?></span>
-          </div>
+          <div class="cd-specs__row"><dt>Service plan expires</dt><dd><?= $e($servicePlanDisplay) ?></dd></div>
           <?php endif; ?>
           <?php if ($vinDisplay): ?>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">VIN</span>
-            <span class="pub-spec-table__val" style="font-family:var(--mono);letter-spacing:.03em;">
-              <?= htmlspecialchars($vinDisplay) ?>
-            </span>
-          </div>
+          <div class="cd-specs__row"><dt>VIN</dt><dd class="cd-mono"><?= $e($vinDisplay) ?></dd></div>
           <?php endif; ?>
           <?php if ($car['mm_code']): ?>
-          <div class="pub-spec-table__row">
-            <span class="pub-spec-table__key">M&amp;M code</span>
-            <span class="pub-spec-table__val"><?= htmlspecialchars($car['mm_code']) ?></span>
-          </div>
+          <div class="cd-specs__row"><dt>M&amp;M code</dt><dd class="cd-mono"><?= $e($car['mm_code']) ?></dd></div>
           <?php endif; ?>
-        </div>
+        </dl>
+        <p class="cd-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          Ownership, warranty and service details are supplied by the dealer. Always ask for supporting documents before you buy.</p>
+      </section>
 
-        <p class="pub-history-note">
-          <i class="fa-solid fa-circle-info"></i>
-          Ownership, warranty and service details are supplied by the dealer.
-          Always request supporting documentation before purchase.
-        </p>
-      </div>
-
-    </div><!-- /pub-tabs -->
-
-    <!-- Finance estimator -->
-    <div class="pub-spec-section pub-reveal">
-      <div class="pub-spec-section__title">Finance estimate</div>
-      <div style="background:white;border:1px solid #e8ecf4;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(15,76,158,.06);">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap;">
-          <div>
-            <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Estimated monthly</div>
-            <div id="monthlyDisplay"
-                 style="font-family:'Sora',sans-serif;font-size:26px;font-weight:800;color:#0f4c9e;letter-spacing:-.02em;margin-top:2px;">
-              ~<?= $monthlyDisp ?>
+      <!-- Finance -->
+      <section class="cd-card" id="finance" aria-labelledby="cdFinTitle">
+        <h2 class="cd-card__title" id="cdFinTitle">Finance estimate</h2>
+        <div class="fin" data-finance="repay" data-price="<?= (float) $car['price'] ?>">
+          <div class="fin__result">
+            <div>
+              <div class="fin__label">Estimated monthly repayment</div>
+              <div class="fin__monthly"><span data-fin-result><?= $e(sdRand(round($monthlyEst))) ?></span> <small>p/m</small></div>
+            </div>
+            <div class="fin__meta">
+              Loan amount <strong data-fin-loan>—</strong><br>
+              Total cost <strong data-fin-total>—</strong>
             </div>
           </div>
-          <div id="depositDisplay" style="font-size:12px;color:#94a3b8;text-align:right;">20% deposit</div>
-        </div>
-        <input type="range" id="depositSlider" min="0" max="50" step="5" value="20"
-               data-price="<?= (float)$car['price'] ?>"
-               data-rate="13.25" data-term="60"
-               style="width:100%;accent-color:#0f4c9e;margin-bottom:6px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;">
-          <span>0% deposit</span><span>50% deposit</span>
-        </div>
-        <p style="font-size:10px;color:#94a3b8;margin-top:10px;line-height:1.5;">
-          Estimate based on NCA rate ~13.25% p.a., 60 months, selected deposit.
-          Contact the dealer for a formal finance quote.
-        </p>
-      </div>
-    </div>
-
-    <!-- SalesDesk info card (v2: replaces old "broker chip" — desk is primary) -->
-    <?php if (!$isPlatformCar): ?>
-    <div class="pub-reveal" style="background:white;border:1px solid #e8ecf4;border-radius:16px;
-         padding:20px;margin-bottom:24px;box-shadow:0 2px 12px rgba(15,76,158,.06);">
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <!-- Desk avatar -->
-        <div style="width:52px;height:52px;border-radius:50%;flex-shrink:0;overflow:hidden;
-                    background:linear-gradient(135deg,#0f4c9e,#3b82f6);
-                    display:flex;align-items:center;justify-content:center;
-                    font-family:'Sora',sans-serif;font-size:16px;font-weight:700;color:#fff;">
-          <?php if ($deskRow['broker_avatar']): ?>
-          <img src="<?= htmlspecialchars($deskRow['broker_avatar']) ?>"
-               style="width:100%;height:100%;object-fit:cover;" alt="">
-          <?php else: ?>
-          <?= htmlspecialchars($brokerInitials) ?>
-          <?php endif; ?>
-        </div>
-        <div>
-          <div style="font-family:'Sora',sans-serif;font-size:15px;font-weight:700;color:#1e293b;">
-            <?= htmlspecialchars($deskRow['desk_name']) ?>
+          <div class="fin__grid">
+            <div class="fin__row">
+              <div class="fin__row-head"><label for="finDeposit">Deposit</label><output data-fin-deposit-out for="finDeposit">20%</output></div>
+              <input type="range" id="finDeposit" min="0" max="50" step="5" value="20" data-fin-deposit>
+            </div>
+            <div class="fin__row">
+              <div class="fin__row-head"><label for="finBalloon">Balloon payment</label><output data-fin-balloon-out for="finBalloon">None</output></div>
+              <input type="range" id="finBalloon" min="0" max="40" step="5" value="0" data-fin-balloon>
+            </div>
+            <div class="fin__row">
+              <div class="fin__row-head"><label for="finRate">Interest rate</label><output data-fin-rate-out for="finRate">13.25%</output></div>
+              <input type="range" id="finRate" min="8" max="22" step="0.25" value="13.25" data-fin-rate>
+            </div>
+            <div class="fin__row">
+              <div class="fin__row-head"><span id="finTermLbl">Term</span></div>
+              <div class="pub-segment fin__terms" role="radiogroup" aria-labelledby="finTermLbl">
+                <?php foreach ([36, 48, 60, 72] as $t): ?>
+                <label class="pub-segment__opt"><input type="radio" name="fin_term" value="<?= $t ?>" data-fin-term <?= $t === 60 ? 'checked' : '' ?>><span><?= $t ?> mo</span></label>
+                <?php endforeach; ?>
+              </div>
+            </div>
           </div>
-          <?php if ($brokerDisplayName !== $deskRow['desk_name']): ?>
-          <div style="font-size:12px;color:#64748b;">
-            <?= htmlspecialchars($brokerDisplayName) ?> · Independent auto broker
-          </div>
-          <?php endif; ?>
-          <?php if ($org && $org['verification_status'] === 'verified'): ?>
-          <div style="margin-top:3px;">
-            <span style="font-size:10px;background:#eff4ff;color:#0f4c9e;border:1px solid #dbeafe;
-                         border-radius:20px;padding:2px 8px;font-family:'Sora',sans-serif;">
-              <i class="fa-solid fa-building" style="font-size:9px;margin-right:3px;"></i>
-              <?= htmlspecialchars($org['name']) ?>
-            </span>
-          </div>
-          <?php endif; ?>
+          <p class="fin__note">Indicative only. Your bank sets the final rate based on your credit profile; the dealer can arrange a formal quote.</p>
         </div>
-      </div>
+      </section>
 
-      <!-- Desk stats strip -->
-      <div style="display:flex;gap:16px;padding:12px 0;border-top:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9;margin-bottom:12px;">
-        <div style="text-align:center;flex:1;">
-          <div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700;color:#1e293b;">
-            <?= (int)($deskStats['active_cars'] ?? 0) ?>
-          </div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px;">Active listings</div>
-        </div>
-        <div style="text-align:center;flex:1;">
-          <div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700;color:#1e293b;">
-            <?= (int)($deskStats['desk_closed'] ?? 0) ?>
-          </div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px;">Deals closed</div>
-        </div>
-        <div style="text-align:center;flex:1;">
-          <div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700;color:#1e293b;">
-            <?= (int)($deskStats['desk_leads'] ?? 0) ?>
-          </div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:1px;">Total enquiries</div>
-        </div>
-      </div>
+      <!-- Seller -->
+      <section class="cd-card" id="seller" aria-labelledby="cdSellerTitle">
+        <h2 class="cd-card__title" id="cdSellerTitle">Who you’ll deal with</h2>
+        <div class="cd-sellers">
 
-      <div style="display:flex;gap:8px;">
-        <a href="/<?= htmlspecialchars($deskRow['desk_slug']) ?>/"
-           class="pub-btn pub-btn-ghost" style="flex:1;justify-content:center;font-size:12px;padding:8px;">
-          <i class="fa-solid fa-id-card"></i> View all from this desk
-        </a>
-        <?php if ($deskRow['broker_phone']): ?>
-        <a href="https://wa.me/27<?= ltrim(preg_replace('/\D/', '', $deskRow['broker_phone']), '0') ?>"
-           target="_blank" rel="noopener"
-           style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;
-                  background:#25d366;color:#fff;border-radius:12px;font-size:12px;
-                  font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;">
-          <i class="fa-brands fa-whatsapp"></i> WhatsApp
-        </a>
-        <?php endif; ?>
-      </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Dealer card -->
-    <div class="pub-dealer-card pub-reveal">
-      <div class="pub-dealer-card__header">
-        <div class="pub-dealer-card__icon"><i class="fa-solid fa-building-user"></i></div>
-        <div>
-          <div class="pub-dealer-card__name"><?= htmlspecialchars($car['dealer_name']) ?></div>
-          <div class="pub-dealer-card__loc">
-            <?php if ($dealerLoc): ?>
-            <i class="fa-solid fa-location-dot" style="font-size:10px;margin-right:3px;"></i>
-            <?= htmlspecialchars($dealerLoc) ?>
-            <?php endif; ?>
-            <?php if ($car['dealer_verification'] === 'verified'): ?>
-            &nbsp;<span class="pub-badge pub-badge-verified" style="font-size:9px;">
-              <i class="fa-solid fa-circle-check"></i> Verified
-            </span>
-            <?php endif; ?>
-          </div>
-        </div>
-      </div>
-      <div class="pub-dealer-card__stats">
-        <div class="pub-dealer-stat">
-          <div class="pub-dealer-stat__num"><?= (int)($dealerStats['active_listings'] ?? 0) ?></div>
-          <div class="pub-dealer-stat__lbl">Active listings</div>
-        </div>
-        <div class="pub-dealer-stat">
-          <div class="pub-dealer-stat__num"><?= (int)($dealerStats['total_leads'] ?? 0) ?></div>
-          <div class="pub-dealer-stat__lbl">Enquiries handled</div>
-        </div>
-      </div>
-      <a href="/cars-for-sale/?dealer=<?= (int)$car['dealer_id'] ?>"
-         class="pub-btn pub-btn-ghost" style="font-size:12px;width:100%;justify-content:center;">
-        <i class="fa-solid fa-grid-2"></i> View all cars from this dealer
-      </a>
-    </div>
-
-  </div><!-- /left col -->
-
-
-  <!-- ═══════════════════════════════════
-       RIGHT COLUMN — Sticky enquiry card
-       ═══════════════════════════════════ -->
-  <div>
-    <div class="pub-enquiry-sticky">
-      <div class="pub-enquiry-card pub-anim pub-d3">
-
-        <!-- Card header -->
-        <div class="pub-enquiry-card__head">
-          <div class="pub-enquiry-card__price"><?= $priceDisp ?></div>
-          <div class="pub-enquiry-card__pm">~<?= $monthlyDisp ?> estimated</div>
-          <div class="pub-enquiry-card__commission">
-            <span class="pub-enquiry-card__comm-label">Broker earns</span>
-            <span class="pub-enquiry-card__comm-val"><?= htmlspecialchars($commRandDisp) ?></span>
-          </div>
-        </div>
-
-        <div class="pub-enquiry-card__body">
-
-          <!-- v2: Desk attribution chip (always present — desk is in URL) -->
           <?php if (!$isPlatformCar): ?>
-          <div class="pub-enquiry-broker" style="margin-bottom:14px;">
-            <div class="pub-enquiry-broker__av">
-              <?php if ($deskRow['broker_avatar']): ?>
-              <img src="<?= htmlspecialchars($deskRow['broker_avatar']) ?>"
-                   alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
-              <?php else: ?>
-              <?= htmlspecialchars($brokerInitials) ?>
+          <div class="cd-seller">
+            <div class="cd-seller__head">
+              <span class="cd-avatar">
+                <?php if ($deskRow['broker_avatar']): ?>
+                <img src="<?= $e($deskRow['broker_avatar']) ?>" alt="" width="52" height="52" loading="lazy">
+                <?php else: ?><?= $e($brokerInitials) ?><?php endif; ?>
+              </span>
+              <span class="cd-seller__id">
+                <span class="cd-seller__role">Your SalesDesk broker</span>
+                <span class="cd-seller__name"><?= $e($deskRow['desk_name']) ?></span>
+                <?php if ($brokerDisplayName !== $deskRow['desk_name']): ?>
+                <span class="cd-seller__sub"><?= $e($brokerDisplayName) ?> · Independent broker</span>
+                <?php endif; ?>
+                <?php if ($org && $org['verification_status'] === 'verified'): ?>
+                <span class="pub-badge pub-badge-desk cd-seller__org"><i class="fa-solid fa-building" aria-hidden="true"></i><?= $e($org['name']) ?></span>
+                <?php endif; ?>
+              </span>
+            </div>
+            <div class="cd-seller__stats">
+              <span><strong><?= (int) ($deskStats['active_cars'] ?? 0) ?></strong> listings</span>
+              <span><strong><?= (int) ($deskStats['desk_closed'] ?? 0) ?></strong> deals closed</span>
+              <span><strong><?= (int) ($deskStats['desk_leads'] ?? 0) ?></strong> enquiries</span>
+            </div>
+            <div class="cd-seller__actions">
+              <a href="/<?= $e($deskRow['desk_slug']) ?>/" class="pub-btn pub-btn-ghost pub-btn-sm">View desk</a>
+              <?php if ($waLink && $isAvailable): ?>
+              <a href="<?= $e($waLink) ?>" class="pub-btn pub-btn-whatsapp pub-btn-sm" target="_blank" rel="noopener">
+                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> WhatsApp
+              </a>
               <?php endif; ?>
             </div>
-            <div>
-              <div class="pub-enquiry-broker__name">
-                <?= htmlspecialchars($deskRow['desk_name']) ?>
-              </div>
-              <div class="pub-enquiry-broker__sub">
-                <?= htmlspecialchars($brokerDisplayName) ?>
-              </div>
-            </div>
           </div>
-          <?php else: ?>
-          <p style="font-size:12px;color:#94a3b8;margin:0 0 14px;">
-            <i class="fa-solid fa-shop" style="margin-right:5px;"></i>
-            Enquiry goes directly to the dealer
-          </p>
           <?php endif; ?>
 
-          <?php if (!$isAvailable): ?>
-          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;
-                      padding:12px 14px;margin-bottom:14px;font-size:12px;color:#b45309;text-align:center;">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            This car is <?= htmlspecialchars($car['status']) ?>. Enquiries are paused.
+          <div class="cd-seller">
+            <div class="cd-seller__head">
+              <span class="cd-avatar cd-avatar--dealer"><i class="fa-solid fa-building-user" aria-hidden="true"></i></span>
+              <span class="cd-seller__id">
+                <span class="cd-seller__role">Dealership</span>
+                <span class="cd-seller__name"><?= $e($car['dealer_name']) ?>
+                  <?php if ($car['dealer_verification'] === 'verified'): ?><i class="fa-solid fa-circle-check cd-verified" title="Verified dealer" aria-label="Verified dealer"></i><?php endif; ?>
+                </span>
+                <?php if ($dealerLoc): ?><span class="cd-seller__sub"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($dealerLoc) ?></span><?php endif; ?>
+              </span>
+            </div>
+            <div class="cd-seller__stats">
+              <span><strong><?= (int) ($dealerStats['active_listings'] ?? 0) ?></strong> cars for sale</span>
+              <span><strong><?= (int) ($dealerStats['total_leads'] ?? 0) ?></strong> enquiries handled</span>
+            </div>
+            <div class="cd-seller__actions">
+              <a href="/cars-for-sale/?dealer=<?= (int) $car['dealer_id'] ?>" class="pub-btn pub-btn-ghost pub-btn-sm">All cars from this dealer</a>
+            </div>
           </div>
+
+        </div>
+      </section>
+
+    </div><!-- /cd-main -->
+
+    <!-- ══════════ ASIDE: PRICE + ENQUIRY ══════════ -->
+    <aside class="cd-aside" aria-label="Price and enquiry">
+      <div class="cd-enquiry" id="enquiry">
+
+        <div class="cd-enquiry__price-block">
+          <div class="cd-enquiry__price"><?= $e(sdRand((float) $car['price'])) ?></div>
+          <a class="cd-enquiry__pm" href="#finance">
+            est. <strong data-fin-mirror><?= $e(sdRand(round($monthlyEst))) ?></strong> p/m
+            <i class="fa-solid fa-calculator" aria-hidden="true"></i>
+          </a>
+          <?php if ($isTradeViewer): ?>
+          <div class="cd-enquiry__comm" title="Visible to signed-in trade accounts only">
+            <i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i> Broker commission <strong><?= $e($commRandDisp) ?></strong>
+          </div>
+          <?php endif; ?>
+        </div>
+
+        <div class="cd-enquiry__body">
+          <div class="cd-enquiry__who">
+            <?php if (!$isPlatformCar): ?>
+            <span class="cd-avatar cd-avatar--sm">
+              <?php if ($deskRow['broker_avatar']): ?><img src="<?= $e($deskRow['broker_avatar']) ?>" alt="" width="36" height="36"><?php else: ?><?= $e($brokerInitials) ?><?php endif; ?>
+            </span>
+            <span><span class="cd-enquiry__who-label">Enquire with</span><strong><?= $e($deskRow['desk_name']) ?></strong></span>
+            <?php else: ?>
+            <span class="cd-avatar cd-avatar--sm cd-avatar--dealer"><i class="fa-solid fa-shop" aria-hidden="true"></i></span>
+            <span><span class="cd-enquiry__who-label">Goes directly to</span><strong><?= $e($car['dealer_name']) ?></strong></span>
+            <?php endif; ?>
+          </div>
+
+          <?php if (!$isAvailable): ?>
+          <div class="pub-alert pub-alert--warn">
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+            <span>This car is <?= $e($car['status']) ?>. Enquiries are paused.</span>
+          </div>
+          <a class="pub-btn pub-btn-primary pub-btn-full" href="/cars-for-sale/?make=<?= urlencode($car['make']) ?>">See similar cars</a>
           <?php else: ?>
 
-          <div id="enquiryGlobalError"
-               style="display:none;background:#fef2f2;border:1px solid #fecaca;
-                      border-radius:12px;padding:10px 12px;margin-bottom:12px;
-                      font-size:12px;color:#dc2626;"></div>
+          <div class="pub-alert pub-alert--error cd-enquiry__error" id="enquiryGlobalError" role="alert" hidden>
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i><span></span>
+          </div>
 
-          <!-- Enquiry form -->
-          <!-- v2: tracking_code now carries either the ?ref= code or the desk's
-               own tracking code. desk_slug is also posted for fallback resolution
-               in api/leads/submit.php -->
-          <form id="enquiryForm" novalidate>
-            <input type="hidden" name="csrf_token"    value="<?= htmlspecialchars($csrfToken) ?>">
-            <input type="hidden" name="tracking_code" value="<?= htmlspecialchars((string)$activeTrackingCode) ?>">
+          <form id="enquiryForm" class="cd-form" novalidate>
+            <input type="hidden" name="csrf_token"    value="<?= $e($csrfToken) ?>">
+            <input type="hidden" name="tracking_code" value="<?= $e((string) $activeTrackingCode) ?>">
             <?php if (!$isPlatformCar): ?>
-            <input type="hidden" name="desk_slug"     value="<?= htmlspecialchars($deskSlug) ?>">
+            <input type="hidden" name="desk_slug"     value="<?= $e($deskSlug) ?>">
             <?php endif; ?>
-            <input type="hidden" name="car_slug"      value="<?= htmlspecialchars($carSlug) ?>">
+            <input type="hidden" name="car_slug"      value="<?= $e($carSlug) ?>">
 
-            <label class="pub-form-label" for="buyer_name">Your name</label>
-            <input class="pub-form-input" type="text" id="buyer_name"
-                   name="buyer_name" placeholder="Thabo Nkosi" autocomplete="name" required>
-            <div class="pub-form-error" id="nameError"></div>
+            <div class="cd-form__grid">
+              <div class="pub-field">
+                <label class="pub-form-label" for="buyer_name">Name</label>
+                <input class="pub-form-input" type="text" id="buyer_name" name="buyer_name"
+                       autocomplete="name" required aria-describedby="nameError">
+                <div class="pub-form-error" id="nameError"></div>
+              </div>
+              <div class="pub-field">
+                <label class="pub-form-label" for="buyer_phone">Phone</label>
+                <input class="pub-form-input" type="tel" id="buyer_phone" name="buyer_phone"
+                       inputmode="tel" autocomplete="tel" placeholder="082 000 0000" required aria-describedby="phoneError">
+                <div class="pub-form-error" id="phoneError"></div>
+              </div>
+            </div>
 
-            <label class="pub-form-label" for="buyer_phone">Phone number</label>
-            <input class="pub-form-input" type="tel" id="buyer_phone"
-                   name="buyer_phone" placeholder="082 000 0000"
-                   autocomplete="tel" required>
-            <div class="pub-form-error" id="phoneError"></div>
+            <div class="pub-field">
+              <label class="pub-form-label" for="buyer_email">Email <small>(optional)</small></label>
+              <input class="pub-form-input" type="email" id="buyer_email" name="buyer_email"
+                     autocomplete="email" inputmode="email" aria-describedby="emailError">
+              <div class="pub-form-error" id="emailError"></div>
+            </div>
 
-            <label class="pub-form-label" for="buyer_email">
-              Email <span style="font-weight:400;font-size:10px;color:#94a3b8;">(optional)</span>
-            </label>
-            <input class="pub-form-input" type="email" id="buyer_email"
-                   name="buyer_email" placeholder="you@example.com" autocomplete="email">
+            <fieldset class="pub-field cd-form__intent">
+              <legend class="pub-form-label">When are you looking to buy?</legend>
+              <div class="cd-intent">
+                <?php foreach (['within_30d' => 'This month', 'one_to_3mo' => '1–3 months', 'browsing' => 'Just looking'] as $val => $label): ?>
+                <label class="cd-intent__opt">
+                  <input type="radio" name="buyer_intent" value="<?= $val ?>" <?= $val === 'browsing' ? 'checked' : '' ?>>
+                  <span><?= $label ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+            </fieldset>
 
-            <label class="pub-form-label" for="buyer_intent">When are you looking to buy?</label>
-            <select class="pub-form-input" id="buyer_intent" name="buyer_intent">
-              <option value="within_30d">🔥 Within the next 30 days</option>
-              <option value="one_to_3mo">🗓️ 1–3 months</option>
-              <option value="browsing" selected>👀 Just browsing</option>
-            </select>
-
-            <label class="pub-form-label" for="buyer_message">
-              Message <span style="font-weight:400;font-size:10px;color:#94a3b8;">(optional)</span>
-            </label>
-            <textarea class="pub-form-input" id="buyer_message"
-                      name="buyer_message" rows="3"
-                      placeholder="Any specific questions…"></textarea>
+            <details class="cd-form__msg">
+              <summary><i class="fa-solid fa-plus" aria-hidden="true"></i> Add a message</summary>
+              <label class="sr-only" for="buyer_message">Message</label>
+              <textarea class="pub-form-input" id="buyer_message" name="buyer_message" rows="3"
+                        placeholder="Is it still available? Can I book a test drive on Saturday?"></textarea>
+            </details>
 
             <div class="pub-form-consent">
-              <input type="checkbox" id="consent_given" name="consent_given" value="1">
+              <input type="checkbox" id="consent_given" name="consent_given" value="1" aria-describedby="consentError">
               <label for="consent_given">
-                I consent to my details being shared with the dealer and listing broker.
-                <a href="/privacy" target="_blank" style="color:#0f4c9e;">Privacy Policy</a>.
+                Share my details with the dealer<?= $isPlatformCar ? '' : ' and listing broker' ?> for this car.
+                <a href="/privacy" target="_blank" rel="noopener">Privacy policy</a>
               </label>
             </div>
             <div class="pub-form-error" id="consentError"></div>
 
-            <button class="pub-form-submit" id="enquirySubmit" type="submit">
-              <i class="fa-solid fa-paper-plane"></i> Send Enquiry
+            <button class="pub-btn pub-btn-primary pub-btn-lg pub-btn-full cd-form__submit" id="enquirySubmit" type="submit">
+              <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send enquiry
             </button>
 
-            <div class="pub-form-or">or</div>
-
-            <?php
-            $waMsg = "Hi, I'm interested in the {$carTitle} listed on SalesDesk for {$priceDisp}. {$shareUrl}";
-            ?>
-            <a href="https://wa.me/?text=<?= urlencode($waMsg) ?>"
-               target="_blank" rel="noopener" class="pub-form-whatsapp">
-              <i class="fa-brands fa-whatsapp"></i> WhatsApp enquiry
+            <?php if ($waLink): ?>
+            <a href="<?= $e($waLink) ?>" target="_blank" rel="noopener" class="pub-btn pub-btn-ghost pub-btn-full cd-form__wa">
+              <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> Chat on WhatsApp
             </a>
+            <?php endif; ?>
           </form>
 
-          <div id="enquirySuccess" style="display:none;">
-            <div class="pub-enquiry-success">
-              <div class="pub-enquiry-success__icon">
-                <i class="fa-solid fa-check"></i>
-              </div>
-              <div style="font-family:'Sora',sans-serif;font-size:16px;font-weight:700;
-                          margin-bottom:8px;color:#15803d;">Enquiry sent!</div>
-              <p style="font-size:13px;color:#64748b;line-height:1.65;">
-                <?= htmlspecialchars($brokerDisplayName) ?> will be in touch soon.
-              </p>
-              <p style="font-size:11px;color:#94a3b8;margin-top:8px;">
-                Check your email for a confirmation.
-              </p>
-            </div>
+          <div class="cd-success" id="enquirySuccess" tabindex="-1" hidden>
+            <span class="cd-success__icon"><i class="fa-solid fa-check" aria-hidden="true"></i></span>
+            <h3 class="cd-success__title">Enquiry sent</h3>
+            <p><?= $e($brokerDisplayName === 'SalesDesk' ? $car['dealer_name'] : $brokerDisplayName) ?> will contact you shortly. A confirmation is on its way to your email.</p>
+            <a class="pub-link" href="/cars-for-sale/?make=<?= urlencode($car['make']) ?>">Keep browsing <?= $e($car['make']) ?> <i class="fa-solid fa-arrow-right"></i></a>
           </div>
 
           <?php endif; ?>
 
-          <!-- Trust signals -->
-          <div class="pub-enquiry-trust">
-            <span><i class="fa-solid fa-lock"></i> Your details are safe</span>
-            <span><i class="fa-solid fa-shield-halved"></i> POPIA compliant</span>
-            <span><i class="fa-solid fa-link"></i> Attribution protected</span>
-          </div>
-
+          <ul class="cd-trust">
+            <li><i class="fa-solid fa-lock" aria-hidden="true"></i> Details only go to this car’s seller</li>
+            <li><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> POPIA compliant · no cost to you</li>
+          </ul>
         </div>
       </div>
+    </aside>
+
+  </div><!-- /cd-layout -->
+
+  <?php if (!empty($relatedCars)): ?>
+  <section class="pub-section cd-related" aria-labelledby="cdRelTitle">
+    <div class="pub-section__head">
+      <div>
+        <span class="pub-eyebrow">Same dealership</span>
+        <h2 class="pub-section__title pub-section__title--sm" id="cdRelTitle">More from <?= $e($car['dealer_name']) ?></h2>
+      </div>
+      <a class="pub-link pub-section__link" href="/cars-for-sale/?dealer=<?= (int) $car['dealer_id'] ?>">View all <i class="fa-solid fa-arrow-right"></i></a>
     </div>
-  </div><!-- /right col -->
+    <div class="vc-grid vc-grid--4">
+      <?php foreach ($relatedCars as $rel) {
+          $rel['desk_slug'] = $rel['rel_desk_slug'] ?? null;
+          $relRef = ($activeTrackingCode && $activeTrackingCode !== ($rel['rel_tracking_code'] ?? null)) ? (string) $activeTrackingCode : '';
+          echo sdVehicleCard($rel + ['dealer_name' => $car['dealer_name'], 'dealer_city' => $car['dealer_city'], 'dealer_province' => $car['dealer_province']], [
+              'ref'        => $relRef,
+              'wishlisted' => in_array((int) $rel['id'], $wishIds, true),
+          ]);
+      } ?>
+    </div>
+  </section>
+  <?php endif; ?>
 
-</div><!-- /pub-detail-grid -->
+</div><!-- /cd -->
 
-<!-- Related cars -->
-<?php if (!empty($relatedCars)): ?>
-<section class="pub-related pub-reveal">
-  <div class="pub-related__title">More from <?= htmlspecialchars($car['dealer_name']) ?></div>
-  <div class="pub-related-grid">
-    <?php foreach ($relatedCars as $rel):
-      $relImgs  = json_decode($rel['image_urls'] ?? '[]', true) ?: [];
-      $relThumb = $relImgs[0] ?? null;
-      // Related car URL: use that car's first-listed desk slug
-      $relUrl = '/cars-for-sale/' . htmlspecialchars($rel['rel_desk_slug']) . '/'
-              . htmlspecialchars($rel['car_slug']) . '/';
-      // Carry ?ref= forward if we have one (sharing broker gets credit on related clicks too)
-      if ($activeTrackingCode && $activeTrackingCode !== $rel['rel_tracking_code']) {
-          $relUrl .= '?ref=' . urlencode($activeTrackingCode);
-      }
-    ?>
-    <a href="<?= $relUrl ?>" class="pub-rel-card">
-      <div class="pub-rel-card__img">
-        <?php if ($relThumb): ?>
-        <img src="<?= htmlspecialchars($relThumb) ?>"
-             alt="<?= htmlspecialchars("{$rel['year']} {$rel['make']} {$rel['model']}") ?>"
-             loading="lazy">
-        <?php else: ?>
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;
-                    font-size:28px;color:#e2e8f0;background:#f3f4f8;">
-          <i class="fa-solid fa-car-side"></i>
-        </div>
-        <?php endif; ?>
-      </div>
-      <div class="pub-rel-card__body">
-        <div class="pub-rel-card__name">
-          <?= htmlspecialchars("{$rel['year']} {$rel['make']} {$rel['model']}") ?>
-        </div>
-        <div class="pub-rel-card__price">
-          R <?= number_format((float)$rel['price'], 0, '.', ' ') ?>
-        </div>
-        <div class="pub-rel-card__meta">
-          <?= htmlspecialchars(ucfirst($rel['condition_type'])) ?>
-          <?php if ($rel['mileage']): ?>
-          · <?= number_format((int)$rel['mileage']) ?> km
-          <?php endif; ?>
-        </div>
-      </div>
-    </a>
-    <?php endforeach; ?>
+<?php if ($isAvailable): ?>
+<!-- ══════════ STICKY MOBILE CTA ══════════ -->
+<div class="cd-sticky" data-sticky-cta data-sticky-cta-target="#enquiry" data-sticky-cta-after=".cd-head">
+  <div class="cd-sticky__price">
+    <strong><?= $e(sdRand((float) $car['price'])) ?></strong>
+    <span>est. <span data-fin-mirror><?= $e(sdRand(round($monthlyEst))) ?></span> p/m</span>
   </div>
-</section>
+  <?php if ($waLink): ?>
+  <a class="pub-btn pub-btn-whatsapp pub-btn-icon" href="<?= $e($waLink) ?>" target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
+    <i class="fa-brands fa-whatsapp" aria-hidden="true"></i>
+  </a>
+  <?php endif; ?>
+  <button class="pub-btn pub-btn-primary" type="button" data-enquiry-focus data-enquiry-hide-on-success>Enquire now</button>
+</div>
 <?php endif; ?>
-
-<style>
-/* Two-column detail grid */
-  .pub-detail-grid {
-    margin-inline: clamp(16px, 4vw, 48px);
-    padding-inline: clamp(12px, 2vw, 24px);  
-  }
-
-  /* ═══════════════════════════════════════════
-     Gallery hero — main image + side panel
-     (overrides public.css §5 for this page only)
-     ═══════════════════════════════════════════ */
-  .pub-gallery__hero {
-    display: flex;
-    gap: 10px;
-    align-items: stretch;
-  }
-
-  .pub-gallery__main {
-    flex: 1 1 68%;
-    min-width: 0;
-    height: 460px;
-    background: #08143c;
-  }
-
-  /* Show the whole car — no cropping. Letterboxes on mismatched
-     aspect ratios instead of zooming in via cover. */
-  .pub-gallery__main img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-
-  .pub-gallery__main:hover img { transform: none; }
-
-  .pub-gallery__side {
-    flex: 0 0 28%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .pub-gallery__side-item {
-    position: relative;
-    flex: 1;
-    min-height: 0;
-    border-radius: var(--r-xl, 16px);
-    overflow: hidden;
-    cursor: pointer;
-    box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.1));
-  }
-
-  .pub-gallery__side-item img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform .3s ease;
-  }
-
-  .pub-gallery__side-item:hover img { transform: scale(1.04); }
-
-  .pub-gallery__side-btn {
-    position: absolute;
-    right: 10px;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    border: none;
-    background: rgba(255,255,255,.9);
-    backdrop-filter: blur(4px);
-    color: var(--text, #1e293b);
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,.18);
-    transition: background .15s, transform .15s;
-  }
-
-  .pub-gallery__side-btn:hover { background: #fff; transform: scale(1.06); }
-  .pub-gallery__side-btn--up   { top: 10px; }
-  .pub-gallery__side-btn--down { bottom: 10px; }
-
-  @media (max-width: 960px) {
-    .pub-gallery__hero { flex-direction: column; }
-    .pub-gallery__side { flex-direction: row; height: 140px; flex: none; }
-    .pub-gallery__main { height: 300px; }
-  }
-
-  @media (max-width: 768px) {
-    .pub-gallery__main { height: 260px; }
-  }
-
-  /* ═══════════════════════════════════════════
-     Desktop-only refinements (>960px). Mobile keeps
-     the stacked layout above untouched.
-
-     The main panel now uses the same box-fill pattern
-     as the side items (width:100%; height:100%; fills
-     its flex slot completely) — just at a larger flex
-     ratio — instead of a separate shrink-to-content
-     display mode. The side panel stays visibly smaller,
-     as it should.
-     ═══════════════════════════════════════════ */
-  @media (min-width: 961px) {
-    .pub-gallery__main {
-      flex: 7 1 0%;
-    }
-
-    .pub-gallery__main img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-
-    .pub-gallery__side {
-      flex: 3 1 0%;
-      min-width: 260px;
-    }
-
-    /* Center the up/down controls on the panel instead of
-       hugging the right edge. */
-    .pub-gallery__side-btn {
-      left: 50%;
-      right: auto;
-      transform: translateX(-50%);
-    }
-
-    .pub-gallery__side-btn:hover { transform: translateX(-50%) scale(1.06); }
-  }
-
-  /* Variant line under the car name */
-  .pub-car-header__variant {
-    font-family: var(--sans, 'DM Sans', sans-serif);
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--muted, #64748b);
-    margin: 4px 0 8px;
-  }
-
-  .pub-related {
-    margin-inline: clamp(16px, 4vw, 48px);
-    padding-inline: clamp(12px, 2vw, 24px);   
-  }
-
-  /* ═══════════════════════════════════════════
-     UX-1: Specifications / Features / History tabs
-     ═══════════════════════════════════════════ */
-  .pub-tabs {
-    background: var(--white, #fff);
-    border: 1px solid var(--border, #e2e8f0);
-    border-radius: var(--r-lg, 14px);
-    box-shadow: 0 2px 12px rgba(15,76,158,.06);
-    margin-bottom: 24px;
-    overflow: hidden;
-  }
-
-  .pub-tabs__nav {
-    display: flex;
-    gap: 2px;
-    padding: 6px;
-    background: var(--bg, #f3f4f8);
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .pub-tabs__nav::-webkit-scrollbar { display: none; }
-
-  .pub-tabs__btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    flex: 1;
-    justify-content: center;
-    white-space: nowrap;
-    padding: 10px 16px;
-    border: none;
-    background: transparent;
-    border-radius: 10px;
-    font-family: var(--sans, 'DM Sans', sans-serif);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--muted, #64748b);
-    cursor: pointer;
-    transition: background .15s, color .15s;
-  }
-
-  .pub-tabs__btn:hover { color: var(--p, #0f4c9e); }
-
-  .pub-tabs__btn.active {
-    background: var(--white, #fff);
-    color: var(--p, #0f4c9e);
-    box-shadow: 0 1px 4px rgba(0,0,0,.08);
-  }
-
-  .pub-tabs__count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--p-light, #eff4ff);
-    color: var(--p, #0f4c9e);
-    font-size: 10px;
-    font-weight: 700;
-    font-family: var(--mono, monospace);
-  }
-  .pub-tabs__btn.active .pub-tabs__count { background: var(--p, #0f4c9e); color: #fff; }
-  .pub-tabs__count--warn { background: #fef2f2; color: #dc2626; }
-
-  .pub-tabs__panel { display: none; padding: 20px; }
-  .pub-tabs__panel.active { display: block; }
-
-  /* Feature groups */
-  .pub-feat-groups {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px 28px;
-  }
-  .pub-feat-group__title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--font-d, 'Sora', sans-serif);
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text, #1e293b);
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border, #e2e8f0);
-  }
-  .pub-feat-group__title i { color: var(--p, #0f4c9e); font-size: 12px; }
-  .pub-feat-group__count {
-    margin-left: auto;
-    font-size: 10px;
-    color: var(--faint, #94a3b8);
-    font-family: var(--mono, monospace);
-  }
-  .pub-feat-list { list-style: none; display: flex; flex-direction: column; gap: 7px; }
-  .pub-feat-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 12.5px;
-    color: var(--text2, #3d4663);
-    line-height: 1.4;
-  }
-  .pub-feat-item i { color: var(--green, #15803d); font-size: 10px; margin-top: 3px; flex-shrink: 0; }
-
-  .pub-feat-empty {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    background: var(--bg, #f3f4f8);
-    border: 1px dashed var(--border2, #cbd5e1);
-    border-radius: 12px;
-    padding: 16px;
-    font-size: 13px;
-    color: var(--muted, #64748b);
-    line-height: 1.6;
-  }
-  .pub-feat-empty i { color: var(--p, #0f4c9e); margin-top: 2px; }
-
-  /* History & warranty */
-  .pub-history-alert {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    border-radius: 12px;
-    padding: 14px 16px;
-    margin-bottom: 16px;
-    font-size: 13px;
-    color: #991b1b;
-    line-height: 1.55;
-  }
-  .pub-history-alert i { color: #dc2626; font-size: 16px; margin-top: 1px; flex-shrink: 0; }
-
-  .pub-history-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 11.5px;
-    color: var(--faint, #94a3b8);
-    margin-top: 14px;
-    line-height: 1.6;
-  }
-  .pub-history-note i { margin-top: 2px; flex-shrink: 0; }
-
-  @media (max-width: 640px) {
-    .pub-feat-groups { grid-template-columns: 1fr; }
-    .pub-tabs__btn { padding: 10px 12px; font-size: 12px; }
-    .pub-tabs__panel { padding: 16px; }
-  }
-</style>
-
-<script>
-(function () {
-  'use strict';
-  var root = document.getElementById('specTabs');
-  if (!root) return;
-
-  var btns   = Array.from(root.querySelectorAll('.pub-tabs__btn'));
-  var panels = Array.from(root.querySelectorAll('.pub-tabs__panel'));
-
-  btns.forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var target = btn.getAttribute('data-tab');
-
-      btns.forEach(function (b) {
-        var isActive = b === btn;
-        b.classList.toggle('active', isActive);
-        b.setAttribute('aria-selected', isActive ? 'true' : 'false');
-      });
-
-      panels.forEach(function (p) {
-        p.classList.toggle('active', p.getAttribute('data-panel') === target);
-      });
-    });
-  });
-})();
-</script>
-
-<script>
-/* Gallery hero side-panel (up/down nav) — syncs with public.js's
-   thumb-click logic rather than duplicating it. Only active when
-   the side panel was rendered (>2 images). */
-(function () {
-  'use strict';
-  var thumbs = Array.from(document.querySelectorAll('.pub-gallery__thumb'));
-  if (thumbs.length < 3) return;
-
-  var images = thumbs.map(function (t) {
-    return t.getAttribute('data-src') || t.querySelector('img').src;
-  });
-
-  var sideImg1   = document.getElementById('sideImg1');
-  var sideImg2   = document.getElementById('sideImg2');
-  var sideThumb1 = document.getElementById('sideThumb1');
-  var sideThumb2 = document.getElementById('sideThumb2');
-  var upBtn      = document.getElementById('gallerySideUp');
-  var downBtn    = document.getElementById('gallerySideDown');
-  if (!sideImg1 || !sideImg2 || !sideThumb1 || !sideThumb2) return;
-
-  function currentIdx() {
-    var i = thumbs.findIndex(function (t) { return t.classList.contains('active'); });
-    return i === -1 ? 0 : i;
-  }
-
-  function refreshSide() {
-    var len = images.length;
-    var idx = currentIdx();
-    var i1 = (idx + 1) % len;
-    var i2 = (idx + 2) % len;
-    sideImg1.src = images[i1];
-    sideImg2.src = images[i2];
-    sideThumb1.setAttribute('data-abs', i1);
-    sideThumb2.setAttribute('data-abs', i2);
-  }
-
-  function goToAbs(idx) {
-    var len = images.length;
-    idx = ((idx % len) + len) % len;
-    thumbs[idx].click(); // reuses public.js's goTo() + active-state logic
-    setTimeout(refreshSide, 0);
-  }
-
-  thumbs.forEach(function (t) {
-    t.addEventListener('click', function () { setTimeout(refreshSide, 0); });
-  });
-
-  sideThumb1.addEventListener('click', function () {
-    goToAbs(parseInt(sideThumb1.getAttribute('data-abs') || '1', 10));
-  });
-  sideThumb2.addEventListener('click', function () {
-    goToAbs(parseInt(sideThumb2.getAttribute('data-abs') || '2', 10));
-  });
-
-  if (upBtn) upBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    goToAbs(currentIdx() - 1);
-  });
-  if (downBtn) downBtn.addEventListener('click', function (e) {
-    e.stopPropagation();
-    goToAbs(currentIdx() + 1);
-  });
-
-  refreshSide();
-})();
-</script>
 
 <?php
 $pageContent = ob_get_clean();

@@ -45,6 +45,20 @@
  *   /cars-for-sale/ instead of /cars-for-sale/, matching the route rename in
  *   .htaccess and cars-for-sale/index.php.
  *
+ * PUBLIC UX/UI OVERHAUL (this pass):
+ *   HOME-1  Page rebuilt: ink hero with a vertical search card, body-type
+ *           tiles, latest listings on the shared vehicle card
+ *           (views/partials/vehicle-card.php), "continue browsing" rails
+ *           that only render when the visitor has activity, affordability
+ *           calculator + budget tiles, condition cards, how-it-works /
+ *           trust band, provinces, top desks, news, trade CTA band.
+ *   HOME-2  ALL inline <style>, <script>, style="" and onclick="" removed.
+ *           Page CSS: assets/css/home.css + assets/css/hero-search.css.
+ *           Page JS:  assets/js/home.js (hero search) — loaded via $extraJs.
+ *   HOME-3  Hero search make list now comes from live inventory (with
+ *           counts) instead of a hardcoded JS array; condition + body
+ *           type counts added (one grouped query each).
+ *
  * Remaining TODOs left as inline comments:
  *   - Top SalesDesks: replace static cards with live query
  */
@@ -136,11 +150,12 @@ try {
 try {
     $featuredStmt = $pdo->prepare("
         SELECT
-            c.id, c.slug AS car_slug, c.make, c.model, c.year, c.price,
+            c.id, c.slug AS car_slug, c.make, c.model, c.variant, c.year, c.price,
             c.mileage, c.condition_type, c.body_type, c.fuel_type,
             c.transmission, c.drivetrain, c.image_urls,
             d.verification_status AS dealer_verified,
             d.company_name        AS dealer_name,
+            a.city                AS dealer_city,
             a.province            AS dealer_province,
             first_desk.desk_slug,
             first_desk.desk_name,
@@ -215,7 +230,7 @@ try {
     $recentStmt = $pdo->prepare("
         SELECT
             c.id, c.slug AS car_slug, c.make, c.model, c.year, c.price,
-            c.mileage, c.image_urls,
+            c.mileage, c.image_urls, c.condition_type, c.fuel_type,
             d.company_name AS dealer_name,
             first_desk.desk_slug
         FROM car_views cv
@@ -258,7 +273,7 @@ try {
         $wishStmt = $pdo->prepare("
             SELECT
                 c.id, c.slug AS car_slug, c.make, c.model, c.year, c.price,
-                c.mileage, c.image_urls,
+                c.mileage, c.image_urls, c.condition_type, c.fuel_type,
                 d.company_name AS dealer_name,
                 first_desk.desk_slug
             FROM cars c
@@ -289,6 +304,26 @@ try {
 } catch (Throwable) {
     $wishlistCars = [];
 }
+
+// ── Live: inventory facets for the hero search + tiles (HOME-3) ──
+// Same base filter as $totalCars (status=active + dealer active) so
+// every number shown matches what /cars-for-sale/ renders on click.
+$facetBase = "FROM cars c JOIN dealers d ON d.id = c.dealer_id WHERE c.status = 'active' AND d.is_active = 1";
+try {
+    $makeCounts = $pdo->query("SELECT c.make, COUNT(*) AS cnt {$facetBase} GROUP BY c.make ORDER BY c.make")
+                      ->fetchAll(PDO::FETCH_KEY_PAIR);
+} catch (Throwable) { $makeCounts = []; }
+try {
+    $conditionCounts = $pdo->query("SELECT c.condition_type, COUNT(*) {$facetBase} GROUP BY c.condition_type")
+                           ->fetchAll(PDO::FETCH_KEY_PAIR);
+} catch (Throwable) { $conditionCounts = []; }
+try {
+    $bodyCounts = $pdo->query("SELECT c.body_type, COUNT(*) {$facetBase} AND c.body_type IS NOT NULL GROUP BY c.body_type")
+                      ->fetchAll(PDO::FETCH_KEY_PAIR);
+} catch (Throwable) { $bodyCounts = []; }
+try {
+    $verifiedDealers = (int) $pdo->query("SELECT COUNT(*) FROM dealers WHERE is_active = 1 AND verification_status = 'verified'")->fetchColumn();
+} catch (Throwable) { $verifiedDealers = 0; }
 
 // ── Live: Saved Searches ────────────────────────────────────────
 try {
@@ -330,63 +365,37 @@ try {
 
 // ── Province display data ──────────────────────────────────────
 $provinces = [
-    'Gauteng'       => ['abbr' => 'GP', 'icon' => 'fa-city'],
-    'Western Cape'  => ['abbr' => 'WC', 'icon' => 'fa-water'],
-    'KwaZulu-Natal' => ['abbr' => 'KZN','icon' => 'fa-umbrella-beach'],
-    'Eastern Cape'  => ['abbr' => 'EC', 'icon' => 'fa-mountain'],
-    'Limpopo'       => ['abbr' => 'LP', 'icon' => 'fa-tree'],
-    'Mpumalanga'    => ['abbr' => 'MP', 'icon' => 'fa-cloud-sun'],
-    'North West'    => ['abbr' => 'NW', 'icon' => 'fa-diamond'],
-    'Free State'    => ['abbr' => 'FS', 'icon' => 'fa-wheat-awn'],
-    'Northern Cape' => ['abbr' => 'NC', 'icon' => 'fa-sun'],
+    'Gauteng'       => 'Johannesburg · Pretoria',
+    'Western Cape'  => 'Cape Town · Stellenbosch',
+    'KwaZulu-Natal' => 'Durban · Pietermaritzburg',
+    'Eastern Cape'  => 'Gqeberha · East London',
+    'Limpopo'       => 'Polokwane · Tzaneen',
+    'Mpumalanga'    => 'Mbombela · Witbank',
+    'North West'    => 'Rustenburg · Mahikeng',
+    'Free State'    => 'Bloemfontein · Welkom',
+    'Northern Cape' => 'Kimberley · Upington',
 ];
 
-// ── Prov abbreviation helper ───────────────────────────────────
-$provAbbr = [
-    'Gauteng'       => 'GP',  'Western Cape'  => 'WC',  'KwaZulu-Natal' => 'KZN',
-    'Eastern Cape'  => 'EC',  'Limpopo'       => 'LP',  'Mpumalanga'    => 'MP',
-    'North West'    => 'NW',  'Free State'    => 'FS',  'Northern Cape' => 'NC',
+// ── Body-type tiles (label => filter value) ───────────────────
+$bodyTiles = [
+    'SUV'         => 'SUVs & 4×4s',
+    'Bakkie'      => 'Bakkies',
+    'Hatchback'   => 'Hatchbacks',
+    'Sedan'       => 'Sedans',
+    'Crossover'   => 'Crossovers',
+    'MPV'         => 'Family & MPV',
+    'Coupe'       => 'Coupes',
+    'Station Wagon' => 'Wagons',
 ];
 
-// ── Fuel icon helper ───────────────────────────────────────────
-/**
- * BUG FIX: this used an exact match() against strtolower($fuel), but the
- * real fuel_type values written by app/dealer/car-upload.php's wizard
- * carry parenthetical suffixes — 'Plug-in Hybrid (PHEV)', 'LPG (Autogas)',
- * 'CNG (Natural Gas)', 'Flex Fuel (E85/Ethanol)' — none of which equal
- * the old bare 'plug-in hybrid' case, so PHEV cars silently fell through
- * to the generic pump icon instead of the intended leaf icon. Switched to
- * str_contains() substring matching, same approach used in
- * CsvImporter::normalizeFuelType(), so every real value classifies
- * correctly regardless of the parenthetical suffix.
- */
-function homeFuelIcon(string $fuel): string {
-    $v = strtolower($fuel);
-    return match (true) {
-        str_contains($v, 'electric')            => 'fa-bolt',
-        str_contains($v, 'hybrid')               => 'fa-leaf',
-        str_contains($v, 'hydrogen')              => 'fa-droplet',
-        str_contains($v, 'diesel')                => 'fa-oil-can',
-        str_contains($v, 'lpg') || str_contains($v, 'cng') || str_contains($v, 'autogas') || str_contains($v, 'natural gas')
-                                                   => 'fa-fire-flame-simple',
-        default                                   => 'fa-gas-pump',
-    };
-}
-
-// ── News read-time helper (NEWS-1) ──────────────────────────────
-// Mirrors news/index.php + news/article.php's articleReadTime() /
-// newsReadTime() so the estimate is consistent site-wide.
-function homeNewsReadTime(string $content): string {
-    $words = str_word_count(strip_tags($content));
-    return max(1, (int) ceil($words / 220)) . ' min read';
-}
-
-// ── News thumbnail fallback (NEWS-1) ────────────────────────────
-// Same Unsplash fallback used by news/index.php's newsThumb().
-function homeNewsThumb(array $post): string {
-    return $post['featured_image_url']
-        ?: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=1200&auto=format&fit=crop';
-}
+// ── Budget tiles ──────────────────────────────────────────────
+$budgetTiles = [
+    ['Under R150k',   null,    150000, 'First car, city runabout'],
+    ['R150k – R300k', 150000,  300000, 'Hatchbacks & compact SUVs'],
+    ['R300k – R500k', 300000,  500000, 'Family SUVs & bakkies'],
+    ['R500k – R800k', 500000,  800000, 'Premium & double-cab'],
+    ['R800k +',       800000,  null,   'Luxury & performance'],
+];
 
 // ── Desk avatar initials ───────────────────────────────────────
 function deskInitials(array $desk): string {
@@ -396,104 +405,43 @@ function deskInitials(array $desk): string {
     return $init ?: strtoupper(substr($desk['display_name'], 0, 2));
 }
 
-// ── Gradient pool for desk avatars ────────────────────────────
-$gradients = [
-    'linear-gradient(135deg,#3b82f6,#1d4ed8)',
-    'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-    'linear-gradient(135deg,#10b981,#047857)',
-    'linear-gradient(135deg,#f59e0b,#b45309)',
-    'linear-gradient(135deg,#ef4444,#b91c1c)',
-];
-
-/**
- * Render a single activity-tab vehicle card (Recently Viewed / Wishlist).
- */
-function renderActivityCard(array $car): string {
-    $imgs   = json_decode($car['image_urls'] ?? '[]', true) ?: [];
-    $thumb  = $imgs[0] ?? null;
-    // MIGRATION 0012 SYNC FIX: desk_slug can now be null/empty (car isn't
-    // on any broker's desk yet). Route to the platform-attributed
-    // /cars-for-sale/car/{slug}/ URL in that case instead of building a
-    // broken /cars-for-sale//{slug}/ link — same branch cars-for-sale/index.php
-    // already uses for its own card links ($hasDesk / $detailUrl there).
-    $carUrl = !empty($car['desk_slug'])
-        ? '/cars-for-sale/' . htmlspecialchars($car['desk_slug']) . '/' . htmlspecialchars($car['car_slug']) . '/'
-        : '/cars-for-sale/car/' . htmlspecialchars($car['car_slug']) . '/';
-
-    ob_start();
-    ?>
-    <a href="<?= $carUrl ?>" class="sd-vcard">
-      <div class="sd-vcard__img-wrap">
-        <?php if ($thumb): ?>
-        <img class="sd-vcard__img"
-             src="<?= htmlspecialchars($thumb) ?>"
-             alt="<?= htmlspecialchars("{$car['year']} {$car['make']} {$car['model']}") ?>"
-             loading="lazy">
-        <?php else: ?>
-        <div class="sd-vcard__img-placeholder"><i class="fa-solid fa-car-side"></i></div>
-        <?php endif; ?>
-        <span class="sd-vcard__year"><?= (int)$car['year'] ?></span>
-        <?php if ($car['mileage']): ?>
-        <span class="sd-vcard__km">
-          <i class="fa-solid fa-road" style="color:#94a3b8;margin-right:3px;"></i>
-          <?= number_format((int)$car['mileage']) ?> km
-        </span>
-        <?php endif; ?>
-      </div>
-      <div class="sd-vcard__body">
-        <div class="sd-vcard__top">
-          <div>
-            <div class="sd-vcard__name">
-              <?= htmlspecialchars("{$car['make']} {$car['model']}") ?>
-            </div>
-            <div class="sd-vcard__dealer">
-              <i class="fa-regular fa-building"></i> <?= htmlspecialchars($car['dealer_name']) ?>
-            </div>
-          </div>
-          <div class="sd-vcard__price">
-            R <?= number_format((float)$car['price'], 0, '.', '&nbsp;') ?>
-          </div>
-        </div>
-      </div>
-    </a>
-    <?php
-    return ob_get_clean();
+// ── News helpers (NEWS-1) — mirror news/index.php ───────────────
+function homeNewsReadTime(string $content): string {
+    $words = str_word_count(strip_tags($content));
+    return max(1, (int) ceil($words / 220)) . ' min read';
+}
+function homeNewsThumb(array $post): string {
+    return $post['featured_image_url']
+        ?: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=1200&auto=format&fit=crop';
 }
 
+require_once __DIR__ . '/views/partials/vehicle-card.php';
+require_once __DIR__ . '/views/partials/body-type-icon.php';
+
+$wishIds     = array_map('intval', $wishlistIds ?? []);
+$hasActivity = !empty($recentlyViewed) || !empty($wishlistCars) || !empty($savedSearches);
+$fmtTotal    = number_format($totalCars);
+
 // ── Page meta ──────────────────────────────────────────────────
-$pageTitle     = 'Browse ' . number_format($totalCars) . ' New & Used Cars for Sale in South Africa | SalesDesk';
-$ogTitle       = 'Browse ' . number_format($totalCars) . ' New & Used Cars Across South Africa | SalesDesk';
-$ogDescription = 'Browse ' . number_format($totalCars) . ' new and used cars for sale across South Africa. '.
-                   'Compare prices, mileage, specs, and finance options all in one place.';
-$canonicalUrl  = (defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za') . '/';
+$siteUrl       = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
+$pageTitle     = 'New & Used Cars for Sale in South Africa | ' . $fmtTotal . ' Listings | SalesDesk';
+$ogTitle       = 'Browse ' . $fmtTotal . ' New & Used Cars Across South Africa | SalesDesk';
+$ogDescription = 'Browse ' . $fmtTotal . ' new and used cars for sale from verified dealers across South Africa. '
+               . 'Compare prices, mileage, specs and finance — then deal with a broker who is paid to help.';
+$canonicalUrl  = $siteUrl . '/';
+$ogImage       = $siteUrl . '/assets/img/hero.jpg';
 $layoutVariant  = 'wide';
 $showBreadcrumb = false;
 $shareUrl       = $canonicalUrl;
-$shareTitle     = 'Browse ' . number_format($totalCars) . ' New & Used Cars for Sale in South Africa | SalesDesk';
+$shareTitle     = $ogTitle;
+$hideNavSearch  = true;          // the hero search owns this job
+$includeBrowseCss     = false;
+$includeHowItWorksCss = false;
 
-// og:image — reuse the hero image already loaded for every visitor
-// (see .sd-hero's background-image further down); no new asset
-// request needed for the share preview.
-$ogImage = (defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za') . '/assets/img/hero.jpg';
-
-/**
- * PERF FIX: home.css defines the hero, search card, shop cards, and
- * vehicle grid — all above-the-fold homepage markup. It used to be
- * <link>'d from inside $pageContent (mid-<body>), which meant the
- * browser painted all of that markup unstyled first, then re-flowed
- * once the parser finally reached the tag and fetched the file.
- *
- * layout-public.php renders $extraCss inside <head>, right alongside
- * global.css / public.css / browse.css (see its own CSS-load-order
- * comment). Using that hook here means home.css is requested in
- * parallel with the rest of the critical CSS, before first paint,
- * instead of being discovered after unstyled content is already on
- * screen. Preloaded too, matching the pattern layout-public.php
- * already uses for global.css / public.css.
- */
 $assetVersion = $assetVersion ?? date('Ymd');
-$extraCss     = '<link rel="preload" as="style" href="/assets/css/home.css?v=' . $assetVersion . '">' . "\n"
+$extraCss     = '<link rel="stylesheet" href="/assets/css/hero-search.css?v=' . $assetVersion . '">' . "\n"
               . '<link rel="stylesheet" href="/assets/css/home.css?v=' . $assetVersion . '">' . "\n";
+$extraJs      = ['/assets/js/home.js'];
 
 ob_start();
 ?>
@@ -501,422 +449,406 @@ ob_start();
 <!-- ════════════════════════════════════════════════
      HERO
      ════════════════════════════════════════════════ -->
-<section class="sd-hero">
-  <div class="sd-hero__overlay"></div>
-  <div class="sd-hero__content anim-up">
+<section class="home-hero" aria-labelledby="homeHeroTitle">
+  <div class="home-hero__glow" aria-hidden="true"></div>
+  <div class="sd-container home-hero__inner">
 
-    <h1 class="sd-hero__title">New &amp; Used Cars for Sale</h1>
-    <p class="sd-hero__sub">South Africa&rsquo;s Automotive Commerce Community.</p>
+    <div class="home-hero__copy pub-anim">
+      <span class="home-hero__live">
+        <span class="home-hero__pulse" aria-hidden="true"></span>
+        <?= $totalCars > 0 ? $fmtTotal . ' cars live right now' : 'Live listings' ?>
+      </span>
 
-    <?php include __DIR__ . '/views/partials/hero-search-widget.php'; ?>
+      <h1 class="home-hero__title" id="homeHeroTitle">
+        New &amp; used cars for sale in <span class="home-hero__accent">South&nbsp;Africa</span>
+      </h1>
+
+      <p class="home-hero__sub">
+        Every car from verified dealerships in one search — with an independent
+        broker on your side who only gets paid when you drive away happy.
+      </p>
+
+      <div class="home-hero__popular">
+        <span class="home-hero__popular-label">Popular:</span>
+        <a class="pub-chip pub-chip--on-ink" href="/cars-for-sale/?body_type[]=Bakkie">Bakkies</a>
+        <a class="pub-chip pub-chip--on-ink" href="/cars-for-sale/?price_max=200000">Under R200k</a>
+        <a class="pub-chip pub-chip--on-ink" href="/cars-for-sale/?body_type[]=SUV">SUVs</a>
+        <a class="pub-chip pub-chip--on-ink" href="/cars-for-sale/?q=Hilux">Toyota Hilux</a>
+        <a class="pub-chip pub-chip--on-ink" href="/cars-for-sale/?transmission[]=Automatic">Automatic</a>
+      </div>
+
+      <ul class="home-hero__trust">
+        <li><i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+          <span><strong><?= $verifiedDealers > 0 ? number_format($verifiedDealers) . ' verified' : 'Verified' ?></strong> dealerships</span></li>
+        <li><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+          <span><strong>POPIA</strong> compliant enquiries</span></li>
+        <li><i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i>
+          <span><strong>No fees</strong> for buyers</span></li>
+      </ul>
+    </div>
+
+    <div class="home-hero__search pub-anim pub-d2">
+      <?php include __DIR__ . '/views/partials/hero-search-widget.php'; ?>
+    </div>
 
   </div>
 </section>
 
 <!-- ════════════════════════════════════════════════
-     PICK UP WHERE YOU LEFT OFF
+     BODY TYPES
      ════════════════════════════════════════════════ -->
-<section class="sd-section ">
-  <div class="container">
-    <div class="sd-sec-header" style="margin-bottom:20px">
+<section class="pub-section pub-section--tight" aria-labelledby="homeBodyTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
       <div>
-        <span class="sd-eyebrow">
-          <i class="fa-solid fa-clock-rotate-left" style="margin-right:5px;"></i>Your activity
-        </span>
-        <h2 class="sd-sec-title">Pick up where you left off</h2>
+        <h2 class="pub-section__title pub-section__title--sm" id="homeBodyTitle">Browse by body type</h2>
+      </div>
+      <a href="/cars-for-sale/" class="pub-link pub-section__link">All <?= $fmtTotal ?> cars <i class="fa-solid fa-arrow-right"></i></a>
+    </div>
+
+    <div class="home-bodies">
+      <?php foreach ($bodyTiles as $val => $label):
+        $cnt = (int) ($bodyCounts[$val] ?? 0); ?>
+      <a class="home-body" href="/cars-for-sale/?body_type[]=<?= urlencode($val) ?>">
+        <?= sdBodyTypeIcon($val, 'home-body__icon') ?>
+        <span class="home-body__label"><?= htmlspecialchars($label) ?></span>
+        <span class="home-body__count"><?= $cnt > 0 ? number_format($cnt) . ' car' . ($cnt === 1 ? '' : 's') : 'Browse' ?></span>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<?php if ($hasActivity): ?>
+<!-- ════════════════════════════════════════════════
+     CONTINUE BROWSING (only when the visitor has activity)
+     ════════════════════════════════════════════════ -->
+<section class="pub-section pub-section--tight" aria-labelledby="homeActivityTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
+      <div>
+        <span class="pub-eyebrow"><i class="fa-solid fa-clock-rotate-left"></i> Your activity</span>
+        <h2 class="pub-section__title pub-section__title--sm" id="homeActivityTitle">Pick up where you left off</h2>
       </div>
     </div>
 
-    <div class="sd-tab-nav">
-      <button class="sd-tab-btn active" data-tab="recent">
-        <i class="fa-regular fa-eye" style="margin-right:6px;"></i>Recently Viewed
-        <?php if (!empty($recentlyViewed)): ?>
-        <span class="sd-tab-count"><?= count($recentlyViewed) ?></span>
-        <?php endif; ?>
-      </button>
-      <button class="sd-tab-btn" data-tab="wishlist">
-        <i class="fa-regular fa-heart" style="margin-right:6px;"></i>Wishlist
-        <?php if (!empty($wishlistCars)): ?>
-        <span class="sd-tab-count"><?= count($wishlistCars) ?></span>
-        <?php endif; ?>
-      </button>
-      <button class="sd-tab-btn" data-tab="saved">
-        <i class="fa-regular fa-bookmark" style="margin-right:6px;"></i>Saved Searches
-        <?php if (!empty($savedSearches)): ?>
-        <span class="sd-tab-count"><?= count($savedSearches) ?></span>
-        <?php endif; ?>
-      </button>
-    </div>
+    <div class="home-tabs" data-tabs>
+      <div class="home-tabs__list" role="tablist" aria-label="Your activity">
+        <?php
+        $actTabs = array_filter([
+            'recent'   => !empty($recentlyViewed) ? ['Recently viewed', count($recentlyViewed)] : null,
+            'wishlist' => !empty($wishlistCars)   ? ['Saved cars', count($wishlistCars)]        : null,
+            'saved'    => !empty($savedSearches)  ? ['Saved searches', count($savedSearches)]   : null,
+        ]);
+        $firstTab = array_key_first($actTabs);
+        foreach ($actTabs as $key => [$label, $cnt]): ?>
+        <button class="home-tabs__tab" type="button" role="tab" id="tab-btn-<?= $key ?>"
+                aria-controls="tab-<?= $key ?>" aria-selected="<?= $key === $firstTab ? 'true' : 'false' ?>"
+                tabindex="<?= $key === $firstTab ? '0' : '-1' ?>">
+          <?= $label ?> <span class="home-tabs__count"><?= $cnt ?></span>
+        </button>
+        <?php endforeach; ?>
+      </div>
 
-    <?php
-    $tabs = [
-        'recent'   => [
-            'icon'  => 'fa-regular fa-eye-slash',
-            'title' => 'No recently viewed vehicles yet',
-            'sub'   => 'Start browsing and vehicles you view will appear here automatically.',
-            'items' => $recentlyViewed,
-            'type'  => 'cars',
-        ],
-        'wishlist' => [
-            'icon'  => 'fa-regular fa-heart',
-            'title' => 'Your wishlist is empty',
-            'sub'   => 'Tap the heart icon on any vehicle card to save it here.',
-            'items' => $wishlistCars,
-            'type'  => 'cars',
-        ],
-        'saved'    => [
-            'icon'  => 'fa-regular fa-bookmark',
-            'title' => 'No saved searches yet',
-            'sub'   => 'Set up filters on the browse page and click "Save this search" to be notified when matching vehicles are listed.',
-            'items' => $savedSearches,
-            'type'  => 'searches',
-        ],
-    ];
-    foreach ($tabs as $key => $tab):
-    ?>
-    <div class="sd-tab-panel <?= $key === 'recent' ? 'active' : '' ?>" id="tab-<?= $key ?>">
-      <?php if (!empty($tab['items'])): ?>
-
-        <?php if ($tab['type'] === 'cars'): ?>
-        <div class="sd-vehicle-grid sd-vehicle-grid--activity">
-          <?php foreach ($tab['items'] as $car) echo renderActivityCard($car); ?>
+      <?php if (!empty($recentlyViewed)): ?>
+      <div class="home-tabs__panel" role="tabpanel" id="tab-recent" aria-labelledby="tab-btn-recent" <?= $firstTab !== 'recent' ? 'hidden' : '' ?>>
+        <div class="pub-rail home-rail">
+          <?php foreach ($recentlyViewed as $car) echo sdVehicleCard($car, ['variant' => 'compact', 'wishlisted' => in_array((int) $car['id'], $wishIds, true)]); ?>
         </div>
+      </div>
+      <?php endif; ?>
 
-        <?php else: /* saved searches */ ?>
-        <div class="sd-saved-search-list">
-          <?php foreach ($tab['items'] as $search): ?>
-          <a href="/cars-for-sale/?<?= htmlspecialchars($search['query_string'], ENT_QUOTES) ?>" class="sd-saved-search-item">
-            <span class="sd-saved-search-icon"><i class="fa-regular fa-bookmark"></i></span>
-            <span class="sd-saved-search-info">
-              <span class="sd-saved-search-label"><?= htmlspecialchars($search['label']) ?></span>
-              <span class="sd-saved-search-meta">Saved <?= htmlspecialchars(date('d M Y', strtotime($search['created_at']))) ?></span>
+      <?php if (!empty($wishlistCars)): ?>
+      <div class="home-tabs__panel" role="tabpanel" id="tab-wishlist" aria-labelledby="tab-btn-wishlist" <?= $firstTab !== 'wishlist' ? 'hidden' : '' ?>>
+        <div class="pub-rail home-rail">
+          <?php foreach ($wishlistCars as $car) echo sdVehicleCard($car, ['variant' => 'compact', 'wishlisted' => true]); ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($savedSearches)): ?>
+      <div class="home-tabs__panel" role="tabpanel" id="tab-saved" aria-labelledby="tab-btn-saved" <?= $firstTab !== 'saved' ? 'hidden' : '' ?>>
+        <div class="home-saved">
+          <?php foreach ($savedSearches as $search): ?>
+          <a href="/cars-for-sale/?<?= htmlspecialchars($search['query_string'], ENT_QUOTES) ?>" class="home-saved__item">
+            <span class="home-saved__icon"><i class="fa-regular fa-bookmark"></i></span>
+            <span class="home-saved__text">
+              <span class="home-saved__label"><?= htmlspecialchars($search['label']) ?></span>
+              <span class="home-saved__meta">Saved <?= htmlspecialchars(date('j M Y', strtotime($search['created_at']))) ?></span>
             </span>
-            <span class="sd-saved-search-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+            <i class="fa-solid fa-arrow-right home-saved__arrow" aria-hidden="true"></i>
           </a>
           <?php endforeach; ?>
         </div>
-        <?php endif; ?>
-
-      <?php else: ?>
-        <div class="sd-pickup-empty">
-          <div class="sd-pickup-empty__icon"><i class="<?= $tab['icon'] ?>"></i></div>
-          <div class="sd-pickup-empty__title"><?= htmlspecialchars($tab['title']) ?></div>
-          <div class="sd-pickup-empty__sub"><?= htmlspecialchars($tab['sub']) ?></div>
-          <a href="/cars-for-sale/" class="pub-btn pub-btn-primary" style="font-size:13px;padding:9px 20px;">
-            Browse vehicles <i class="fa-solid fa-arrow-right"></i>
-          </a>
-        </div>
+      </div>
       <?php endif; ?>
     </div>
-    <?php endforeach; ?>
+  </div>
+</section>
+<?php endif; ?>
 
-    <div class="sd-pickup-ip-note">
-      <!--<i class="fa-solid fa-circle-info"></i>
-      Activity is tracked by browser session &mdash; no sign-in required.-->
+<!-- ════════════════════════════════════════════════
+     LATEST LISTINGS
+     ════════════════════════════════════════════════ -->
+<?php if (!empty($featuredCars)): ?>
+<section class="pub-section" aria-labelledby="homeLatestTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
+      <div>
+        <span class="pub-eyebrow">Fresh stock</span>
+        <h2 class="pub-section__title" id="homeLatestTitle">Just listed</h2>
+        <p class="pub-section__sub">The newest cars from verified dealerships around the country.</p>
+      </div>
+      <a href="/cars-for-sale/" class="pub-btn pub-btn-ghost pub-section__link">
+        View all <?= $fmtTotal ?> cars <i class="fa-solid fa-arrow-right"></i>
+      </a>
+    </div>
+
+    <div class="vc-grid vc-grid--4 vc-grid--teaser">
+      <?php foreach ($featuredCars as $i => $car) {
+          echo sdVehicleCard($car, [
+              'wishlisted' => in_array((int) $car['id'], $wishIds, true),
+              'eager'      => $i < 4,
+          ]);
+      } ?>
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <!-- ════════════════════════════════════════════════
-     SHOP BY CONDITION
+     BUDGET + AFFORDABILITY
      ════════════════════════════════════════════════ -->
-<section class="sd-section">
-  <div class="container">
-    <div class="sd-sec-header">
-      <div>
-        <span class="sd-eyebrow">New &amp; Pre-Owned</span>
-        <h2 class="sd-sec-title">What kind of car are you after?</h2>
-      </div>
-    </div>
-    <div class="sd-shop-grid">
+<section class="pub-section" aria-labelledby="homeBudgetTitle">
+  <div class="sd-container">
+    <div class="home-budget">
 
-      <a href="/cars-for-sale/?condition=used" class="sd-shop-card sd-shop-card--used">
-        <div class="sd-shop-badge">Pre-Owned Vehicles</div>
-        <div>
-          <h3 class="sd-shop-title">Used Cars</h3>
-          <p class="sd-shop-desc">Browse quality pre-owned vehicles from verified dealerships across South Africa. Compare prices, mileage, specs, and finance options all in one place.</p>
-          <div class="sd-shop-actions">
-            <span class="sd-shop-btn-primary">
-              <i class="fa-solid fa-magnifying-glass"></i> Browse Used Cars
-            </span>
+      <div class="home-afford pub-reveal">
+        <span class="pub-eyebrow">Affordability</span>
+        <h2 class="pub-section__title" id="homeBudgetTitle">What can I afford?</h2>
+        <p class="home-afford__sub">Slide to your comfortable monthly repayment. We’ll work out the car price and show you what fits.</p>
+
+        <div class="fin" data-finance="afford">
+          <div class="fin__row">
+            <div class="fin__row-head"><label for="affBudget">Monthly budget</label><output data-fin-budget-out>R 6 000 p/m</output></div>
+            <input type="range" id="affBudget" min="2000" max="30000" step="500" value="6000" data-fin-budget>
           </div>
-        </div>
-      </a>
-
-      <a href="/cars-for-sale/?condition=new" class="sd-shop-card sd-shop-card--new">
-        <div class="sd-shop-badge">Latest Models</div>
-        <div>
-          <h3 class="sd-shop-title">New Cars</h3>
-          <p class="sd-shop-desc">Explore the latest models from dealerships nationwide. Discover new releases, compare features and pricing, and connect directly with dealers.</p>
-          <div class="sd-shop-actions">
-            <span class="sd-shop-btn-primary">
-              <i class="fa-solid fa-car"></i> Explore New Cars
-            </span>
+          <div class="fin__grid">
+            <div class="fin__row">
+              <div class="fin__row-head"><label for="affDeposit">Deposit</label><output data-fin-deposit-out>10%</output></div>
+              <input type="range" id="affDeposit" min="0" max="40" step="5" value="10" data-fin-deposit>
+            </div>
+            <div class="fin__row">
+              <div class="fin__row-head"><label for="affRate">Interest rate</label><output data-fin-rate-out>13.25%</output></div>
+              <input type="range" id="affRate" min="8" max="22" step="0.25" value="13.25" data-fin-rate>
+            </div>
           </div>
-        </div>
-      </a>
+          <div class="fin__row">
+            <div class="fin__row-head"><span id="affTermLbl">Term</span></div>
+            <div class="pub-segment" role="radiogroup" aria-labelledby="affTermLbl">
+              <?php foreach ([48, 60, 72] as $t): ?>
+              <label class="pub-segment__opt"><input type="radio" name="aff_term" value="<?= $t ?>" data-fin-term <?= $t === 72 ? 'checked' : '' ?>><span><?= $t ?> months</span></label>
+              <?php endforeach; ?>
+            </div>
+          </div>
 
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════════════════════════════════════
-     BROWSE BY CATEGORY
-     ════════════════════════════════════════════════ -->
-<section class="sd-section">
-  <div class="container">
-    <div class="sd-sec-header">
-      <div>
-        <span class="sd-eyebrow">What are you looking for?</span>
-        <h2 class="sd-sec-title">Browse by category</h2>
-      </div>
-      <a href="/cars-for-sale/" class="sd-sec-link">View all &rarr;</a>
-    </div>
-
-    <div class="sd-pill-row">
-      <a href="/cars-for-sale/"                        class="sd-pill active"><i class="fa-solid fa-list"></i> All</a>
-      <a href="/cars-for-sale/?body_type[]=Bakkie"     class="sd-pill"><i class="fa-solid fa-truck-monster"></i> Bakkies</a>
-      <a href="/cars-for-sale/?body_type[]=Hatchback"  class="sd-pill"><i class="fa-solid fa-car"></i> Hatchbacks</a>
-      <a href="/cars-for-sale/?body_type[]=Sedan"      class="sd-pill"><i class="fa-solid fa-car-side"></i> Sedans</a>
-      <a href="/cars-for-sale/?body_type[]=SUV"        class="sd-pill"><i class="fa-solid fa-truck"></i> SUVs / 4x4</a>
-      <a href="/cars-for-sale/?fuel_type[]=Electric"   class="sd-pill"><i class="fa-solid fa-bolt"></i> Electric</a>
-      <a href="/cars-for-sale/?price_min=1000000"      class="sd-pill"><i class="fa-solid fa-star"></i> Luxury</a>
-      <a href="/cars-for-sale/?price_max=300000"       class="sd-pill"><i class="fa-solid fa-tag"></i> Under R 300k</a>
-    </div>
-
-    <?php if (!empty($featuredCars)): ?>
-    <div class="sd-vehicle-grid">
-      <?php foreach ($featuredCars as $i => $car):
-        $imgs    = json_decode($car['image_urls'] ?? '[]', true) ?: [];
-        $thumb   = $imgs[0] ?? null;
-        $prov    = $provAbbr[$car['dealer_province'] ?? ''] ?? ($car['dealer_province'] ?? '');
-        $hasDesk = !empty($car['desk_slug']);
-        // MIGRATION 0012 SYNC FIX: mirrors cars-for-sale/index.php's own
-        // $hasDesk / $detailUrl branch — a featured car with no broker
-        // desk yet links to the platform-attributed route instead of a
-        // broken /cars-for-sale//{slug}/ URL.
-        $carUrl  = $hasDesk
-            ? '/cars-for-sale/' . htmlspecialchars($car['desk_slug']) . '/' . htmlspecialchars($car['car_slug']) . '/'
-            : '/cars-for-sale/car/' . htmlspecialchars($car['car_slug']) . '/';
-        $isEV    = strtolower($car['fuel_type'] ?? '') === 'electric';
-      ?>
-      <a href="<?= $carUrl ?>" class="sd-vcard pub-reveal" style="animation-delay:<?= ($i % 4) * 0.1 ?>s">
-        <div class="sd-vcard__img-wrap">
-          <?php if ($thumb): ?>
-          <img class="sd-vcard__img"
-               src="<?= htmlspecialchars($thumb) ?>"
-               alt="<?= htmlspecialchars("{$car['year']} {$car['make']} {$car['model']}") ?>"
-               loading="lazy">
-          <?php else: ?>
-          <div class="sd-vcard__img-placeholder"><i class="fa-solid fa-car-side"></i></div>
-          <?php endif; ?>
-          <span class="sd-vcard__year"><?= (int)$car['year'] ?></span>
-          <?php if ($prov): ?>
-          <span class="sd-vcard__prov"><?= htmlspecialchars($prov) ?></span>
-          <?php endif; ?>
-          <?php if ($car['mileage']): ?>
-          <span class="sd-vcard__km">
-            <i class="fa-solid fa-road" style="color:#94a3b8;margin-right:3px;"></i>
-            <?= number_format((int)$car['mileage']) ?> km
-          </span>
-          <?php endif; ?>
-          <?php if ($isEV): ?>
-          <span class="sd-vcard__ev">EV</span>
-          <?php endif; ?>
-        </div>
-        <div class="sd-vcard__body">
-          <div class="sd-vcard__top">
+          <div class="home-afford__result">
             <div>
-              <div class="sd-vcard__name">
-                <?= htmlspecialchars("{$car['make']} {$car['model']}") ?>
-              </div>
-              <div class="sd-vcard__dealer">
-                <i class="fa-regular fa-building"></i> <?= htmlspecialchars($car['dealer_name']) ?>
-              </div>
+              <div class="fin__label">You could look at cars up to</div>
+              <div class="fin__monthly" data-fin-result>R 0</div>
             </div>
-            <div class="sd-vcard__price">
-              R <?= number_format((float)$car['price'], 0, '.', '&nbsp;') ?>
-            </div>
+            <a class="pub-btn pub-btn-primary" href="/cars-for-sale/" data-fin-link>
+              <span>Show cars</span> <i class="fa-solid fa-arrow-right"></i>
+            </a>
           </div>
-          <div class="sd-vcard__desk-row">
-            <?php if ($hasDesk): ?>
-            <span class="sd-badge-desk">
-              <i class="fa-solid fa-id-card"></i>
-              <?= htmlspecialchars($car['desk_name']) ?>
-            </span>
-            <?php else: ?>
-            <span class="sd-badge-desk">
-              <i class="fa-solid fa-shop"></i>
-              Direct from dealer
-            </span>
-            <?php endif; ?>
-            <?php if ($car['dealer_verified'] === 'verified'): ?>
-            <span class="sd-badge-v" style="margin-left:6px;">
-              <i class="fa-solid fa-circle-check"></i> Verified
-            </span>
-            <?php endif; ?>
-          </div>
-          <div class="sd-vcard__specs">
-            <?php if ($car['fuel_type']): ?>
-            <span class="sd-spec">
-              <i class="fa-solid <?= homeFuelIcon($car['fuel_type']) ?>"></i>
-              <?= htmlspecialchars($car['fuel_type']) ?>
-            </span>
-            <?php endif; ?>
-            <?php if ($car['transmission']): ?>
-            <span class="sd-spec"><?= htmlspecialchars($car['transmission']) ?></span>
-            <?php endif; ?>
-            <?php if ($car['drivetrain']): ?>
-            <span class="sd-spec"><?= htmlspecialchars($car['drivetrain']) ?></span>
-            <?php endif; ?>
-            <?php if ($car['body_type']): ?>
-            <span class="sd-spec"><?= htmlspecialchars($car['body_type']) ?></span>
-            <?php endif; ?>
-          </div>
+          <p class="fin__note">Estimate only, at the rate and term selected. Your bank decides the final approval and rate.</p>
         </div>
+      </div>
+
+      <div class="home-budget__tiles">
+        <h3 class="home-budget__title">Shop by budget</h3>
+        <?php foreach ($budgetTiles as [$label, $min, $max, $hint]):
+          $qs = http_build_query(array_filter(['price_min' => $min, 'price_max' => $max], fn($v) => $v !== null)); ?>
+        <a class="home-budget__tile pub-reveal" href="/cars-for-sale/?<?= $qs ?>">
+          <span>
+            <span class="home-budget__label"><?= htmlspecialchars($label) ?></span>
+            <span class="home-budget__hint"><?= htmlspecialchars($hint) ?></span>
+          </span>
+          <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </a>
+        <?php endforeach; ?>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════
+     CONDITION
+     ════════════════════════════════════════════════ -->
+<section class="pub-section" aria-labelledby="homeCondTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
+      <div>
+        <span class="pub-eyebrow">New, used or demo</span>
+        <h2 class="pub-section__title" id="homeCondTitle">Pick the right kind of deal</h2>
+      </div>
+    </div>
+    <div class="home-conds">
+      <?php
+      $condCards = [
+          'used' => ['Pre-owned', 'The widest choice and the best value. Every listing comes from a verified dealership.', 'fa-car'],
+          'new'  => ['Brand new', 'Latest models with full manufacturer warranty and service plans.', 'fa-star'],
+          'demo' => ['Demo',      'Nearly new, low mileage and still under warranty — at a used-car price.', 'fa-gauge-simple-high'],
+      ];
+      foreach ($condCards as $val => [$title, $desc, $icon]):
+        $cnt = (int) ($conditionCounts[$val] ?? 0); ?>
+      <a class="home-cond home-cond--<?= $val ?> pub-reveal" href="/cars-for-sale/?condition=<?= $val ?>">
+        <span class="home-cond__icon"><i class="fa-solid <?= $icon ?>" aria-hidden="true"></i></span>
+        <span class="home-cond__count"><?= $cnt > 0 ? number_format($cnt) . ' available' : 'Browse' ?></span>
+        <span class="home-cond__title"><?= $title ?> cars</span>
+        <span class="home-cond__desc"><?= $desc ?></span>
+        <span class="home-cond__cta">Shop <?= strtolower($title) ?> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
       </a>
       <?php endforeach; ?>
     </div>
-    <?php endif; ?>
+  </div>
+</section>
 
-    <div class="sd-view-all">
-      <a href="/cars-for-sale/" class="pub-btn pub-btn-ghost">
-        Browse all <?= $totalCars > 0 ? number_format($totalCars) . ' vehicles' : 'vehicles' ?>
-        <i class="fa-solid fa-arrow-right"></i>
-      </a>
+<!-- ════════════════════════════════════════════════
+     HOW IT WORKS / TRUST
+     ════════════════════════════════════════════════ -->
+<section class="pub-section" aria-labelledby="homeHowTitle">
+  <div class="sd-container">
+    <div class="home-how">
+      <div class="home-how__intro">
+        <span class="pub-eyebrow">Why SalesDesk</span>
+        <h2 class="pub-section__title home-how__title" id="homeHowTitle">A car marketplace where someone is actually on your side</h2>
+        <p class="home-how__sub">
+          Dealers list their stock. Independent SalesDesk brokers share it and help you
+          buy — and they’re only paid commission when a deal closes. No cost to you.
+        </p>
+        <a class="pub-btn pub-btn-on-ink" href="/how-it-works/brokers">How it works <i class="fa-solid fa-arrow-right"></i></a>
+      </div>
+      <ol class="home-how__steps">
+        <li class="home-how__step">
+          <span class="home-how__num">1</span>
+          <span class="home-how__step-title">Search every verified dealer</span>
+          <span class="home-how__step-text">One search across dealerships nationwide — real stock, real prices.</span>
+        </li>
+        <li class="home-how__step">
+          <span class="home-how__num">2</span>
+          <span class="home-how__step-title">Enquire in 30 seconds</span>
+          <span class="home-how__step-text">Your details only go to the dealer and broker for that car. POPIA protected.</span>
+        </li>
+        <li class="home-how__step">
+          <span class="home-how__num">3</span>
+          <span class="home-how__step-title">Get help closing the deal</span>
+          <span class="home-how__step-text">Test drives, finance and paperwork — with a broker whose success depends on yours.</span>
+        </li>
+      </ol>
     </div>
   </div>
 </section>
 
 <!-- ════════════════════════════════════════════════
-     BROWSE BY PROVINCE
+     PROVINCES
      ════════════════════════════════════════════════ -->
-<section class="sd-section">
-  <div class="container">
-    <div class="sd-sec-header">
+<section class="pub-section" aria-labelledby="homeProvTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
       <div>
-        <span class="sd-eyebrow">South Africa</span>
-        <h2 class="sd-sec-title">Browse by province</h2>
+        <span class="pub-eyebrow">Near you</span>
+        <h2 class="pub-section__title" id="homeProvTitle">Cars for sale by province</h2>
       </div>
     </div>
-    <div class="sd-prov-grid">
-      <?php foreach ($provinces as $provName => $meta):
-        $cnt = $provCounts[$provName] ?? 0;
-      ?>
-      <a href="/cars-for-sale/?province=<?= urlencode($provName) ?>" class="sd-prov-chip pub-reveal">
-        <i class="fa-solid <?= $meta['icon'] ?>"></i>
-        <span class="sd-prov-chip__label"><?= htmlspecialchars($provName) ?></span>
-        <span class="sd-prov-chip__n">
-          <?= $cnt > 0 ? number_format($cnt) . ' car' . ($cnt !== 1 ? 's' : '') : 'Browse' ?>
+    <div class="home-provs">
+      <?php foreach ($provinces as $provName => $cities):
+        $cnt = (int) ($provCounts[$provName] ?? 0); ?>
+      <a href="/cars-for-sale/?province=<?= urlencode($provName) ?>" class="home-prov">
+        <span class="home-prov__text">
+          <span class="home-prov__name"><?= htmlspecialchars($provName) ?></span>
+          <span class="home-prov__cities"><?= htmlspecialchars($cities) ?></span>
+        </span>
+        <span class="home-prov__count"><?= $cnt > 0 ? number_format($cnt) : '—' ?></span>
+      </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
+</section>
+
+<?php if (!empty($topDesks)): ?>
+<!-- ════════════════════════════════════════════════
+     TOP SALESDESKS
+     ════════════════════════════════════════════════ -->
+<section class="pub-section" aria-labelledby="homeDesksTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
+      <div>
+        <span class="pub-eyebrow">Brokers</span>
+        <h2 class="pub-section__title" id="homeDesksTitle">Top SalesDesks this month</h2>
+      </div>
+      <a href="/desks/" class="pub-link pub-section__link">Find a SalesDesk <i class="fa-solid fa-arrow-right"></i></a>
+    </div>
+    <div class="home-desks">
+      <?php foreach ($topDesks as $i => $desk):
+        $loc = implode(', ', array_filter([$desk['city'], $desk['province']])); ?>
+      <a class="home-desk pub-reveal" href="/<?= htmlspecialchars($desk['slug']) ?>/">
+        <span class="home-desk__top">
+          <span class="home-desk__av home-desk__av--<?= $i % 5 ?>">
+            <?php if ($desk['avatar_url']): ?>
+            <img src="<?= htmlspecialchars($desk['avatar_url']) ?>" alt="" loading="lazy" width="52" height="52">
+            <?php else: ?>
+            <?= htmlspecialchars(deskInitials($desk)) ?>
+            <?php endif; ?>
+          </span>
+          <span class="home-desk__id">
+            <span class="home-desk__name"><?= htmlspecialchars($desk['display_name']) ?></span>
+            <span class="home-desk__loc"><?= $loc ? htmlspecialchars($loc) : 'Independent broker' ?></span>
+          </span>
+          <?php if ($i === 0): ?><span class="pub-badge pub-badge-accent home-desk__rank"><i class="fa-solid fa-trophy"></i> #1</span><?php endif; ?>
+        </span>
+        <span class="home-desk__stats">
+          <span><strong><?= (int) $desk['active_listings'] ?></strong> listings</span>
+          <span><strong><?= (int) $desk['leads_this_month'] ?></strong> enquiries</span>
+          <span><strong><?= (int) $desk['deals_closed'] ?></strong> deals</span>
         </span>
       </a>
       <?php endforeach; ?>
     </div>
   </div>
 </section>
+<?php endif; ?>
 
-<!-- ════════════════════════════════════════════════
-     TOOLS
-     ════════════════════════════════════════════════ -->
-<section class="sd-section ">
-  <div class="container">
-    <div class="sd-sec-header">
-      <div>
-        <span class="sd-eyebrow">Resources</span>
-        <h2 class="sd-sec-title">Tools &amp; services</h2>
-      </div>
-    </div>
-    <div class="sd-tools-grid">
-
-      <div class="sd-tool-card">
-        <div class="sd-tool-header">
-          <div class="sd-tool-icon-wrap">
-            <svg width="22" height="22" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" stroke="#fff">
-              <path d="M3 13l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5"/>
-              <path d="M5 13h14M5 13v4M19 13v4"/>
-              <circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/>
-            </svg>
-          </div>
-          <h3 class="sd-tool-title">Compare Cars</h3>
-        </div>
-        <p class="sd-tool-desc">Compare key specifications and pricing side-by-side — finding your perfect match has never been easier.</p>
-        <div class="sd-tool-btn-group">
-          <a href="/tools/compare/" class="sd-tool-btn">
-            <i class="fa-solid fa-arrow-right-arrow-left"></i> Compare Used Cars
-          </a>
-          <!--<a href="/cars-for-sale/?condition=new" class="sd-tool-btn">
-            <i class="fa-solid fa-car"></i> Compare New Cars
-          </a>-->
-        </div>
-      </div>
-
-      <div class="sd-tool-card">
-        <div class="sd-tool-header">
-          <div class="sd-tool-icon-wrap">
-            <svg width="22" height="22" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" stroke="#fff">
-              <rect x="5" y="3" width="14" height="18" rx="2"/>
-              <line x1="8" y1="7" x2="16" y2="7"/>
-              <line x1="8" y1="11" x2="8" y2="11" stroke-width="3"/>
-              <line x1="12" y1="11" x2="12" y2="11" stroke-width="3"/>
-              <line x1="16" y1="11" x2="16" y2="11" stroke-width="3"/>
-              <line x1="8" y1="15" x2="8" y2="15" stroke-width="3"/>
-              <line x1="12" y1="15" x2="12" y2="15" stroke-width="3"/>
-              <line x1="16" y1="15" x2="16" y2="15" stroke-width="3"/>
-            </svg>
-          </div>
-          <h3 class="sd-tool-title">Affordability Calculator</h3>
-        </div>
-        <p class="sd-tool-desc">Calculate your perfect car budget by factoring in your financial goals, income, and monthly expenses.</p>
-        <div class="sd-tool-btn-group">
-          <a href="/tools/finance-calculator/" class="sd-tool-btn">
-            <i class="fa-solid fa-calculator"></i> Calculate My Affordability
-          </a>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════════════════════════════════════
-     CAR NEWS & REVIEWS
-     NEWS-1: now sourced live from blog_posts (see $latestNews
-     query near the top of this file) instead of a hardcoded
-     3-item array. Section is skipped entirely if no posts have
-     been published yet, rather than showing fake placeholder news.
-     ════════════════════════════════════════════════ -->
 <?php if (!empty($latestNews)): ?>
-<section class="sd-section" id="for-dealers">
-  <div class="container">
-    <div class="sd-news-header">
+<!-- ════════════════════════════════════════════════
+     NEWS (NEWS-1: live from blog_posts)
+     ════════════════════════════════════════════════ -->
+<section class="pub-section" aria-labelledby="homeNewsTitle">
+  <div class="sd-container">
+    <div class="pub-section__head">
       <div>
-        <span class="sd-eyebrow">Stay informed</span>
-        <h2 class="sd-sec-title">Latest car news &amp; reviews</h2>
+        <span class="pub-eyebrow">Stay informed</span>
+        <h2 class="pub-section__title" id="homeNewsTitle">Latest car news &amp; reviews</h2>
       </div>
-      <a href="/news/" class="sd-news-see-all">
-        See all
-        <span class="sd-news-arrow"><i class="fa-solid fa-arrow-right"></i></span>
-      </a>
+      <a href="/news/" class="pub-link pub-section__link">All news <i class="fa-solid fa-arrow-right"></i></a>
     </div>
-    <div class="sd-news-grid">
+    <div class="home-news">
       <?php foreach ($latestNews as $article):
-        $newsUrl = '/news/' . htmlspecialchars($article['slug']) . '/';
-      ?>
-      <article class="sd-news-card pub-reveal" onclick="location.href='<?= $newsUrl ?>'">
-        <div class="sd-news-img">
-          <img src="<?= htmlspecialchars(homeNewsThumb($article)) ?>"
-               alt="<?= htmlspecialchars($article['title']) ?>" loading="lazy">
+        $newsUrl = '/news/' . rawurlencode($article['slug']) . '/'; ?>
+      <article class="home-news__card pub-reveal">
+        <div class="home-news__img">
+          <img src="<?= htmlspecialchars(homeNewsThumb($article)) ?>" alt="" loading="lazy" width="640" height="400">
         </div>
-        <div class="sd-news-body">
-          <h3 class="sd-news-title"><?= htmlspecialchars($article['title']) ?></h3>
+        <div class="home-news__body">
+          <span class="home-news__meta">
+            <span class="home-news__cat"><?= htmlspecialchars($article['category_name'] ?? 'Car news') ?></span>
+            · <?= homeNewsReadTime($article['content'] ?? '') ?>
+          </span>
+          <h3 class="home-news__title"><a href="<?= $newsUrl ?>"><?= htmlspecialchars($article['title']) ?></a></h3>
           <?php if ($article['excerpt']): ?>
-          <p class="sd-news-desc"><?= htmlspecialchars($article['excerpt']) ?></p>
+          <p class="home-news__excerpt"><?= htmlspecialchars($article['excerpt']) ?></p>
           <?php endif; ?>
-          <div class="sd-news-meta">
-            <span class="sd-news-category"><?= htmlspecialchars($article['category_name'] ?? 'Car News') ?></span>
-            <span class="sd-news-dot"></span>
-            <span class="sd-news-read"><?= homeNewsReadTime($article['content'] ?? '') ?></span>
-          </div>
         </div>
       </article>
       <?php endforeach; ?>
@@ -926,167 +858,26 @@ ob_start();
 <?php endif; ?>
 
 <!-- ════════════════════════════════════════════════
-     TOP SALESDESKS THIS WEEK
+     TRADE CTA
      ════════════════════════════════════════════════ -->
-<?php if (!empty($topDesks)): ?>
-<section class="sd-section ">
-  <div class="container">
-    <div class="sd-sec-header">
-      <div>
-        <span class="sd-eyebrow">Active desks</span>
-        <h2 class="sd-sec-title">Top SalesDesks this week</h2>
-      </div>
-    </div>
-    <div class="sd-broker-grid">
-      <?php foreach ($topDesks as $i => $desk):
-        $initials = deskInitials($desk);
-        $grad     = $gradients[$i % count($gradients)];
-        $loc      = implode(' · ', array_filter([$desk['city'], $desk['province']]));
-      ?>
-      <div class="sd-bcard pub-reveal">
-        <div class="sd-bcard__top">
-          <div class="sd-bcard__av" style="background:<?= $grad ?>">
-            <?php if ($desk['avatar_url']): ?>
-            <img src="<?= htmlspecialchars($desk['avatar_url']) ?>"
-                 style="width:100%;height:100%;object-fit:cover;border-radius:50%;" alt="">
-            <?php else: ?>
-            <?= htmlspecialchars($initials) ?>
-            <?php endif; ?>
-          </div>
-          <div class="sd-bcard__info">
-            <div class="sd-bcard__name"><?= htmlspecialchars($desk['display_name']) ?></div>
-            <div class="sd-bcard__loc">
-              <?= $loc ? htmlspecialchars($loc) . ' · ' : '' ?>Active broker
-            </div>
-          </div>
-        </div>
-        <div class="sd-bcard__stats">
-          <div>
-            <div class="sd-bcard__num"><?= (int)$desk['active_listings'] ?></div>
-            <div class="sd-bcard__lbl">Listings</div>
-          </div>
-          <div>
-            <div class="sd-bcard__num"><?= (int)$desk['leads_this_month'] ?></div>
-            <div class="sd-bcard__lbl">Leads this month</div>
-          </div>
-          <div>
-            <div class="sd-bcard__num"><?= (int)$desk['deals_closed'] ?></div>
-            <div class="sd-bcard__lbl">Deals closed</div>
-          </div>
-        </div>
-        <a href="/<?= htmlspecialchars($desk['slug']) ?>/" class="sd-bcard__link">
-          View Desk &rarr;
-        </a>
-      </div>
-      <?php endforeach; ?>
+<section class="pub-section" aria-label="Work with SalesDesk">
+  <div class="sd-container">
+    <div class="home-trade">
+      <a class="home-trade__card home-trade__card--broker" href="/how-it-works/brokers">
+        <span class="pub-eyebrow">For brokers &amp; side-hustlers</span>
+        <span class="home-trade__title">Earn commission selling cars. No stock, no showroom.</span>
+        <span class="home-trade__text">Pick cars from verified dealers, share your link, and get paid when your buyer drives away. Attribution is tracked for you.</span>
+        <span class="pub-btn pub-btn-accent">Create your SalesDesk <i class="fa-solid fa-arrow-right"></i></span>
+      </a>
+      <a class="home-trade__card home-trade__card--dealer" href="/how-it-works/dealers">
+        <span class="pub-eyebrow">For dealerships</span>
+        <span class="home-trade__title">Put your stock in front of a national sales force.</span>
+        <span class="home-trade__text">Upload inventory once. Brokers and sales executives market it for you — you only pay on results.</span>
+        <span class="pub-btn pub-btn-dark">List your dealership <i class="fa-solid fa-arrow-right"></i></span>
+      </a>
     </div>
   </div>
 </section>
-<?php endif; ?>
-
-<!-- ════════════════════════════════════════════════
-     PAGE-SPECIFIC ASSETS
-     home.css is now loaded from <head> via $extraCss (set above,
-     before this ob_start() block) — see the PERF FIX comment near
-     the top of this file. home.js stays here: it's already `defer`'d
-     in layout-public.php's pattern... actually it's inlined below
-     with `defer` directly, so its position in the body doesn't
-     block paint the way a blocking <link rel="stylesheet"> did.
-     ════════════════════════════════════════════════ -->
-<script src="/assets/js/home.js?v=<?= $assetVersion ?>" defer></script>
-
-<?php
-/*
- * Inline styles kept here to override any stale cached home.css.
- * Widget CSS (hws-* classes) lives inside hero-search-widget.php
- * and is never served from a cached asset file.
- */
-?>
-<style>
-  section { overflow: hidden; }
-  .sd-vehicle-grid { overflow-y: hidden; }
-
-  /* Hero layout — inlined to defeat stale home.css cache */
-  .sd-hero__title {
-    color: #fff;
-    font-family: var(--font-d);
-    font-size: clamp(18px, calc(14px + 1.2vw), 32px);
-    font-weight: 800;
-    line-height: 1.05;
-    margin-bottom: clamp(8px, 1.2vh, 14px);
-    letter-spacing: -1px;
-  }
-  .sd-hero__sub {
-    color: #fff;
-    font-size: clamp(11px, calc(10px + 0.3vw), 14px);
-    font-weight: 400;
-    margin-bottom: clamp(22px, 3.5vh, 38px);
-  }
-  .sd-hero {
-    position: relative;
-    width: 100%;
-    margin: 0;
-    box-sizing: border-box;
-    min-height: clamp(480px, 70vh, 100vh);
-    background-image:
-      linear-gradient(120deg, rgba(8,20,60,.82) 0%, rgba(15,40,100,.55) 50%, rgba(0,0,0,.28) 100%),
-      url('assets/img/hero.jpg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    display: flex;
-    align-items: flex-start;
-    padding: clamp(70px,10vh,110px) clamp(20px,5vw,80px) clamp(60px,8vh,100px) clamp(24px,10vw,140px);
-    overflow-x: hidden;
-  }
-  .container {
-    margin-inline: clamp(16px, 4vw, 48px);
-    padding-inline: clamp(12px, 2vw, 24px);
-  }
-  .sd-tab-nav { overflow-y: hidden; }
-  .sd-bcard { min-width: 0; }
-  .sd-bcard__name { overflow-wrap: anywhere; }
-
-  .sd-vehicle-grid--activity {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: 260px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  .sd-vehicle-grid--activity::-webkit-scrollbar { display: none; }
-
-  @media (max-width: 900px) {
-    .sd-vehicle-grid { grid-template-columns: repeat(2, 1fr); }
-    .container {
-      margin-inline: clamp(4px, 0.8vw, 12px);
-      padding-inline: clamp(8px, 1vw, 12px);
-    }
-  }
-  @media (max-width: 480px) {
-    .sd-vehicle-grid,
-    .sd-vehicle-grid--activity {
-      grid-template-columns: none;
-      grid-auto-flow: column;
-      grid-auto-columns: 100%;
-      overflow-x: auto;
-      scroll-snap-type: x mandatory;
-      gap: 12px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      margin: 0 auto;
-      padding: 0;
-    }
-    .sd-vehicle-grid::-webkit-scrollbar,
-    .sd-vehicle-grid--activity::-webkit-scrollbar { display: none; }
-    .sd-vehicle-grid .sd-vcard,
-    .sd-vehicle-grid--activity .sd-vcard {
-      width: 100%;
-      scroll-snap-align: start;
-    }
-  }
-</style>
 
 <?php
 $pageContent = ob_get_clean();

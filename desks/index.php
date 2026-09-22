@@ -1,6 +1,6 @@
 <?php
 /**
- * SalesDesk — Find a SalesDesk (Broker Directory)
+ * SalesDesk — Find a SalesDesk (Broker Directory)  (v2)
  * Route: /desks/  →  /desks/index.php
  *
  * Public, searchable directory of active broker storefronts.
@@ -9,9 +9,25 @@
  * Filters:  q (name/broker search), province, sort
  * Sort:     active (most cars) | popular (most views) | newest | name
  *
- * Follows the same query-building / pagination conventions as
- * browse pages (browse.css classes reused directly — no new
- * component CSS framework introduced).
+ * v2 (public UX/UI overhaul — desk pages pass):
+ *   DK-1  Page rebuilt on the shared design system: ink hero with the
+ *         search + province in one form, sticky results toolbar with
+ *         province chips and sort, redesigned desk cards, helpful empty
+ *         state, CTA band.
+ *   DK-2  Desk cards now show a 3-photo preview of that desk's newest
+ *         cars (one extra grouped query for the whole page, not one per
+ *         card) — a directory of brokers is much easier to scan when you
+ *         can see what they actually have in stock.
+ *   DK-3  The two-filter sidebar + its drawer are gone: with only a name
+ *         search and a province, a full filter drawer was more chrome
+ *         than content. Both now live in the hero / toolbar and apply
+ *         with the shared [data-autosubmit] handler in public.js — so
+ *         this page needs no page-level JS at all.
+ *   DK-4  ALL inline <style>, <script> and style="" removed.
+ *         Page CSS: assets/css/desks.css.
+ *   DK-5  Cars count now only counts ACTIVE cars (the old query counted
+ *         every broker_inventory row, so a desk whose cars had been sold
+ *         or removed still advertised them).
  */
 
 declare(strict_types=1);
@@ -91,6 +107,7 @@ $orderBy = match ($sort) {
 
 // ============================================================
 // MAIN QUERY
+// DK-5: cars_count counts only cars that are still active.
 // ============================================================
 $sql = "
     SELECT
@@ -100,7 +117,7 @@ $sql = "
         a.city, a.province, a.suburb,
         o.name                 AS org_name,
         o.verification_status  AS org_verification,
-        COUNT(DISTINCT bi.id)  AS cars_count,
+        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN bi.id END) AS cars_count,
         COALESCE(SUM(bi.views), 0) AS total_views,
         COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS deals_closed
     FROM salesdesks sd
@@ -122,12 +139,47 @@ $stmt->execute($params);
 $desks = $stmt->fetchAll();
 
 // ============================================================
+// DK-2: newest 3 car photos per desk on this page — ONE query for
+// the whole page (not one per card).
+// ============================================================
+$deskPreviews = [];
+if ($desks) {
+    $ids = array_map(static fn($d) => (int) $d['id'], $desks);
+    $ph  = implode(',', array_fill(0, count($ids), '?'));
+    try {
+        $prevStmt = $pdo->prepare("
+            SELECT salesdesk_id, image_urls, make, model
+            FROM (
+                SELECT bi.salesdesk_id, c.image_urls, c.make, c.model,
+                       ROW_NUMBER() OVER (PARTITION BY bi.salesdesk_id ORDER BY bi.added_at DESC) AS rn
+                FROM broker_inventory bi
+                JOIN cars c ON c.id = bi.car_id AND c.status = 'active'
+                WHERE bi.salesdesk_id IN ({$ph})
+            ) ranked
+            WHERE rn <= 3
+        ");
+        $prevStmt->execute($ids);
+        foreach ($prevStmt->fetchAll() as $row) {
+            $imgs = json_decode($row['image_urls'] ?? '[]', true) ?: [];
+            if (!empty($imgs[0])) {
+                $deskPreviews[(int) $row['salesdesk_id']][] = [
+                    'src' => $imgs[0],
+                    'alt' => trim(($row['make'] ?? '') . ' ' . ($row['model'] ?? '')),
+                ];
+            }
+        }
+    } catch (Throwable) {
+        $deskPreviews = [];   // window functions unavailable — cards render without previews
+    }
+}
+
+// ============================================================
 // PLATFORM-WIDE STAT STRIP
 // ============================================================
 $globalStatsStmt = $pdo->prepare("
     SELECT
         COUNT(DISTINCT sd.id) AS desk_count,
-        COUNT(DISTINCT bi.id) AS listing_count,
+        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN bi.id END) AS listing_count,
         COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS closed_count
     FROM salesdesks sd
     JOIN users u ON u.id = sd.user_id AND u.status = 'active'
@@ -143,16 +195,18 @@ $globalStats = $globalStatsStmt->fetch() ?: ['desk_count' => 0, 'listing_count' 
 // PROVINCE LIST (for filter — distinct provinces actually in use)
 // ============================================================
 $provinceStmt = $pdo->prepare("
-    SELECT DISTINCT a.province
+    SELECT a.province, COUNT(DISTINCT sd.id) AS desk_count
     FROM salesdesks sd
     JOIN users u ON u.id = sd.user_id AND u.status = 'active'
     JOIN profiles p ON p.user_id = u.id
     JOIN addresses a ON a.id = p.address_id
     WHERE sd.is_active = 1 AND a.province IS NOT NULL AND a.province != ''
+    GROUP BY a.province
     ORDER BY a.province ASC
 ");
 $provinceStmt->execute();
-$provinces = array_column($provinceStmt->fetchAll(), 'province');
+$provinceCounts = $provinceStmt->fetchAll(PDO::FETCH_KEY_PAIR);
+$provinces      = array_keys($provinceCounts);
 
 // Fallback to the full canonical SA province list if the DB has none yet.
 if (empty($provinces)) {
@@ -178,18 +232,38 @@ function desksQueryString(array $overrides = []): string
     return http_build_query($merged);
 }
 
+function desksUrl(array $overrides = []): string
+{
+    $qs = desksQueryString($overrides);
+    return '/desks/' . ($qs !== '' ? '?' . $qs : '');
+}
+
+// Compact number for the stat rows: 1 200 → 1.2k
+function desksCompact(int $n): string
+{
+    return $n >= 1000 ? rtrim(rtrim(number_format($n / 1000, 1), '0'), '.') . 'k' : (string) $n;
+}
+
 // ============================================================
 // PAGE META
 // ============================================================
 $siteUrl        = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
-$pageTitle      = 'Find a SalesDesk | Independent Car Brokers in South Africa';
+$pageTitle      = ($province ? 'Car Brokers in ' . $province : 'Find a SalesDesk')
+                . ' | Independent Car Brokers in South Africa';
 $ogTitle        = 'Find a Broker — SalesDesk Directory';
-$ogDescription  = 'Browse ' . number_format((int)$globalStats['desk_count'])
+$ogDescription  = 'Browse ' . number_format((int) $globalStats['desk_count'])
                  . ' independent car brokers across South Africa. Find a trusted SalesDesk near you.';
 $canonicalUrl   = $siteUrl . '/desks/' . (desksQueryString() ? '?' . desksQueryString() : '');
 $layoutVariant  = 'wide';
 $showBreadcrumb = true;
 $breadcrumbs    = [['Find a SalesDesk', null]];
+
+$assetVersion         = $assetVersion ?? date('Ymd');
+$extraCss             = '<link rel="stylesheet" href="/assets/css/desks.css?v=' . $assetVersion . '">' . "\n";
+$includeBrowseCss     = false;
+$includeHowItWorksCss = false;
+
+$e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 
 ob_start();
 ?>
@@ -197,534 +271,259 @@ ob_start();
 <!-- ══════════════════════════════════════════════════════
      HERO
      ══════════════════════════════════════════════════════ -->
-<div style="background:linear-gradient(140deg,#08143c 0%, var(--p) 100%);
-            padding:3rem 24px 2.75rem;margin-bottom:2rem;position:relative;overflow:hidden;">
+<section class="dk-hero" aria-labelledby="dkTitle">
+  <div class="dk-hero__glow" aria-hidden="true"></div>
+  <div class="sd-container dk-hero__inner">
 
-  <div style="position:absolute;top:-60px;right:-60px;width:220px;height:220px;
-              border-radius:50%;background:rgba(255,255,255,.06);"></div>
-  <div style="position:absolute;bottom:-40px;left:8%;width:140px;height:140px;
-              border-radius:50%;background:rgba(255,255,255,.04);"></div>
+    <span class="dk-hero__pill">
+      <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+      <?= number_format((int) $globalStats['desk_count']) ?> active broker<?= (int) $globalStats['desk_count'] === 1 ? '' : 's' ?> on SalesDesk
+    </span>
 
-  <div style="max-width:820px;margin:0 auto;text-align:center;position:relative;z-index:1;">
-    <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);
-                border:1px solid rgba(255,255,255,.18);border-radius:var(--r-full);
-                padding:6px 16px;font-size:12px;font-weight:600;color:#fff;margin-bottom:1.25rem;">
-      <i class="fa-solid fa-id-card"></i> <?= number_format((int)$globalStats['desk_count']) ?> active brokers on SalesDesk
-    </div>
-
-    <h1 style="font-family:var(--font-d);font-size:34px;font-weight:800;color:#fff;
-               line-height:1.15;letter-spacing:-.03em;margin-bottom:.75rem;">
-      Find a SalesDesk near you
+    <h1 class="dk-hero__title" id="dkTitle">
+      Find a <span class="dk-hero__accent">SalesDesk</span> near you
     </h1>
-    <p style="font-size:15px;color:rgba(255,255,255,.65);line-height:1.7;margin-bottom:1.75rem;
-              max-width:560px;margin-left:auto;margin-right:auto;">
-      Every broker on SalesDesk runs their own personal storefront — verified, commission-protected,
-      and backed by real dealer inventory. Search by name or browse by province.
+
+    <p class="dk-hero__sub">
+      Every broker here runs their own storefront — verified, commission-protected and
+      backed by real dealer stock. Search by name, or browse by province.
     </p>
 
-    <!-- Search form -->
-    <form method="GET" action="/desks/"
-          style="display:flex;gap:8px;max-width:520px;margin:0 auto;flex-wrap:wrap;">
-      <div style="flex:1;min-width:220px;position:relative;">
-        <i class="fa-solid fa-magnifying-glass"
-           style="position:absolute;left:16px;top:50%;transform:translateY(-50%);
-                  color:rgba(255,255,255,.5);font-size:13px;"></i>
-        <input type="text" name="q" value="<?= htmlspecialchars($q) ?>"
-               placeholder="Search broker or desk name…"
-               style="width:100%;padding:13px 16px 13px 40px;border-radius:var(--r-md);
-                      border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);
-                      color:#fff;font-size:14px;font-family:var(--sans);outline:none;">
-      </div>
-      <?php if ($province): ?>
-      <input type="hidden" name="province" value="<?= htmlspecialchars($province) ?>">
-      <?php endif; ?>
+    <form class="dk-search" method="GET" action="/desks/" role="search" data-clean-submit>
       <?php if ($sort !== 'active'): ?>
-      <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
+      <input type="hidden" name="sort" value="<?= $e($sort) ?>">
       <?php endif; ?>
-      <button type="submit" class="pub-btn pub-btn-primary"
-              style="background:#fff;color:var(--p);padding:13px 26px;font-size:14px;flex-shrink:0;">
-        Search
+
+      <div class="dk-search__field">
+        <i class="fa-solid fa-magnifying-glass dk-search__icon" aria-hidden="true"></i>
+        <label class="sr-only" for="deskSearchInput">Broker or desk name</label>
+        <input class="dk-search__input" type="search" id="deskSearchInput" name="q"
+               value="<?= $e($q) ?>" placeholder="Broker or desk name" autocomplete="off" enterkeyhint="search">
+      </div>
+
+      <div class="dk-search__field dk-search__field--select">
+        <i class="fa-solid fa-location-dot dk-search__icon" aria-hidden="true"></i>
+        <label class="sr-only" for="deskProvinceSelect">Province</label>
+        <select class="dk-search__input dk-search__select" id="deskProvinceSelect" name="province" data-autosubmit>
+          <option value="">All provinces</option>
+          <?php foreach ($provinces as $prov): ?>
+          <option value="<?= $e($prov) ?>" <?= $province === $prov ? 'selected' : '' ?>>
+            <?= $e($prov) ?><?= isset($provinceCounts[$prov]) ? ' (' . (int) $provinceCounts[$prov] . ')' : '' ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+
+      <button class="pub-btn pub-btn-accent dk-search__btn" type="submit">
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Search
       </button>
     </form>
 
-    <!-- Stat strip -->
-    <div style="display:flex;gap:28px;justify-content:center;margin-top:2rem;flex-wrap:wrap;">
-      <div>
-        <div style="font-family:var(--font-d);font-size:22px;font-weight:800;color:#fff;">
-          <?= number_format((int)$globalStats['desk_count']) ?>
-        </div>
-        <div style="font-size:11px;color:rgba(255,255,255,.55);">Active brokers</div>
-      </div>
-      <div>
-        <div style="font-family:var(--font-d);font-size:22px;font-weight:800;color:#fff;">
-          <?= number_format((int)$globalStats['listing_count']) ?>
-        </div>
-        <div style="font-size:11px;color:rgba(255,255,255,.55);">Cars listed</div>
-      </div>
-      <div>
-        <div style="font-family:var(--font-d);font-size:22px;font-weight:800;color:#4ade80;">
-          <?= number_format((int)$globalStats['closed_count']) ?>
-        </div>
-        <div style="font-size:11px;color:rgba(255,255,255,.55);">Deals closed</div>
-      </div>
-    </div>
+    <ul class="dk-hero__stats">
+      <li><strong><?= number_format((int) $globalStats['desk_count']) ?></strong> active brokers</li>
+      <li><strong><?= number_format((int) $globalStats['listing_count']) ?></strong> cars on desks</li>
+      <li><strong><?= number_format((int) $globalStats['closed_count']) ?></strong> deals closed</li>
+    </ul>
   </div>
-</div>
+</section>
 
-<!-- ══════════════════════════════════════════════════════
-     LAYOUT: filter sidebar + results
-     ══════════════════════════════════════════════════════ -->
-<div class="browse-layout">
 
-  <!-- Mobile filter toggle -->
-  <button class="browse-filter-toggle" id="deskFilterToggle" type="button">
-    <span><i class="fa-solid fa-sliders"></i> Filter brokers</span>
-    <?php if ($province): ?>
-    <span class="browse-filter-toggle__badge">1</span>
-    <?php endif; ?>
-  </button>
+<div class="sd-container dk-body">
 
-  <!-- ── Sidebar ─────────────────────────────────────────── -->
-  <aside class="browse-sidebar" id="deskSidebar">
-    <div class="browse-sidebar__close" id="deskSidebarClose">
-      <span>Filter brokers</span>
-      <i class="fa-solid fa-xmark"></i>
-    </div>
-
-    <div class="sidebar-card">
-      <div class="sidebar-card__header">
-        <div class="sidebar-card__title"><i class="fa-solid fa-sliders"></i> Filters</div>
-        <?php if ($q || $province): ?>
-        <a href="/desks/<?= $sort !== 'active' ? '?sort=' . urlencode($sort) : '' ?>"
-           class="sidebar-card__reset">Reset</a>
-        <?php endif; ?>
-      </div>
-
-      <form method="GET" action="/desks/" id="deskFilterForm">
-        <?php if ($sort !== 'active'): ?>
-        <input type="hidden" name="sort" value="<?= htmlspecialchars($sort) ?>">
-        <?php endif; ?>
-
-        <div class="filter-section">
-          <label class="filter-section-label" for="deskSearchInput">Broker / desk name</label>
-          <div class="search-input-wrap">
-            <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="deskSearchInput" name="q"
-                   class="search-input-sidebar"
-                   value="<?= htmlspecialchars($q) ?>"
-                   placeholder="e.g. Sipho, AutoLink…">
-          </div>
-        </div>
-
-        <div class="filter-section">
-          <label class="filter-section-label" for="deskProvinceSelect">Province</label>
-          <select id="deskProvinceSelect" name="province" class="filter-select">
-            <option value="">All provinces</option>
-            <?php foreach ($provinces as $prov): ?>
-            <option value="<?= htmlspecialchars($prov) ?>" <?= $province === $prov ? 'selected' : '' ?>>
-              <?= htmlspecialchars($prov) ?>
-            </option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-
-        <button type="submit" class="filter-apply-btn">Apply filters</button>
-        <p class="filter-noscript-hint">Filters apply automatically once JavaScript loads.</p>
-      </form>
-
-      <div class="sidebar-card__footer">
-        <i class="fa-solid fa-shield-halved"></i>
-        Every broker desk is tied to a verified SalesDesk account.
-      </div>
-    </div>
-  </aside>
-
-  <div class="browse-sidebar-overlay" id="deskSidebarOverlay"></div>
-
-  <!-- ── Results ─────────────────────────────────────────── -->
-  <div class="browse-results">
-
-    <div class="results-bar">
-      <p class="results-bar__count">
-        <span class="results-bar__count-num"><?= number_format($totalDesks) ?></span>
-        <span class="results-bar__heading">
-          broker<?= $totalDesks === 1 ? '' : 's' ?> found<?= $province ? ' in ' . htmlspecialchars($province) : '' ?>
-        </span>
-      </p>
-
-      <form class="sort-form" method="GET" action="/desks/" id="deskSortForm">
-        <?php if ($q): ?><input type="hidden" name="q" value="<?= htmlspecialchars($q) ?>"><?php endif; ?>
-        <?php if ($province): ?><input type="hidden" name="province" value="<?= htmlspecialchars($province) ?>"><?php endif; ?>
-        <label for="deskSort" style="font-size:12px;color:var(--muted);">Sort:</label>
-        <select id="deskSort" name="sort" class="sort-select">
-          <option value="active"  <?= $sort === 'active'  ? 'selected' : '' ?>>Most cars listed</option>
-          <option value="popular" <?= $sort === 'popular' ? 'selected' : '' ?>>Most viewed</option>
-          <option value="newest"  <?= $sort === 'newest'  ? 'selected' : '' ?>>Newest desks</option>
-          <option value="name"    <?= $sort === 'name'    ? 'selected' : '' ?>>Name (A–Z)</option>
-        </select>
-      </form>
-    </div>
-
-    <?php if ($province || $q): ?>
-    <div class="active-filter-tags">
-      <?php if ($q): ?>
-      <span class="active-filter-tag">
-        “<?= htmlspecialchars($q) ?>”
-        <a class="active-filter-tag__dismiss" href="/desks/?<?= desksQueryString(['q' => null, 'page' => null]) ?>">&times;</a>
-      </span>
-      <?php endif; ?>
-      <?php if ($province): ?>
-      <span class="active-filter-tag">
-        <?= htmlspecialchars($province) ?>
-        <a class="active-filter-tag__dismiss" href="/desks/?<?= desksQueryString(['province' => null, 'page' => null]) ?>">&times;</a>
-      </span>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php if (empty($desks)): ?>
-
-    <div class="browse-empty">
-      <i class="fa-solid fa-magnifying-glass-minus browse-empty__icon"></i>
-      <div class="browse-empty__title">No brokers match your search</div>
-      <div class="browse-empty__sub">
-        Try a different name or clear your province filter.
-      </div>
-      <a href="/desks/" class="browse-empty__reset">Clear all filters</a>
-    </div>
-
-    <?php else: ?>
-
-    <div class="desk-grid browse-grid--animated">
-      <?php foreach ($desks as $desk):
-        $brokerName = trim(($desk['first_name'] ?? '') . ' ' . ($desk['last_name'] ?? ''))
-                      ?: $desk['display_name'];
-        $initials   = strtoupper(
-            substr($desk['first_name'] ?? '', 0, 1) . substr($desk['last_name'] ?? '', 0, 1)
-        ) ?: 'SD';
-        $location   = implode(', ', array_filter([$desk['city'], $desk['province']]));
-        $accent     = $desk['primary_colour'] ?: '#0f4c9e';
-        $isOrgVerified = ($desk['org_verification'] ?? null) === 'verified';
-        $deskUrl    = '/' . htmlspecialchars($desk['slug']) . '/';
-      ?>
-      <a href="<?= $deskUrl ?>" class="desk-card">
-        <div class="desk-card__banner" style="background:linear-gradient(135deg,#08143c, <?= htmlspecialchars($accent) ?>);">
-          <?php if ((int)$desk['cars_count'] > 0): ?>
-          <span class="desk-card__banner-tag">
-            <i class="fa-solid fa-car"></i> <?= (int)$desk['cars_count'] ?> car<?= (int)$desk['cars_count'] === 1 ? '' : 's' ?>
-          </span>
-          <?php endif; ?>
-        </div>
-
-        <div class="desk-card__body">
-          <div class="desk-card__avatar">
-            <?php if ($desk['avatar_url']): ?>
-            <img src="<?= htmlspecialchars($desk['avatar_url']) ?>" alt="<?= htmlspecialchars($brokerName) ?>">
-            <?php else: ?>
-            <?= htmlspecialchars($initials) ?>
-            <?php endif; ?>
-          </div>
-
-          <div class="desk-card__name"><?= htmlspecialchars($desk['display_name']) ?></div>
-          <div class="desk-card__broker"><?= htmlspecialchars($brokerName) ?></div>
-
-          <?php if ($desk['tagline']): ?>
-          <div class="desk-card__tagline"><?= htmlspecialchars(mb_strimwidth($desk['tagline'], 0, 72, '…')) ?></div>
-          <?php endif; ?>
-
-          <div class="desk-card__badges">
-            <?php if ($location): ?>
-            <span class="desk-card__badge"><i class="fa-solid fa-location-dot"></i> <?= htmlspecialchars($location) ?></span>
-            <?php endif; ?>
-            <?php if ($isOrgVerified): ?>
-            <span class="verified-badge"><i class="fa-solid fa-circle-check"></i> <?= htmlspecialchars($desk['org_name']) ?></span>
-            <?php endif; ?>
-          </div>
-
-          <div class="desk-card__stats">
-            <div class="desk-card__stat">
-              <div class="desk-card__stat-num"><?= number_format((int)$desk['total_views']) ?></div>
-              <div class="desk-card__stat-lbl">Views</div>
-            </div>
-            <div class="desk-card__stat">
-              <div class="desk-card__stat-num"><?= (int)$desk['deals_closed'] ?></div>
-              <div class="desk-card__stat-lbl">Closed</div>
-            </div>
-            <div class="desk-card__stat desk-card__stat--cta">
-              Visit desk <i class="fa-solid fa-arrow-right"></i>
-            </div>
-          </div>
-        </div>
-      </a>
-      <?php endforeach; ?>
-    </div>
-
-    <!-- Pagination -->
-    <?php if ($totalPages > 1): ?>
-    <div class="pagination">
-      <?php if ($page > 1): ?>
-      <a class="pagination__page pagination__page--nav" href="?<?= desksQueryString(['page' => $page - 1]) ?>">
-        <i class="fa-solid fa-chevron-left"></i> Prev
-      </a>
-      <?php endif; ?>
-
-      <?php
-      $windowStart = max(1, $page - 2);
-      $windowEnd   = min($totalPages, $page + 2);
-
-      if ($windowStart > 1): ?>
-        <a class="pagination__page" href="?<?= desksQueryString(['page' => 1]) ?>">1</a>
-        <?php if ($windowStart > 2): ?><span class="pagination__ellipsis">…</span><?php endif; ?>
-      <?php endif;
-
-      for ($i = $windowStart; $i <= $windowEnd; $i++): ?>
-        <a class="pagination__page <?= $i === $page ? 'active' : '' ?>"
-           href="?<?= desksQueryString(['page' => $i]) ?>"><?= $i ?></a>
-      <?php endfor;
-
-      if ($windowEnd < $totalPages):
-        if ($windowEnd < $totalPages - 1): ?><span class="pagination__ellipsis">…</span><?php endif; ?>
-        <a class="pagination__page" href="?<?= desksQueryString(['page' => $totalPages]) ?>"><?= $totalPages ?></a>
-      <?php endif; ?>
-
-      <?php if ($page < $totalPages): ?>
-      <a class="pagination__page pagination__page--nav" href="?<?= desksQueryString(['page' => $page + 1]) ?>">
-        Next <i class="fa-solid fa-chevron-right"></i>
-      </a>
-      <?php endif; ?>
-    </div>
-    <?php endif; ?>
-
-    <?php endif; // empty($desks) ?>
-
-  </div><!-- /browse-results -->
-</div><!-- /browse-layout -->
-
-<!-- ══════════════════════════════════════════════════════
-     CTA — become a broker
-     ══════════════════════════════════════════════════════ -->
-<div style="margin-inline:clamp(16px,4vw,48px);margin-top:3rem;">
-  <div style="text-align:center;padding:2.25rem;background:var(--white);
-              border:1px solid var(--border);border-radius:var(--r-xl);
-              box-shadow:var(--shadow-md);">
-    <div style="font-family:var(--font-d);font-size:20px;font-weight:800;margin-bottom:6px;">
-      Don't see your desk here yet?
-    </div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;max-width:420px;
-              margin-left:auto;margin-right:auto;">
-      Create your free SalesDesk in minutes — add cars, share your link, and start earning commission.
+  <!-- ══════════════════════════════════
+       TOOLBAR
+       ══════════════════════════════════ -->
+  <div class="dk-toolbar">
+    <p class="dk-toolbar__count">
+      <strong><?= number_format($totalDesks) ?></strong>
+      broker<?= $totalDesks === 1 ? '' : 's' ?><?= $province ? ' in ' . $e($province) : '' ?><?= $q ? ' matching “' . $e($q) . '”' : '' ?>
     </p>
-    <a href="/brokers.php" class="pub-btn pub-btn-primary" style="padding:12px 28px;font-size:14px;display:inline-flex;">
-      <i class="fa-solid fa-id-card"></i> Create your SalesDesk
-    </a>
+
+    <form class="sort-form dk-toolbar__sort" method="GET" action="/desks/" data-clean-submit>
+      <?php if ($q): ?><input type="hidden" name="q" value="<?= $e($q) ?>"><?php endif; ?>
+      <?php if ($province): ?><input type="hidden" name="province" value="<?= $e($province) ?>"><?php endif; ?>
+      <label class="sr-only" for="deskSort">Sort brokers</label>
+      <i class="fa-solid fa-arrow-down-wide-short sort-form__icon" aria-hidden="true"></i>
+      <select class="sort-select" id="deskSort" name="sort" data-autosubmit>
+        <option value="active"  <?= $sort === 'active'  ? 'selected' : '' ?>>Most cars listed</option>
+        <option value="popular" <?= $sort === 'popular' ? 'selected' : '' ?>>Most viewed</option>
+        <option value="newest"  <?= $sort === 'newest'  ? 'selected' : '' ?>>Newest desks</option>
+        <option value="name"    <?= $sort === 'name'    ? 'selected' : '' ?>>Name (A–Z)</option>
+      </select>
+      <noscript><button class="pub-btn pub-btn-ghost pub-btn-sm" type="submit">Sort</button></noscript>
+    </form>
   </div>
+
+  <!-- Province chips -->
+  <div class="dk-provinces" aria-label="Filter by province">
+    <a class="pub-chip <?= $province === '' ? 'is-active' : '' ?>" href="<?= $e(desksUrl(['province' => null, 'page' => null])) ?>">
+      All provinces
+    </a>
+    <?php foreach ($provinces as $prov): ?>
+    <a class="pub-chip <?= $province === $prov ? 'is-active' : '' ?>"
+       href="<?= $e($province === $prov ? desksUrl(['province' => null, 'page' => null]) : desksUrl(['province' => $prov, 'page' => null])) ?>"
+       <?= $province === $prov ? 'aria-current="true"' : '' ?>>
+      <?= $e($prov) ?>
+      <?php if (isset($provinceCounts[$prov])): ?><span class="dk-provinces__n"><?= (int) $provinceCounts[$prov] ?></span><?php endif; ?>
+    </a>
+    <?php endforeach; ?>
+  </div>
+
+  <?php if ($q || $province): ?>
+  <div class="active-filter-tags">
+    <?php if ($q): ?>
+    <a class="active-filter-tag" href="<?= $e(desksUrl(['q' => null, 'page' => null])) ?>" aria-label="Remove name filter">
+      “<?= $e($q) ?>” <i class="fa-solid fa-xmark active-filter-tag__dismiss" aria-hidden="true"></i>
+    </a>
+    <?php endif; ?>
+    <?php if ($province): ?>
+    <a class="active-filter-tag" href="<?= $e(desksUrl(['province' => null, 'page' => null])) ?>" aria-label="Remove province filter">
+      <?= $e($province) ?> <i class="fa-solid fa-xmark active-filter-tag__dismiss" aria-hidden="true"></i>
+    </a>
+    <?php endif; ?>
+    <a class="active-filter-clear" href="/desks/">Clear all</a>
+  </div>
+  <?php endif; ?>
+
+
+  <!-- ══════════════════════════════════
+       RESULTS
+       ══════════════════════════════════ -->
+  <?php if (empty($desks)): ?>
+
+  <div class="pub-empty dk-empty">
+    <span class="pub-empty__icon"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span>
+    <h2 class="pub-empty__title">No brokers match that search</h2>
+    <p class="pub-empty__sub">Try a different name, or look at every desk in the country.</p>
+    <div class="pub-empty__actions">
+      <?php if ($province): ?>
+      <a class="pub-chip" href="<?= $e(desksUrl(['province' => null, 'page' => null])) ?>"><i class="fa-solid fa-xmark"></i> <?= $e($province) ?></a>
+      <?php endif; ?>
+      <?php if ($q): ?>
+      <a class="pub-chip" href="<?= $e(desksUrl(['q' => null, 'page' => null])) ?>"><i class="fa-solid fa-xmark"></i> “<?= $e($q) ?>”</a>
+      <?php endif; ?>
+    </div>
+    <a href="/desks/" class="pub-btn pub-btn-primary dk-empty__btn">See all brokers</a>
+  </div>
+
+  <?php else: ?>
+
+  <div class="dk-grid">
+    <?php foreach ($desks as $desk):
+      $brokerName = trim(($desk['first_name'] ?? '') . ' ' . ($desk['last_name'] ?? '')) ?: $desk['display_name'];
+      $initials   = strtoupper(substr($desk['first_name'] ?? '', 0, 1) . substr($desk['last_name'] ?? '', 0, 1)) ?: 'SD';
+      $location   = implode(', ', array_filter([$desk['city'], $desk['province']]));
+      $isOrgVerified = ($desk['org_verification'] ?? null) === 'verified';
+      $deskUrl    = '/' . rawurlencode($desk['slug']) . '/';
+      $previews   = $deskPreviews[(int) $desk['id']] ?? [];
+      $carsCount  = (int) $desk['cars_count'];
+    ?>
+    <article class="dk-card pub-reveal">
+      <div class="dk-card__head">
+        <span class="dk-avatar">
+          <?php if ($desk['avatar_url']): ?>
+          <img src="<?= $e($desk['avatar_url']) ?>" alt="" width="56" height="56" loading="lazy">
+          <?php elseif ($desk['logo_url']): ?>
+          <img src="<?= $e($desk['logo_url']) ?>" alt="" width="56" height="56" loading="lazy">
+          <?php else: ?>
+          <?= $e($initials) ?>
+          <?php endif; ?>
+        </span>
+
+        <span class="dk-card__id">
+          <h2 class="dk-card__name"><a class="dk-card__link" href="<?= $e($deskUrl) ?>"><?= $e($desk['display_name']) ?></a></h2>
+          <span class="dk-card__broker"><?= $e($brokerName) ?></span>
+          <?php if ($location): ?>
+          <span class="dk-card__loc"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($location) ?></span>
+          <?php endif; ?>
+        </span>
+      </div>
+
+      <?php if ($isOrgVerified || $desk['tagline']): ?>
+      <div class="dk-card__meta">
+        <?php if ($isOrgVerified): ?>
+        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <?= $e($desk['org_name']) ?></span>
+        <?php endif; ?>
+        <?php if ($desk['tagline']): ?>
+        <p class="dk-card__tagline"><?= $e(mb_strimwidth($desk['tagline'], 0, 90, '…')) ?></p>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <div class="dk-card__preview" aria-hidden="true">
+        <?php if ($previews): ?>
+          <?php foreach (array_slice($previews, 0, 3) as $pv): ?>
+          <span class="dk-card__thumb"><img src="<?= $e($pv['src']) ?>" alt="" width="180" height="135" loading="lazy"></span>
+          <?php endforeach; ?>
+          <?php for ($i = count($previews); $i < 3; $i++): ?>
+          <span class="dk-card__thumb dk-card__thumb--empty"><i class="fa-solid fa-car-side"></i></span>
+          <?php endfor; ?>
+        <?php else: ?>
+          <?php for ($i = 0; $i < 3; $i++): ?>
+          <span class="dk-card__thumb dk-card__thumb--empty"><i class="fa-solid fa-car-side"></i></span>
+          <?php endfor; ?>
+        <?php endif; ?>
+      </div>
+
+      <div class="dk-card__stats">
+        <span><strong><?= $carsCount ?></strong> car<?= $carsCount === 1 ? '' : 's' ?></span>
+        <span><strong><?= (int) $desk['deals_closed'] ?></strong> closed</span>
+        <span><strong><?= desksCompact((int) $desk['total_views']) ?></strong> views</span>
+        <span class="dk-card__cta">Visit desk <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+      </div>
+    </article>
+    <?php endforeach; ?>
+  </div>
+
+  <?php if ($totalPages > 1): ?>
+  <nav class="pagination" aria-label="Pages">
+    <?php if ($page > 1): ?>
+    <a class="pagination__page pagination__page--nav" rel="prev" href="<?= $e(desksUrl(['page' => $page > 2 ? $page - 1 : null])) ?>">
+      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i><span class="pagination__label">Previous</span>
+    </a>
+    <?php endif; ?>
+
+    <?php
+    $prev = null;
+    for ($i = 1; $i <= $totalPages; $i++):
+        if (!($i === 1 || $i === $totalPages || abs($i - $page) <= 1)) continue;
+        if ($prev !== null && $i - $prev > 1): ?>
+    <span class="pagination__ellipsis" aria-hidden="true">…</span>
+        <?php endif; ?>
+    <a class="pagination__page <?= $i === $page ? 'active' : '' ?>" <?= $i === $page ? 'aria-current="page"' : '' ?>
+       href="<?= $e(desksUrl(['page' => $i > 1 ? $i : null])) ?>" aria-label="Page <?= $i ?>"><?= $i ?></a>
+    <?php $prev = $i; endfor; ?>
+
+    <?php if ($page < $totalPages): ?>
+    <a class="pagination__page pagination__page--nav" rel="next" href="<?= $e(desksUrl(['page' => $page + 1])) ?>">
+      <span class="pagination__label">Next</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+    </a>
+    <?php endif; ?>
+  </nav>
+  <?php endif; ?>
+
+  <?php endif; ?>
+
+
+  <!-- ══════════════════════════════════
+       CTA
+       ══════════════════════════════════ -->
+  <section class="dk-cta pub-reveal" aria-labelledby="dkCtaTitle">
+    <div class="dk-cta__text">
+      <span class="pub-eyebrow">Brokers &amp; sales executives</span>
+      <h2 class="dk-cta__title" id="dkCtaTitle">Your desk could be on this page.</h2>
+      <p class="dk-cta__sub">
+        Create a free SalesDesk, add cars from verified dealerships, share your link —
+        and earn commission on every deal you source. No stock, no showroom, no monthly fee.
+      </p>
+    </div>
+    <div class="dk-cta__actions">
+      <a href="/auth/register" class="pub-btn pub-btn-accent pub-btn-lg">Create your SalesDesk</a>
+      <a href="/how-it-works/brokers" class="pub-btn pub-btn-on-ink pub-btn-lg">How it works</a>
+    </div>
+  </section>
+
 </div>
-
-<!-- ══════════════════════════════════════════════════════
-     PAGE-SCOPED STYLES — desk directory card
-     Reuses global tokens; adds only what browse.css /
-     public.css don't already provide.
-     ══════════════════════════════════════════════════════ -->
-<style>
-.desk-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 18px;
-}
-
-.desk-card {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: transform .28s cubic-bezier(.2,0,0,1), box-shadow .28s, border-color .18s;
-}
-
-.desk-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(15,76,158,.13);
-  border-color: #c7d6f5;
-  text-decoration: none;
-}
-
-.desk-card__banner {
-  height: 64px;
-  position: relative;
-}
-
-.desk-card__banner-tag {
-  position: absolute;
-  bottom: 10px;
-  right: 12px;
-  background: rgba(255,255,255,.94);
-  color: var(--p);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 10px;
-  border-radius: var(--r-full);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.desk-card__body {
-  padding: 0 18px 18px;
-  position: relative;
-}
-
-.desk-card__avatar {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  border: 3px solid var(--white);
-  color: #fff;
-  font-family: var(--font-d);
-  font-size: 18px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: -28px;
-  margin-bottom: 10px;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-}
-
-.desk-card__avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-.desk-card__name {
-  font-family: var(--font-d);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.desk-card__broker {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 1px;
-  margin-bottom: 8px;
-}
-
-.desk-card__tagline {
-  font-size: 12px;
-  color: var(--faint);
-  line-height: 1.55;
-  margin-bottom: 10px;
-}
-
-.desk-card__badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.desk-card__badge {
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-full);
-  padding: 3px 9px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.desk-card__stats {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.desk-card__stat { text-align: left; }
-.desk-card__stat-num { font-family: var(--font-d); font-size: 15px; font-weight: 700; color: var(--text); }
-.desk-card__stat-lbl { font-size: 10px; color: var(--faint); }
-
-.desk-card__stat--cta {
-  margin-left: auto;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--p);
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.desk-card__stat--cta i {
-  font-size: 10px;
-  transition: transform .18s;
-}
-
-.desk-card:hover .desk-card__stat--cta i { transform: translateX(3px); }
-
-@media (max-width: 480px) {
-  .desk-grid { grid-template-columns: 1fr; }
-}
-</style>
-
-<!-- ══════════════════════════════════════════════════════
-     BEHAVIOUR — mobile filter drawer + auto-submit selects
-     (Mirrors the pattern used on the main /c/ browse page.)
-     ══════════════════════════════════════════════════════ -->
-<script>
-(function () {
-  'use strict';
-
-  var toggle   = document.getElementById('deskFilterToggle');
-  var sidebar  = document.getElementById('deskSidebar');
-  var overlay  = document.getElementById('deskSidebarOverlay');
-  var closeBtn = document.getElementById('deskSidebarClose');
-
-  function openDrawer() {
-    if (!sidebar) return;
-    sidebar.classList.add('drawer-open');
-    overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-
-  function closeDrawer() {
-    if (!sidebar) return;
-    sidebar.classList.remove('drawer-open');
-    overlay.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  if (toggle)   toggle.addEventListener('click', openDrawer);
-  if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
-  if (overlay)  overlay.addEventListener('click', closeDrawer);
-
-  // Auto-submit on province / sort change (progressive enhancement —
-  // the "Apply filters" button and noscript hint remain functional
-  // fallbacks without JS).
-  var provinceSelect = document.getElementById('deskProvinceSelect');
-  if (provinceSelect) {
-    provinceSelect.addEventListener('change', function () {
-      document.getElementById('deskFilterForm').requestSubmit();
-    });
-  }
-
-  var sortSelect = document.getElementById('deskSort');
-  if (sortSelect) {
-    sortSelect.addEventListener('change', function () {
-      document.getElementById('deskSortForm').requestSubmit();
-    });
-  }
-})();
-</script>
 
 <?php
 $pageContent = ob_get_clean();

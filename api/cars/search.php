@@ -18,6 +18,10 @@
  *   price_max    int      optional  — maximum price (R)
  *   year_min     int      optional  — minimum year
  *   year_max     int      optional  — maximum year
+ *   transmission[] array  optional  — whitelisted (UX-COUNT)
+ *   drivetrain[]   array  optional  — whitelisted (UX-COUNT)
+ *   mileage_min  int      optional  (UX-COUNT)
+ *   mileage_max  int      optional  (UX-COUNT)
  *   comm_type    string   optional  fixed|percentage
  *   sort         string   optional  commission_desc (default)|newest|fewest_brokers|
  *                                   price_asc|price_desc
@@ -138,6 +142,22 @@ $yearMin = isset($_GET['year_min']) && ctype_digit((string) $_GET['year_min'])
 $yearMax = isset($_GET['year_max']) && ctype_digit((string) $_GET['year_max'])
     ? (int) $_GET['year_max'] : null;
 
+// UX-COUNT (public UX/UI overhaul): the /cars-for-sale/ mobile filter
+// sheet shows a live "Show N cars" count, so this endpoint must accept
+// every filter that page has. Values are whitelisted with the same
+// shared lists the browse page uses.
+require_once __DIR__ . '/../../includes/filter-whitelists.php';
+$transmissionsF = array_values(array_intersect(
+    array_filter(array_map('trim', (array) ($_GET['transmission'] ?? []))), sdTransmissionWhitelist()
+));
+$drivetrainsF = array_values(array_intersect(
+    array_filter(array_map('trim', (array) ($_GET['drivetrain'] ?? []))), sdDrivetrainWhitelist()
+));
+$mileageMin = isset($_GET['mileage_min']) && ctype_digit((string) $_GET['mileage_min'])
+    ? (int) $_GET['mileage_min'] : null;
+$mileageMax = isset($_GET['mileage_max']) && ctype_digit((string) $_GET['mileage_max'])
+    ? (int) $_GET['mileage_max'] : null;
+
 // Current broker's salesdesk_id (if logged in as broker) — for on_desk flag
 $currentSalesdeskId = 0;
 if (!empty($_SESSION['user_id']) && ($_SESSION['user_role'] ?? '') === 'broker') {
@@ -217,6 +237,18 @@ try {
         $where[]  = "c.year <= ?";
         $params[] = $yearMax;
     }
+
+    // ── Transmission / drivetrain (array) + mileage (UX-COUNT) ──
+    if (!empty($transmissionsF)) {
+        $where[] = 'c.transmission IN (' . implode(',', array_fill(0, count($transmissionsF), '?')) . ')';
+        $params  = array_merge($params, $transmissionsF);
+    }
+    if (!empty($drivetrainsF)) {
+        $where[] = 'c.drivetrain IN (' . implode(',', array_fill(0, count($drivetrainsF), '?')) . ')';
+        $params  = array_merge($params, $drivetrainsF);
+    }
+    if ($mileageMin !== null) { $where[] = 'c.mileage >= ?'; $params[] = $mileageMin; }
+    if ($mileageMax !== null) { $where[] = 'c.mileage <= ?'; $params[] = $mileageMax; }
 
     // ── Commission type ────────────────────────────────────────
     if ($commType && in_array($commType, ['fixed', 'percentage'], true)) {

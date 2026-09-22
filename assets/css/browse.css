@@ -1,1079 +1,884 @@
 /**
- * SalesDesk — Browse Page Styles  (v3)
- * T1 owns this file.
+ * SalesDesk — Browse CSS  (v2)
+ * assets/css/browse.css
  *
- * Everything for the car browse experience: /cars-for-sale/ and broker
- * storefronts (same sidebar + grid). Behaviour lives in
- * assets/js/browse.js and assets/js/search-typeahead.js.
+ * Browse layout: filter sidebar (drawer ≤ 1024px), results toolbar,
+ * active-filter chips, quick budget chips, results grid, pagination,
+ * empty state. Used by /cars-for-sale/ and — through the same class
+ * contract — the broker storefront (broker/index.php) and /desks/.
  *
- * Load order: global.css → public-shell.css → public.css → browse.css
+ * v2 (public UX/UI overhaul): full rewrite.
+ *   – Layout sits inside .sd-container (max width) — no more
+ *     margin + padding clamp pairs.
+ *   – Sidebar sections are <details> accordions (plain <div> sections
+ *     from older markup still style correctly).
+ *   – Sticky results toolbar with sort + grid/list toggle.
+ *   – Mobile drawer is a full-height sheet with a sticky
+ *     "Show N cars" footer (count kept live by browse.js).
+ *   – Legacy .vehicle-card markup (broker storefront) restyled to match
+ *     the shared .vc card until that page moves to the partial.
+ *   – Typeahead styles moved to public.css §7.
  *
- * OWNERSHIP:
- *   – Nav, mega panels, account panel, mobile drawer  → public-shell.css
- *   – .pub-page-wide / .pub-breadcrumb                → public-shell.css
- *   – .sr-only                                        → global.css
- *   – .pub-browse-grid base                           → public.css
- *     (breakpoints for it live here)
+ * Class contract kept (do not rename — broker/index.php, desks/index.php):
+ *   browse-layout, browse-sidebar, browse-sidebar-overlay,
+ *   browse-sidebar__close, browse-filter-toggle(__badge), browse-results,
+ *   sidebar-card(__header|__title|__reset|__footer), filter-section(-label),
+ *   filter-chip, chip-row, condition-chip-row, filter-select,
+ *   min-max-row / -input / -sep, year-row, search-input-wrap,
+ *   search-input-sidebar, filter-apply-btn, results-bar(__count|__count-num|
+ *   __heading), sort-form, sort-select, active-filter-tags, active-filter-tag
+ *   (__dismiss), price-pill-row, price-pill, pub-browse-grid, pagination
+ *   browse-empty(__icon|__title|__sub|__reset),
+ *   vehicle-card(*), salesdesk-badge, verified-badge.
  *
- * v3 (UI consolidation, Phase 1):
- *   – §1–7 mega-nav / account / trigger / mobile-drawer rules removed
- *     (now public-shell.css). Nav rules removed from the ≤1024px and
- *     ≤480px blocks too.
- *   – browse-additions.css merged and deleted. Nothing in it was
- *     browse-specific: its nav/footer/share/detail rules were already
- *     duplicated in public.css or now belong to public-shell.css, and
- *     .sr-only moved to global.css.
- *   – Page-scoped <style> from cars-for-sale/index.php merged here:
- *     the .browse-layout margins and reduced-motion guard were exact
- *     duplicates of rules below (dropped); the typeahead dropdown is
- *     now §14 (shared with broker/index.php).
- *   – Classes added for markup that used inline style="" attributes:
- *     .filter-section--search, .browse-filter-toggle__icon,
- *     .browse-filter-toggle__chevron.
- *   – Sidebar sticky offset derives from --nav-h; lateral gutters from
- *     --page-gutter.
- *
- * Patches retained from v2:
- *   P1  .browse-sidebar — sticky under the nav
- *   P2  .price-pill-row — -webkit-overflow-scrolling: touch
- *   P3  .pagination__page--nav — Prev/Next modifier
- *   P4  .browse-results — min-width: 0
- *   P5  .browse-grid--animated — CSS-only fade, respects prefers-reduced-motion
- *   P6  .browse-sidebar__close — color + font-family
- *   P7  .sidebar-card__footer i — replaces inline style dependency
- *   P8  ≤768px .browse-filter-toggle — display:flex
+ * Behaviour: assets/js/browse.js
  *
  * Sections:
- *   1.  Layout shell
- *   2.  Mobile filter toggle, overlay, drawer close
- *   3.  Sidebar card & inputs
- *   4.  Filter chips & price pills
- *   5.  Vehicle card
- *   6.  Results bar & sort
- *   7.  Active-filter tags
- *   8.  Price quick-filter row
- *   9.  Card badges
- *  10.  Pagination
- *  11.  Empty state
- *  12.  Grid entry animation
- *  13.  Responsive
- *  14.  Search typeahead dropdown
- *  15.  Touch overrides, print
+ *   1. Page header
+ *   2. Layout
+ *   3. Sidebar card & sections
+ *   4. Inputs, chips, body tiles
+ *   5. Results toolbar
+ *   6. Budget chips
+ *   7. Results grid & list view
+ *   8. Results footnote
+ *   9. Empty state
+ *  10. Legacy .vehicle-card (broker storefront)
+ *  11. Drawer (≤ 1024px)
  */
 
 
 /* ══════════════════════════════════════
-   1. LAYOUT SHELL
+   1. PAGE HEADER
+   ══════════════════════════════════════ */
+.browse-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 18px 22px;
+}
+
+.browse-head__title {
+  font-family: var(--font-d);
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -.035em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.browse-head__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+  color: var(--muted);
+}
+
+.browse-head__sub strong { color: var(--text); }
+.browse-head__dot { color: var(--faint); }
+
+.browse-head__live { display: inline-flex; align-items: center; gap: 6px; }
+
+.browse-head__pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, .18);
+}
+
+@media (max-width: 640px) {
+  .browse-head { padding-block: 10px 14px; }
+  .browse-head__actions { display: none; }
+}
+
+
+/* ══════════════════════════════════════
+   2. LAYOUT
    ══════════════════════════════════════ */
 .browse-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 24px;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: clamp(20px, 2.4vw, 36px);
   align-items: start;
+}
+
+.browse-results { min-width: 0; }
+
+/* Nested inside an .sd-container already (broker storefront) */
+.browse-layout--flush { max-width: none; margin-inline: 0; padding-inline: 0; }
+
+/* Legacy markup without .sd-container */
+.browse-layout:not(.sd-container):not(.browse-layout--flush) {
+  width: 100%;
+  max-width: calc(var(--container) + var(--page-gutter) * 2);
+  margin-inline: auto;
   padding-inline: var(--page-gutter);
 }
 
-/* P4 — prevents grid track blowout from wide content */
-.browse-results { min-width: 0; }
-
-/* P1 — sticky just below the nav bar */
 .browse-sidebar {
   position: sticky;
-  top: calc(var(--nav-h) + 12px);
+  top: calc(var(--nav-h) + 16px);
   max-height: calc(100vh - var(--nav-h) - 32px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #dde3ef transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.browse-sidebar::-webkit-scrollbar       { width: 4px; }
-.browse-sidebar::-webkit-scrollbar-track { background: transparent; }
-.browse-sidebar::-webkit-scrollbar-thumb {
-  background: #dde3ef;
-  border-radius: 4px;
-}
+/* Legacy sidebars (no .sidebar-card__body): let the aside scroll instead of the card */
+.browse-sidebar:not(:has(.sidebar-card__body)) { overflow-y: auto; scrollbar-width: thin; }
+.sidebar-card:not(:has(.sidebar-card__body)) { overflow: visible; flex-shrink: 0; }
+.browse-sidebar > .sidebar-card__footer { display: flex; gap: 8px; padding: 0 6px; border: 0; background: none; }
+
+.browse-sidebar-overlay { display: none; }
 
 
 /* ══════════════════════════════════════
-   2. MOBILE FILTER TOGGLE, OVERLAY, CLOSE
-   ══════════════════════════════════════ */
-.browse-filter-toggle {
-  display: none; /* shown ≤ 768px (§13) */
-  width: calc(100% - (var(--page-gutter) * 2));
-  margin: 0 var(--page-gutter) 16px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 11px 16px;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--sans);
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: border-color .15s, background .15s;
-}
-
-.browse-filter-toggle:hover {
-  border-color: var(--p);
-  background: var(--p-light);
-  color: var(--p);
-}
-
-.browse-filter-toggle__icon    { margin-right: 6px; }
-.browse-filter-toggle__chevron { font-size: 11px; color: var(--faint); }
-
-.browse-filter-toggle__badge {
-  background: var(--p);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: var(--r-full);
-  padding: 1px 7px;
-  min-width: 20px;
-  text-align: center;
-}
-
-.browse-sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.4);
-  z-index: calc(var(--z-dropdown) + 10);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-}
-
-.browse-sidebar-overlay.open { display: block; }
-
-/* P6 */
-.browse-sidebar__close {
-  display: none; /* shown in drawer mode (§13) */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--white);
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  font-family: var(--sans);
-  cursor: pointer;
-}
-
-
-/* ══════════════════════════════════════
-   3. SIDEBAR CARD & INPUTS
+   3. SIDEBAR CARD & SECTIONS
    ══════════════════════════════════════ */
 .sidebar-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
   background: var(--white);
-  border-radius: var(--r-xl);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-md);
-  padding: 20px;
+  border-radius: var(--r-xl);
+  overflow: hidden;
 }
 
 .sidebar-card__header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-bottom: 14px;
+  gap: 10px;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 18px;
+  flex-shrink: 0;
 }
 
 .sidebar-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  font-family: var(--font-d);
+  font-size: 16px;
   font-weight: 700;
-  font-size: 14px;
+  letter-spacing: -.02em;
   color: var(--text);
+}
+
+.sidebar-card__title i { font-size: 13px; color: var(--muted); }
+
+.sidebar-card__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font: 700 11px/1 var(--sans);
+  color: #fff;
+  background: var(--p);
+  border-radius: var(--r-full);
+}
+
+.sidebar-card__reset {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p);
+}
+
+.sidebar-card__reset:hover { color: var(--p-dark); }
+
+.sidebar-card__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+
+.sidebar-card__footer {
+  display: none;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--white);
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Older markup puts the footer hint/apply button inline — keep it visible there */
+.sidebar-card > .sidebar-card__footer:not(:last-child),
+.sidebar-card__footer:has(> i) { display: block; }
+
+.filter-section {
+  position: relative;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-section:last-child { border-bottom: 0; }
+
+.filter-section-label {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
 }
 
-.sidebar-card__title i { color: var(--p); font-size: 13px; }
+details.filter-section > summary.filter-section-label {
+  margin: -2px 0;
+  padding: 2px 0;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
 
-.sidebar-card__reset {
-  font-size: 12px;
-  font-weight: 600;
+details.filter-section > summary::-webkit-details-marker { display: none; }
+
+details.filter-section > summary::after {
+  content: '\f078';
+  margin-left: auto;
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: 10px;
+  color: var(--faint);
+  transition: transform var(--dur-2) var(--ease);
+}
+
+details.filter-section[open] > summary { margin-bottom: 12px; }
+details.filter-section[open] > summary::after { transform: rotate(180deg); }
+
+.filter-section__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10.5px;
   color: var(--p);
   background: var(--p-light);
-  padding: 4px 12px;
   border-radius: var(--r-full);
-  text-decoration: none;
-  transition: background .15s;
 }
 
-.sidebar-card__reset:hover { background: var(--p-b); text-decoration: none; }
+.filter-noscript-hint { display: none; font-size: 12px; color: var(--amber); text-align: center; }
 
-.sidebar-card__footer {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-  color: var(--faint);
-  display: flex;
+
+/* ══════════════════════════════════════
+   4. INPUTS, CHIPS, BODY TILES
+   ══════════════════════════════════════ */
+.search-input-wrap { position: relative; }
+
+.search-input-wrap > i {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search-input-sidebar,
+.filter-select,
+.min-max-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  font: 500 14px/1.2 var(--sans);
+  color: var(--text);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color var(--dur-1), box-shadow var(--dur-1), background var(--dur-1);
+}
+
+.search-input-sidebar { padding-left: 36px; }
+
+.search-input-sidebar:focus,
+.filter-select:focus,
+.min-max-input:focus { background: var(--white); border-color: var(--p-mid); box-shadow: 0 0 0 4px var(--p-ring); }
+
+.filter-select {
+  padding-right: 32px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%235b6b82' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+}
+
+.filter-select:has(option:checked:not([value=""])) {
+  color: var(--p-dark);
+  background-color: var(--p-light);
+  border-color: var(--p-b);
+}
+
+.min-max-row,
+.year-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 6px;
 }
 
-/* P7 */
-.sidebar-card__footer i {
-  color: var(--amber);
-  flex-shrink: 0;
-  margin-right: 4px;
-}
+.year-row { grid-template-columns: 1fr 1fr; }
 
-.filter-section { margin-bottom: 18px; }
+.min-max-sep { color: var(--faint); font-size: 13px; }
 
-/* Anchors the typeahead dropdown (§14) — was style="position:relative" */
-.filter-section--search { position: relative; }
+.filter-segment { display: flex; }
+.filter-segment .pub-segment__opt { flex: 1; }
+.filter-segment .pub-segment__opt span { width: 100%; justify-content: center; padding: 0 6px; }
 
-.filter-section-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--faint);
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  display: block;
-}
-
-.search-input-wrap { position: relative; }
-
-.search-input-wrap i {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--faint);
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.search-input-sidebar {
-  width: 100%;
-  padding: 10px 14px 10px 38px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  background: var(--bg);
-  color: var(--text);
-  outline: none;
-  transition: border-color .15s, box-shadow .15s, background .15s;
-  font-family: var(--sans);
-}
-
-.search-input-sidebar:focus {
-  border-color: var(--p);
-  box-shadow: 0 0 0 3px rgba(15,76,158,.08);
-  background: var(--white);
-}
-
-.search-input-sidebar::placeholder { color: var(--faint); }
-
-.min-max-row {
+.chip-row,
+.condition-chip-row {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.min-max-sep {
-  color: var(--border2);
-  font-weight: 300;
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  font: 500 13px/1 var(--sans);
+  color: var(--text2);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--dur-1), background var(--dur-1), color var(--dur-1);
+}
+
+.filter-chip:hover { border-color: var(--border2); color: var(--text); }
+
+.filter-chip.active,
+.filter-chip:has(input:checked) {
+  color: var(--p);
+  background: var(--p-light);
+  border-color: var(--p-b);
+  font-weight: 600;
+}
+
+.filter-chip:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--p-ring); }
+
+.body-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.body-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 4px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text2);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color var(--dur-1), background var(--dur-1), color var(--dur-1);
+}
+
+.body-tile span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
+.body-tile__icon { width: 46px; height: 20px; color: var(--muted); }
+
+.body-tile:hover { border-color: var(--border2); color: var(--text); }
+
+.body-tile.active,
+.body-tile:has(input:checked) { color: var(--p); background: var(--p-light); border-color: var(--p-b); }
+
+.body-tile.active .body-tile__icon,
+.body-tile:has(input:checked) .body-tile__icon { color: var(--p); }
+
+.body-tile.active .body-tile__icon circle,
+.body-tile:has(input:checked) .body-tile__icon circle { fill: var(--p-light); }
+
+.body-tile:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--p-ring); }
+
+.filter-apply-btn { width: 100%; }
+
+/* Legacy apply button (desks / storefront markup without .pub-btn) */
+.filter-apply-btn:not(.pub-btn) {
+  display: block;
+  width: calc(100% - 36px);
+  height: 42px;
+  margin: 14px 18px;
+  font: 600 14px/1 var(--sans);
+  color: #fff;
+  background: var(--p);
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+.filter-apply-btn:not(.pub-btn):hover { background: var(--p-dark); }
+
+
+/* ══════════════════════════════════════
+   5. RESULTS TOOLBAR  (sort control lives in public.css §17)
+   ══════════════════════════════════════ */
+.results-bar {
+  position: sticky;
+  top: var(--nav-h);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 0;
+  background: rgba(244, 246, 250, .92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.results-bar__count {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.results-bar__count-num { font-weight: 700; color: var(--text); }
+.results-bar__heading { color: var(--text2); }
+
+.view-toggle {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+}
+
+.view-toggle__btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 32px;
+  font-size: 13px;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+
+.view-toggle__btn[aria-pressed="true"] { color: #fff; background: var(--ink); }
+
+.browse-filter-toggle {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  font: 600 13.5px/1 var(--sans);
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
   flex-shrink: 0;
 }
 
-.min-max-input {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  background: var(--bg);
-  color: var(--text);
-  outline: none;
-  transition: border-color .15s, background .15s;
-  font-family: var(--sans);
-  -moz-appearance: textfield;
-}
+/* Storefront markup places the toggle outside the container */
+main > .browse-filter-toggle,
+.broker-container ~ .browse-filter-toggle { margin-inline: var(--page-gutter); margin-bottom: 12px; }
 
-.min-max-input::-webkit-outer-spin-button,
-.min-max-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-
-.min-max-input:focus        { border-color: var(--p); background: var(--white); }
-.min-max-input::placeholder { color: var(--faint); }
-
-.filter-select {
-  width: 100%;
-  padding: 9px 32px 9px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  background-color: var(--bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  color: var(--text);
-  outline: none;
-  appearance: none;
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: border-color .15s, background-color .15s;
-}
-
-.filter-select:focus {
-  border-color: var(--p);
-  background-color: var(--white);
-}
-
-.year-row                { display: flex; gap: 8px; }
-.year-row .filter-select { flex: 1; width: auto; }
-
-.filter-apply-btn {
-  width: 100%;
-  padding: 10px;
-  background: var(--p);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  border-radius: var(--r-md);
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: background .18s;
-}
-
-.filter-apply-btn:hover { background: var(--p-dark); }
-
-.filter-noscript-hint {
-  display: none;
+.browse-filter-toggle__badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
   font-size: 11px;
-  color: var(--amber);
-  margin-top: 8px;
-  text-align: center;
+  color: #fff;
+  background: var(--p);
+  border-radius: var(--r-full);
 }
 
 
 /* ══════════════════════════════════════
-   4. FILTER CHIPS & PRICE PILLS
+   6. BUDGET CHIPS  (active-filter chips + sort now in public.css)
    ══════════════════════════════════════ */
-.filter-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  cursor: pointer;
-  user-select: none;
-  background: var(--white);
-  border: 1.5px solid var(--border);
-  padding: 7px 10px;
-  border-radius: var(--r-md);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  transition: border-color .18s, background .18s, color .18s, box-shadow .18s;
-  min-height: 38px;
+.price-pill-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.filter-chip:hover { border-color: var(--p); color: var(--p); }
-
-/* Keyboard users tab to the visually hidden input inside the chip */
-.filter-chip:focus-within {
-  outline: 2px solid var(--p);
-  outline-offset: 2px;
-}
-
-.filter-chip.active {
-  background: var(--p);
-  color: var(--white);
-  border-color: var(--p);
-  box-shadow: 0 2px 8px rgba(15,76,158,.25);
-}
-
-.condition-chip-row              { display: flex; gap: 6px; }
-.condition-chip-row .filter-chip { flex: 1; }
-.chip-row                        { display: flex; flex-wrap: wrap; gap: 6px; }
+.price-pill-row::-webkit-scrollbar { display: none; }
 
 .price-pill {
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  border-radius: var(--r-full);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  transition: all .18s;
-  border: 1.5px solid var(--border);
-  background: var(--white);
-  color: var(--muted);
-  min-height: 34px;
+  height: 34px;
+  padding: 0 14px;
+  font: 500 13px/1 var(--sans);
   white-space: nowrap;
+  color: var(--text2);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  transition: border-color var(--dur-1), color var(--dur-1), background var(--dur-1);
 }
 
-.price-pill:hover { border-color: var(--p); color: var(--p); text-decoration: none; }
-
-.price-pill.active {
-  background: var(--p);
-  color: var(--white);
-  border-color: var(--p);
-  box-shadow: 0 2px 8px rgba(15,76,158,.22);
-}
+.price-pill:hover { border-color: var(--border2); color: var(--text); }
+.price-pill.active { color: #fff; background: var(--ink); border-color: var(--ink); }
 
 
 /* ══════════════════════════════════════
-   5. VEHICLE CARD
+   7. RESULTS GRID & LIST VIEW
    ══════════════════════════════════════ */
-.vehicle-card {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  background: var(--white);
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  transition: transform .28s cubic-bezier(.2,0,0,1),
-              box-shadow .28s cubic-bezier(.2,0,0,1),
-              border-color .18s;
-  box-shadow: 0 2px 10px rgba(0,0,0,.04);
+.pub-browse-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.5vw, 20px);
 }
 
-.vehicle-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(15,76,158,.13);
-  border-color: #c7d6f5;
-  text-decoration: none;
+.pub-browse-grid.is-list { grid-template-columns: 1fr; }
+
+@media (min-width: 769px) {
+  .pub-browse-grid.is-list .vc { flex-direction: row; }
+  .pub-browse-grid.is-list .vc__media { flex: 0 0 min(38%, 340px); aspect-ratio: auto; min-height: 230px; }
+  .pub-browse-grid.is-list .vc__body { padding: 20px 22px; }
+  .pub-browse-grid.is-list .vc__title { font-size: 19px; }
+  .pub-browse-grid.is-list .vc__price { font-size: 24px; }
 }
+
+@media (min-width: 1500px) {
+  .pub-browse-grid:not(.is-list) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1200px) {
+  .pub-browse-grid:not(.is-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1024px) {
+  .pub-browse-grid:not(.is-list) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 860px) {
+  .pub-browse-grid:not(.is-list) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .pub-browse-grid:not(.is-list) { grid-template-columns: 1fr; }
+  .view-toggle { display: none; }
+}
+
+/* Grid entry animation (kept for storefront markup) */
+.browse-grid--animated { animation: pub-fade-up .45s var(--ease) both; }
+
+
+/* ══════════════════════════════════════
+   8. RESULTS FOOTNOTE  (pagination now lives in public.css §16)
+   ══════════════════════════════════════ */
+.browse-foot-note {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+@media (max-width: 560px) {
+  .browse-foot-note { font-size: 12px; }
+}
+
+/* ══════════════════════════════════════
+   9. EMPTY STATE
+   ══════════════════════════════════════ */
+.browse-empty { margin-top: 8px; }
+
+/* Legacy empty-state markup (icon/title/sub as divs) */
+.browse-empty:not(.pub-empty) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 24px;
+  text-align: center;
+  background: var(--white);
+  border: 1px dashed var(--border2);
+  border-radius: var(--r-xl);
+}
+
+.browse-empty__icon  { font-size: 32px; color: var(--p); }
+.browse-empty__title { font: 700 18px/1.3 var(--font-d); color: var(--text); }
+.browse-empty__sub   { color: var(--muted); }
+.browse-empty__reset { margin-top: 14px; }
+.browse-empty:not(.pub-empty) .browse-empty__reset { font-weight: 600; color: var(--p); }
+
+
+/* ══════════════════════════════════════
+   10. LEGACY .vehicle-card (broker storefront)
+   ══════════════════════════════════════ */
+.vehicle-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  transition: box-shadow var(--dur-3) var(--ease), transform var(--dur-3) var(--ease);
+}
+
+.vehicle-card:hover { box-shadow: var(--shadow-lg); transform: translateY(-3px); color: var(--text); }
 
 .vehicle-card__img {
   position: relative;
-  height: 195px;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(160deg, #e9eef6, #dfe6f0);
   overflow: hidden;
-  background: var(--bg);
 }
 
-.vehicle-card__img img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform .5s cubic-bezier(.2,0,0,1);
-}
+.vehicle-card__img img { width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease); }
+.vehicle-card:hover .vehicle-card__img img { transform: scale(1.04); }
 
-.vehicle-card:hover .vehicle-card__img img { transform: scale(1.06); }
-
-.vehicle-card__img-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 42px;
-  color: var(--border);
-}
+.vehicle-card__img-placeholder { display: grid; place-items: center; height: 100%; font-size: 40px; color: var(--border2); }
 
 .vehicle-card__pill {
   position: absolute;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: var(--r-full);
-  line-height: 1.5;
-  pointer-events: none;
-}
-
-.vehicle-card__pill--year {
-  top: 12px; left: 12px;
-  background: rgba(0,0,0,.55);
-  backdrop-filter: blur(6px);
-  color: #fff;
-  font-family: var(--font-d);
-  font-weight: 700;
-}
-
-.vehicle-card__pill--province {
-  top: 12px; right: 12px;
-  background: rgba(255,255,255,.95);
-  color: var(--text);
-  box-shadow: 0 1px 4px rgba(0,0,0,.10);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 3px;
-}
-
-.vehicle-card__pill--province .pill-icon { color: var(--p); font-size: 9px; }
-
-.vehicle-card__pill--mileage {
-  bottom: 12px; right: 12px;
-  background: rgba(255,255,255,.95);
-  color: var(--text);
-  box-shadow: 0 1px 4px rgba(0,0,0,.10);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.vehicle-card__pill--mileage .pill-icon { color: var(--faint); font-size: 9px; }
-
-.vehicle-card__pill--new {
-  bottom: 12px; left: 12px;
-  background: var(--p);
-  color: #fff;
-  font-family: var(--font-d);
-  font-weight: 700;
-}
-
-.vehicle-card__pill--ev {
-  bottom: 12px; left: 12px;
-  background: var(--green);
-  color: #fff;
-  font-weight: 700;
-}
-
-.vehicle-card__body { padding: 16px; }
-
-.vehicle-card__name-row {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
-  margin-bottom: 8px;
-}
-
-.vehicle-card__name-group { min-width: 0; flex: 1; }
-
-.vehicle-card__name {
-  font-family: var(--font-d);
-  font-weight: 700;
-  font-size: 14px;
+  height: 24px;
+  padding: 0 9px;
+  font: 700 11px/1 var(--sans);
   color: var(--text);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: rgba(255, 255, 255, .94);
+  border-radius: var(--r-full);
 }
 
-.vehicle-card__dealer {
-  font-size: 11px;
-  color: var(--faint);
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
+.vehicle-card__pill .pill-icon { font-size: 9px; color: var(--muted); }
+.vehicle-card__pill--year     { top: 12px; left: 12px; }
+.vehicle-card__pill--province { top: 12px; left: 70px; }   /* right corner belongs to the save button */
+.vehicle-card__pill--mileage  { bottom: 12px; right: 12px; }
+.vehicle-card__pill--new      { bottom: 12px; left: 12px; color: #fff; background: var(--p); }
+.vehicle-card__pill--ev       { bottom: 12px; left: 12px; color: #065f46; background: #d1fae5; }
 
-.vehicle-card__dealer i { flex-shrink: 0; }
+.vehicle-card__body { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; flex: 1; }
 
-.vehicle-card__price {
-  font-family: var(--font-d);
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--p);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
+.vehicle-card__name-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.vehicle-card__name-group { min-width: 0; }
+.vehicle-card__name { font: 600 16px/1.3 var(--font-d); letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vehicle-card__dealer { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.vehicle-card__price { font: 700 18px/1.2 var(--font-d); letter-spacing: -.03em; white-space: nowrap; }
 
-.vehicle-card__meta-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  gap: 6px;
-  flex-wrap: wrap;
-}
+.vehicle-card__meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 
-.vehicle-card__specs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
+.vehicle-card__specs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 
 .vehicle-card__spec-pill {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  font-size: 11px;
-  padding: 2px 9px;
-  border-radius: var(--r-full);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.vehicle-card__spec-pill i { font-size: 10px; }
-
-
-/* ══════════════════════════════════════
-   6. RESULTS BAR & SORT
-   ══════════════════════════════════════ */
-.results-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-
-.results-bar__count { font-size: 14px; color: var(--muted); font-weight: 500; margin: 0; }
-
-.results-bar__count-num {
-  font-family: var(--font-d);
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--text);
-  margin-right: 6px;
-}
-
-.results-bar__heading { color: var(--faint); font-weight: 400; }
-
-.sort-form {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sort-select {
-  width: auto;
-  padding: 8px 32px 8px 12px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  background-color: var(--bg);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2394a3b8' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  color: var(--text);
-  outline: none;
-  appearance: none;
-  cursor: pointer;
-  font-family: var(--sans);
-  transition: border-color .15s, background-color .15s;
-}
-
-.sort-select:focus { border-color: var(--p); background-color: var(--white); }
-
-
-/* ══════════════════════════════════════
-   7. ACTIVE-FILTER TAGS
-   ══════════════════════════════════════ */
-.active-filter-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 14px;
-}
-
-.active-filter-tag {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: var(--p-light);
-  color: var(--p);
-  border: 1px solid var(--p-b);
-  border-radius: var(--r-full);
-  padding: 3px 10px;
+  height: 24px;
+  padding: 0 9px;
   font-size: 12px;
-  font-weight: 500;
-}
-
-.active-filter-tag__dismiss {
-  color: #6b8ad4;
-  text-decoration: none;
-  font-size: 14px;
-  line-height: 1;
-  flex-shrink: 0;
-  transition: color .15s;
-}
-
-.active-filter-tag__dismiss:hover { color: var(--p); text-decoration: none; }
-
-
-/* ══════════════════════════════════════
-   8. PRICE QUICK-FILTER ROW
-   ══════════════════════════════════════ */
-.price-pill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 20px;
-}
-
-
-/* ══════════════════════════════════════
-   9. CARD BADGES
-   ══════════════════════════════════════ */
-.salesdesk-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--p-light);
-  color: var(--p);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
+  color: var(--text2);
+  background: var(--bg);
   border-radius: var(--r-full);
-  border: 1px solid var(--p-b);
-  font-family: var(--font-d);
-  letter-spacing: .01em;
 }
 
-.salesdesk-badge i { font-size: 9px; }
-
-.verified-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  background: var(--gr-bg);
-  color: var(--green);
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: var(--r-full);
-  border: 1px solid var(--gr-b);
-}
-
-.verified-badge i { font-size: 8px; }
+.vehicle-card__spec-pill i { font-size: 10px; color: var(--faint); }
 
 
 /* ══════════════════════════════════════
-   10. PAGINATION
+   11. DRAWER (≤ 1024px)
+   Keep 1024px in sync with DRAWER_MQ in browse.js
    ══════════════════════════════════════ */
-.pagination {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 2.5rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
+@media (max-width: 1024px) {
+  .browse-layout { grid-template-columns: minmax(0, 1fr); }
 
-.pagination__page {
-  padding: 8px 14px;
-  border-radius: var(--r-md);
-  font-size: 13px;
-  font-family: var(--mono);
-  text-decoration: none;
-  border: 1px solid var(--border);
-  background: var(--white);
-  color: var(--muted);
-  transition: border-color .15s, background .15s, color .15s;
-  min-width: 40px;
-  text-align: center;
-}
-
-.pagination__page:hover { border-color: var(--p); color: var(--p); text-decoration: none; }
-
-.pagination__page.active {
-  border-color: var(--p);
-  background: var(--p);
-  color: #fff;
-}
-
-/* P3 */
-.pagination__page--nav {
-  min-width: 36px;
-  padding-left: 10px;
-  padding-right: 10px;
-  font-size: 12px;
-}
-
-.pagination__ellipsis {
-  padding: 8px 6px;
-  color: var(--faint);
-  font-size: 13px;
-}
-
-
-/* ══════════════════════════════════════
-   11. EMPTY STATE
-   ══════════════════════════════════════ */
-.browse-empty {
-  text-align: center;
-  padding: 5rem 1rem;
-  background: var(--white);
-  border-radius: var(--r-xl);
-  border: 1px solid var(--border);
-}
-
-.browse-empty__icon {
-  font-size: 40px;
-  margin-bottom: 14px;
-  display: block;
-  color: var(--border);
-}
-
-.browse-empty__title {
-  font-family: var(--font-d);
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-
-.browse-empty__sub {
-  font-size: 13px;
-  color: var(--faint);
-  margin-bottom: 20px;
-}
-
-.browse-empty__reset {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--p);
-  text-decoration: none;
-}
-
-.browse-empty__reset:hover { text-decoration: underline; }
-
-
-/* ══════════════════════════════════════
-   12. GRID ENTRY ANIMATION (P5)
-   animation-fill-mode intentionally omitted
-   so the grid stays visible if animation is
-   skipped (background tab, reduced motion).
-   ══════════════════════════════════════ */
-.browse-grid--animated { animation: browseGridIn .25s ease; }
-
-@keyframes browseGridIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .browse-grid--animated { animation: none; }
-  .browse-sidebar,
-  .browse-sidebar-overlay { transition: none; }
-}
-
-
-/* ══════════════════════════════════════
-   13. RESPONSIVE
-   ══════════════════════════════════════ */
-
-/* Large screens (≥ 1400px) */
-@media (min-width: 1400px) {
-  .browse-layout {
-    grid-template-columns: 320px 1fr;
-    gap: 32px;
-  }
-
-  .pub-browse-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-  }
-
-  .vehicle-card__img { height: 215px; }
-}
-
-/* Tablet portrait (769px – 1024px) */
-@media (max-width: 1024px) and (min-width: 769px) {
-  .browse-layout {
-    grid-template-columns: 260px 1fr;
-    gap: 18px;
-  }
-
-  .pub-browse-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 14px;
-  }
-
-  .results-bar__count-num { font-size: 20px; }
-}
-
-/* Mobile (≤ 768px): sidebar becomes a left drawer */
-@media (max-width: 768px) {
-  .browse-layout {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-
-  /* P8 */
-  .browse-filter-toggle { display: flex; }
+  .browse-filter-toggle { display: inline-flex; }
 
   .browse-sidebar {
     position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: min(320px, 88vw);
-    z-index: calc(var(--z-dropdown) + 20);
-    background: var(--white);
-    box-shadow: 4px 0 24px rgba(0,0,0,.18);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    transform: translateX(-100%);
-    transition: transform .28s cubic-bezier(.2,0,0,1);
+    inset: 0;
+    top: auto;
+    z-index: var(--z-modal);
+    height: 100%;
     max-height: none;
-    border-radius: 0 var(--r-xl) var(--r-xl) 0;
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-
-  .browse-sidebar.drawer-open { transform: translateX(0); }
-
-  .browse-sidebar-overlay {
-    display: block;
-    opacity: 0;
-    transition: opacity .28s ease;
+    padding-top: max(24px, env(safe-area-inset-top));
     pointer-events: none;
   }
 
-  .browse-sidebar-overlay.open { opacity: 1; pointer-events: auto; }
-
-  .browse-sidebar__close { display: flex; }
-
-  .browse-sidebar .sidebar-card {
-    border-radius: 0;
-    border: none;
-    box-shadow: none;
-    padding: 16px;
+  .sidebar-card {
+    margin-top: auto;
+    max-height: 100%;
+    border-radius: var(--r-2xl) var(--r-2xl) 0 0;
+    border: 0;
+    box-shadow: var(--shadow-xl);
+    transform: translateY(100%);
+    transition: transform var(--dur-3) var(--ease);
+    pointer-events: auto;
   }
 
-  .results-bar__count-num { font-size: 18px; }
-  .results-bar { flex-direction: column; align-items: flex-start; gap: 8px; }
-  .sort-form   { width: 100%; }
-  .sort-select { width: 100%; }
+  .browse-sidebar { flex-direction: column; }
+  .browse-sidebar.drawer-open .sidebar-card { transform: none; }
 
-  .vehicle-card__img { height: 175px; }
+  /* Legacy markup (broker storefront) renders the close button outside the card */
+  .browse-sidebar > .browse-sidebar__close {
+    align-self: flex-end;
+    margin: 0 16px 10px;
+    pointer-events: auto;
+    background: var(--white);
+    box-shadow: var(--shadow-md);
+  }
+  .browse-sidebar:not(.drawer-open) > .browse-sidebar__close { display: none; }
 
-  .pub-browse-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+  .browse-sidebar:not(.drawer-open) .sidebar-card { visibility: hidden; transition: transform var(--dur-3) var(--ease), visibility 0s linear var(--dur-3); }
+
+  .sidebar-card__header { padding: 14px 16px; }
+  .sidebar-card__header::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 6px;
+    width: 40px;
+    height: 4px;
+    margin-left: -20px;
+    border-radius: 4px;
+    background: var(--border2);
+  }
+  .sidebar-card { position: relative; }
+
+  .sidebar-card__footer {
+    display: block;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
   }
 
-  /* P2 — price pills scroll horizontally and bleed to the edge */
-  .price-pill-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    margin-right: calc(var(--page-gutter) * -1);
-    padding-right: var(--page-gutter);
+  .browse-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: calc(var(--z-modal) - 1);
+    background: rgba(10, 22, 40, .48);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur-2) var(--ease), visibility 0s linear var(--dur-2);
   }
 
-  .price-pill-row::-webkit-scrollbar { display: none; }
+  .browse-sidebar-overlay.open { opacity: 1; visibility: visible; transition-delay: 0s; }
 
-  .pagination            { gap: 4px; }
-  .pagination__page      { padding: 7px 11px; font-size: 12px; min-width: 36px; }
-  .pagination__page--nav { min-width: 32px; padding-left: 8px; padding-right: 8px; }
+  .filter-section { padding: 16px; }
+  .search-input-sidebar, .filter-select, .min-max-input { height: 46px; font-size: 16px; }   /* 16px: no iOS zoom */
+  .body-tile-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
-/* Mobile portrait (≤ 480px) */
-@media (max-width: 480px) {
-  .pub-browse-grid { grid-template-columns: 1fr; gap: 12px; }
+/* ── Tablets & landscape phones (641-1024px) ─────────────────────────
+   A bottom sheet stretched across 1024px leaves the controls absurdly
+   wide, so above phone width the drawer becomes a centred dialog. */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .browse-sidebar {
+    align-items: center;
+    padding: 24px max(24px, env(safe-area-inset-left)) calc(24px + env(safe-area-inset-bottom));
+  }
 
-  .vehicle-card__img   { height: 200px; }
-  .vehicle-card__body  { padding: 12px; }
-  .vehicle-card__name  { font-size: 13px; }
-  .vehicle-card__price { font-size: 15px; }
+  .sidebar-card {
+    width: min(560px, 100%);
+    margin: auto;
+    max-height: 100%;
+    border-radius: var(--r-2xl);
+    opacity: 0;
+    transform: translateY(14px) scale(.985);
+    transition: transform var(--dur-3) var(--ease), opacity var(--dur-2) var(--ease);
+  }
 
-  .condition-chip-row              { flex-wrap: wrap; }
-  .condition-chip-row .filter-chip { flex: none; }
-  .price-pill-row                  { gap: 6px; }
-  .price-pill                      { font-size: 11px; padding: 5px 10px; }
-
-  .active-filter-tags { gap: 4px; }
+  .browse-sidebar.drawer-open .sidebar-card { opacity: 1; transform: none; }
+  .sidebar-card__header::before { display: none; }   /* a dialog has no drag grabber */
+  .browse-sidebar > .browse-sidebar__close { align-self: center; margin-right: 0; }
 }
 
-/* Small phone (≤ 360px) */
-@media (max-width: 360px) {
-  .sidebar-card            { padding: 12px; }
-  .vehicle-card__img       { height: 180px; }
-  .results-bar__count-num  { font-size: 16px; }
-  .vehicle-card__spec-pill { font-size: 10px; padding: 2px 7px; }
+/* ── Short viewports (landscape phones) ──────────────────────────────
+   Height is the scarce axis and width is plentiful, so the sheet becomes
+   a full-height side panel: the filter list gets every vertical pixel and
+   the results stay visible beside it. */
+@media (max-width: 1024px) and (max-height: 520px) {
+  .browse-sidebar {
+    align-items: flex-start;
+    padding: 0 0 0 env(safe-area-inset-left);
+  }
+
+  .sidebar-card {
+    width: min(440px, 64%);
+    height: 100%;
+    max-height: 100%;
+    margin: 0;
+    border-radius: 0 var(--r-2xl) var(--r-2xl) 0;
+    opacity: 1;
+    transform: translateX(-100%);
+    transition: transform var(--dur-3) var(--ease);
+  }
+
+  .browse-sidebar.drawer-open .sidebar-card { transform: none; }
+
+  .sidebar-card__header { padding: 11px 16px; }
+  .sidebar-card__header::before { display: none; }
+  .sidebar-card__footer { padding: 9px 16px calc(9px + env(safe-area-inset-bottom)); }
+  .filter-section { padding: 13px 16px; }
+  .browse-sidebar > .browse-sidebar__close { display: none; }
 }
 
-
-/* ══════════════════════════════════════
-   14. SEARCH TYPEAHEAD DROPDOWN
-   Rendered by assets/js/search-typeahead.js.
-   Shared by /cars-for-sale/ and broker storefronts.
-   ══════════════════════════════════════ */
-.typeahead-box {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--white);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-lg);
-  z-index: 40;
-  overflow: hidden;
-  display: none;
+/* Touch: the collapsible filter headings are 25px of text — give them
+   a real hit area without changing how they look. */
+@media (pointer: coarse) {
+  details.filter-section > summary.filter-section-label { margin: -9px 0 4px; padding: 9px 0; }
 }
 
-.typeahead-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  font-size: 13px;
+.browse-sidebar__close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  color: var(--text2);
+  background: var(--bg);
+  border: 0;
+  border-radius: 50%;
   cursor: pointer;
 }
 
-.typeahead-item:hover,
-.typeahead-item.focused { background: var(--bg); }
-
-.typeahead-icon  { font-size: 12px; color: var(--faint); flex-shrink: 0; }
-.typeahead-label { flex: 1; color: var(--text); }
-
-.typeahead-type {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--faint);
-  background: var(--bg);
-  border-radius: var(--r-full);
-  padding: 2px 8px;
+@media (min-width: 1025px) {
+  .browse-sidebar__close { display: none; }
 }
 
-
-/* ══════════════════════════════════════
-   15. TOUCH OVERRIDES, PRINT
-   ══════════════════════════════════════ */
-@media (hover: none) and (pointer: coarse) {
-  .vehicle-card:hover {
-    transform: none;
-    box-shadow: 0 2px 10px rgba(0,0,0,.04);
-    border-color: var(--border);
-  }
-
-  .vehicle-card:active {
-    transform: scale(.98);
-    box-shadow: 0 1px 4px rgba(0,0,0,.08);
-  }
-
-  .vehicle-card:hover .vehicle-card__img img { transform: none; }
+@media (max-width: 480px) {
+  .body-tile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .results-bar { gap: 8px; }
+  .results-bar__count { font-size: 13px; }
+  .sort-select { max-width: 170px; }
 }
 
 @media print {
-  .browse-sidebar,
-  .browse-filter-toggle,
-  .browse-sidebar-overlay,
-  .price-pill-row,
-  .active-filter-tags,
-  .pagination,
-  .sort-form { display: none !important; }
-
-  .browse-layout { display: block; }
-
-  .pub-browse-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .vehicle-card { break-inside: avoid; }
+  .browse-sidebar, .results-bar, .price-pill-row, .pagination { display: none !important; }
+  .browse-layout { grid-template-columns: 1fr; }
 }

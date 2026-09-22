@@ -1,0 +1,220 @@
+/**
+ * SalesDesk — Hero Search Card  (v1)
+ * assets/css/hero-search.css
+ *
+ * Styles for views/partials/hero-search-widget.php (.hs). Replaces the
+ * ≈500-line inline <style> block that partial used to ship.
+ * Behaviour: assets/js/home.js.
+ * Depends on: global.css tokens, public.css (.pub-segment, .pub-chip,
+ * .pub-btn, .typeahead-box).
+ */
+
+.hs {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  padding: clamp(18px, 2.2vw, 28px);
+  color: var(--text);
+  background: var(--white);
+  border-radius: var(--r-2xl);
+  box-shadow: 0 40px 80px -24px rgba(0, 0, 0, .5), 0 0 0 1px rgba(255, 255, 255, .06);
+}
+
+.hs__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 2px;
+}
+
+.hs__title {
+  font-family: var(--font-d);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+
+.hs__cond .pub-segment__opt span { height: 32px; padding: 0 12px; }
+
+.hs__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.hs__field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.hs__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.hs__control { position: relative; }
+
+.hs__icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: var(--p);
+  pointer-events: none;
+}
+
+.hs__input {
+  width: 100%;
+  min-width: 0;
+  height: 50px;
+  padding: 0 14px;
+  font: 500 15px/1.2 var(--sans);
+  color: var(--text);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color var(--dur-1), box-shadow var(--dur-1), background var(--dur-1);
+}
+
+.hs__control--q .hs__input { padding-left: 42px; }
+
+.hs__input::placeholder { color: var(--faint); font-weight: 400; }
+.hs__input:hover { border-color: var(--border2); }
+.hs__input:focus { background: var(--white); border-color: var(--p-mid); box-shadow: 0 0 0 4px var(--p-ring); }
+
+.hs__select {
+  min-width: 0;          /* see home.css: a select's min-content is its widest option */
+  padding-right: 36px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%235b6b82' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 13px center;
+}
+
+/* A select with a real value reads as "set" */
+.hs__select.is-set { color: var(--p-dark); background-color: var(--p-light); border-color: var(--p-b); }
+
+/* More filters */
+.hs__more { border-top: 1px dashed var(--border); padding-top: 4px; }
+
+.hs__more-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 2px;
+  font: 600 13.5px/1 var(--sans);
+  color: var(--p);
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hs__more-toggle::-webkit-details-marker { display: none; }
+
+.hs__more-chev {
+  font-size: 10px;
+  transition: transform var(--dur-2) var(--ease);
+}
+
+.hs__more[open] .hs__more-chev { transform: rotate(180deg); }
+
+.hs__more-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: #fff;
+  background: var(--p);
+  border-radius: var(--r-full);
+}
+
+.hs__more-body {
+  display: grid;
+  gap: 14px;
+  padding: 8px 0 4px;
+  animation: pub-fade-up var(--dur-3) var(--ease) both;
+}
+
+.hs__set {
+  display: grid;
+  gap: 8px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.hs__chip { height: 34px; padding: 0 12px; font-size: 13px; }
+
+.hs__chip:has(input:checked),
+.hs__chip.is-active {
+  color: var(--p);
+  background: var(--p-light);
+  border-color: var(--p-b);
+}
+
+.hs__chip:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--p-ring); }
+
+.hs__submit { margin-top: 4px; }
+
+.hs__submit.is-loading span { opacity: .75; }
+
+.hs__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.hs__reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font: 500 12.5px/1 var(--sans);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.hs__reset:hover { color: var(--text); }
+
+.hs__note i { color: var(--green); margin-right: 4px; }
+
+@media (max-width: 420px) {
+  .hs { border-radius: var(--r-xl); }
+  .hs__grid { gap: 10px; }
+  .hs__head { flex-direction: column; align-items: stretch; }
+  .hs__cond { display: flex; }
+  .hs__cond .pub-segment__opt { flex: 1; }
+  .hs__cond .pub-segment__opt span { width: 100%; justify-content: center; }
+}
+
+/* Touch: the two text-only controls in the card are 21-30px tall */
+@media (pointer: coarse) {
+  .hs__more-toggle { padding-block: 11px; }
+  .hs__reset { padding-block: 11px; }
+  .hs__foot { align-items: center; }
+}
+
+/* Landscape phones / short viewports: the card must not push the fold
+   two screens down. Tighter rows, same controls. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .hs { gap: 10px; padding: 16px; }
+  .hs__input { height: 44px; }
+  .hs__head { margin-bottom: 0; }
+  .hs__title { font-size: 18px; }
+}

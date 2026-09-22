@@ -21,6 +21,16 @@
  *   UTL-1  .sr-only moved here from browse-additions.css (deleted). It is
  *          a cross-surface accessibility utility, not a browse component.
  *
+ * v3 (public UX/UI overhaul):
+ *   TOK-3  Accent (logo orange), ink (dark surface), type scale, motion,
+ *          --container, --section-y, --r-2xl, --shadow-xs/xl and
+ *          --whatsapp tokens added. Existing token NAMES are unchanged
+ *          so app pages keep working; a few neutral VALUES were tuned.
+ *   TOK-4  --page-gutter is now one clamp() (16px → 40px) used with
+ *          --container; the old "margin + padding" double gutter is gone.
+ *   UTL-2  .sd-container, .visually-hidden alias, [hidden] guard and
+ *          reduced-motion global guard added.
+ *
  * NOTE: the Google Fonts @import below is still render-blocking.
  * layout-app.php depends on it (it has no font <link> of its own), so
  * it stays until layout-app.php gets the same async font <link> that
@@ -32,30 +42,49 @@
 
 /* ── Design tokens ─────────────────────────────────────── */
 :root {
-  /* Primary (SalesDesk blue) */
+  /* Primary (SalesDesk blue — matches the logo mark) */
   --p:           #0f4c9e;
-  --p-dark:      #0c3273;
-  --p-mid:       #2563eb;
-  --p-light:     #eff4ff;
-  --p-b:         #bfdbfe;
+  --p-dark:      #0a3577;
+  --p-mid:       #1f63d6;
+  --p-bright:    #2f7cf6;
+  --p-light:     #eef4ff;
+  --p-b:         #c9dbfb;
+  --p-ring:      rgba(31, 99, 214, .28);
+
+  /* Accent (SalesDesk orange — the logo's speed trail) — v3 */
+  --accent:      #f26b1d;
+  --accent-dark: #e05d12;
+  --accent-text: #b8480c;   /* orange for small text on light surfaces (≥4.5:1) */
+  --on-accent:   #0a1628;   /* ink text on orange buttons (≈5.9:1; white would be 3:1) */
+  --accent-2:    #ffa41b;
+  --accent-bg:   #fff4ec;
+  --accent-b:    #ffd6bd;
+
+  /* Ink (dark surfaces: hero, footer, overlays) — v3 */
+  --ink:         #0a1628;
+  --ink-2:       #11213b;
+  --ink-3:       #1b2f52;
+  --on-ink:      #e8eef8;
+  --on-ink-2:    rgba(232, 238, 248, .66);
+  --on-ink-3:    rgba(232, 238, 248, .14);
 
   /* Text */
-  --text:        #1e293b;
-  --text2:       #3d4663;
-  --muted:       #64748b;
-  --faint:       #94a3b8;
+  --text:        #0f1b2d;
+  --text2:       #334155;
+  --muted:       #5b6b82;
+  --faint:       #7d8ba1;   /* v3: was #94a3b8 (2.6:1) — now ≥3:1 on white */
 
   /* Surface */
-  --bg:          #f3f4f8;
-  --bg2:         #f8f9fc;
+  --bg:          #f4f6fa;
+  --bg2:         #f9fafc;
   --white:       #ffffff;
-  --border:      #e2e8f0;
-  --border2:     #cbd5e1;
+  --border:      #e3e8f0;
+  --border2:     #cdd5e1;
 
   /* Status — green (success, verified, active) */
-  --green:       #15803d;
-  --gr-bg:       #f0fdf4;
-  --gr-b:        #bbf7d0;
+  --green:       #13803f;
+  --gr-bg:       #effcf3;
+  --gr-b:        #bbf0cc;
 
   /* Status — amber (warning, pending) */
   --amber:       #b45309;
@@ -77,15 +106,31 @@
   --pur-bg:      #faf5ff;
   --pur-b:       #ede9fe;
 
+  /* Brand third-party */
+  --whatsapp:    #1fb855;
+  --whatsapp-dk: #169447;
+
   /* Typography */
-  --mono:        'DM Mono', monospace;
+  --mono:        'DM Mono', ui-monospace, monospace;
   --serif:       'Fraunces', serif;
-  --sans:        'DM Sans', sans-serif;
+  --sans:        'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-d:      'Sora', 'DM Sans', system-ui, sans-serif;   /* TOK-1 */
 
+  /* Type scale (px — root stays 15px for the app surface) — v3 */
+  --fs-2xs: 11px;
+  --fs-xs:  12px;
+  --fs-sm:  13px;
+  --fs-md:  15px;
+  --fs-lg:  17px;
+  --fs-xl:  20px;
+  --fs-2xl: clamp(22px, 1.6vw + 14px, 28px);
+  --fs-3xl: clamp(26px, 2.4vw + 14px, 38px);
+  --fs-4xl: clamp(32px, 3.6vw + 14px, 58px);
+
   /* Layout (TOK-2) */
-  --nav-h:       60px;
-  --page-gutter: calc(clamp(16px, 4vw, 48px) + clamp(12px, 2vw, 24px));
+  --nav-h:       68px;
+  --container:   1360px;   /* v3: public content max width */
+  --page-gutter: clamp(16px, 3.2vw, 40px);
 
   /* Spacing scale (rem) */
   --sp-1:  0.25rem;
@@ -97,30 +142,35 @@
   --sp-8:  2rem;
   --sp-10: 2.5rem;
   --sp-12: 3rem;
+  --section-y: clamp(48px, 6vw, 88px);   /* v3: vertical rhythm between public sections */
 
   /* Radius */
-  --r-sm:  6px;
-  --r-md:  10px;
-  --r-lg:  14px;
-  --r-xl:  18px;
+  --r-sm:  8px;
+  --r-md:  12px;
+  --r-lg:  16px;
+  --r-xl:  20px;
+  --r-2xl: 28px;
   --r-full: 9999px;
 
-  /* Shadows */
-  --shadow-sm:  0 1px 3px rgba(15,76,158,.06);
-  --shadow-md:  0 4px 16px rgba(15,76,158,.08);
-  --shadow-lg:  0 8px 32px rgba(15,76,158,.12);
+  /* Shadows (layered, ink-tinted) */
+  --shadow-xs:  0 1px 2px rgba(10, 22, 40, .06);
+  --shadow-sm:  0 1px 2px rgba(10, 22, 40, .05), 0 2px 8px rgba(10, 22, 40, .05);
+  --shadow-md:  0 2px 4px rgba(10, 22, 40, .04), 0 8px 24px rgba(10, 22, 40, .08);
+  --shadow-lg:  0 4px 8px rgba(10, 22, 40, .04), 0 18px 48px rgba(10, 22, 40, .14);
+  --shadow-xl:  0 10px 24px rgba(10, 22, 40, .08), 0 32px 80px rgba(10, 22, 40, .22);
+
+  /* Motion — v3 */
+  --ease:      cubic-bezier(.2, .8, .2, 1);
+  --ease-in:   cubic-bezier(.4, 0, 1, 1);
+  --dur-1:     .15s;
+  --dur-2:     .25s;
+  --dur-3:     .4s;
 
   /* Z-index scale */
   --z-dropdown:  100;
   --z-sticky:    200;
   --z-modal:     300;
   --z-toast:     400;
-}
-
-/* Phones: one flat 16px gutter everywhere (nav, breadcrumb, browse,
-   detail) instead of the desktop margin + padding clamp pair. */
-@media (max-width: 768px) {
-  :root { --page-gutter: 16px; }
 }
 
 /* ── Base reset ────────────────────────────────────────── */
@@ -182,4 +232,36 @@ strong {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Alias kept for markup that uses the other common name */
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* [hidden] must win over component display rules (UTL-2) */
+[hidden] { display: none !important; }
+
+/* ── Container (UTL-2) ─────────────────────────────────── */
+.sd-container {
+  width: 100%;
+  max-width: calc(var(--container) + var(--page-gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+::selection { background: var(--p-b); color: var(--text); }
+
+/* Landscape phones: a 68px bar is 17% of a 390px-tall screen. Redefining
+   the token compacts the nav and everything that measures against it
+   (sticky sidebars, section-nav offsets, scroll-margins). */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root { --nav-h: 56px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
 }

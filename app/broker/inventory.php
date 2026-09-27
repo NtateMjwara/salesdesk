@@ -25,6 +25,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/org_membership.php';
 
 applyCachePolicy('auth');
 requireLogin();
@@ -50,7 +51,15 @@ if (!$desk) {
 
 $salesdeskId  = (int) $desk['id'];
 $defaultLimit = getPlatformConfigInt('broker_car_limit_default', 10);
-$carLimit     = $desk['car_limit'] ?? $defaultLimit;
+
+// 0013: desk organisation catalogue rules.
+//   independent → full marketplace
+//   agent       → only the org's brands (empty list = legacy org, unrestricted)
+//   pending / suspended → can browse the org's brands, can't add
+// Car limit precedence: per-broker override > org agent limit > platform default.
+$rules    = brokerCatalogueRules($userId);
+$brands   = $rules['mode'] === 'independent' ? [] : $rules['brands'];
+$carLimit = $desk['car_limit'] ?? ($rules['car_limit'] ?? $defaultLimit);
 $csrf         = generateCSRFToken();
 
 // ── Handle POST: Add to Desk / Remove from Desk ───────────────
@@ -61,6 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
     $carId  = (int) ($_POST['car_id'] ?? 0);
+
+    if ($action === 'add_to_desk' && $carId && !$rules['can_add']) {
+        $_SESSION['flash_error'] = $rules['message'];
+        redirect('/app/broker/inventory.php');
+    }
 
     if ($action === 'add_to_desk' && $carId) {
         // b10: enforce car limit
@@ -87,10 +101,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_error'] = "You've reached your car limit ({$carLimit} cars). Ask an admin to increase your limit.";
         } else {
             // Check car is active and not already on desk.
-            $carStmt = $pdo->prepare("SELECT id, status FROM cars WHERE id = ? AND status = 'active'");
-            $carStmt->execute([$carId]);
+            // 0013: agents may only add their org's brands.
+            [$brandSql, $brandParams] = brandFilterSql($brands);
+            $carStmt = $pdo->prepare("SELECT c.id, c.status FROM cars c WHERE c.id = ? AND c.status = 'active'"
+                . ($brandSql ? " AND {$brandSql}" : ''));
+            $carStmt->execute(array_merge([$carId], $brandParams));
             $car = $carStmt->fetch();
 
+            if (!$car && $brands) {
+                $_SESSION['flash_error'] = 'As an agent at ' . $rules['org']['org_name']
+                    . ' you can only add ' . implode(', ', $brands) . ' cars.';
+            }
             if ($car) {
                 $checkStmt = $pdo->prepare("
                     SELECT id FROM broker_inventory WHERE salesdesk_id = ? AND car_id = ? LIMIT 1
@@ -170,13 +191,24 @@ $deskCount   = count($deskCars);
 $mktWhere  = ["c.status = 'active'", "d.is_active = 1"];
 $mktParams = [];
 
+// 0013: org brand rule.
+[$brandSql, $brandParams] = brandFilterSql($brands);
+if ($brandSql) {
+    $mktWhere[] = $brandSql;
+    array_push($mktParams, ...$brandParams);
+}
+
 if ($q) {
     $mktWhere[]  = "(c.make LIKE ? OR c.model LIKE ? OR CONCAT(c.year,' ',c.make,' ',c.model) LIKE ?)";
     $mktParams[] = '%' . $q . '%';
     $mktParams[] = '%' . $q . '%';
     $mktParams[] = '%' . $q . '%';
 }
-if ($make)     { $mktWhere[] = "c.make = ?";               $mktParams[] = $make; }
+if ($make)     {   // 0013: include alternative spellings (Volkswagen ↔ VW)
+    $variants    = sdMakeVariants($make);
+    $mktWhere[]  = 'c.make IN (' . implode(',', array_fill(0, count($variants), '?')) . ')';
+    array_push($mktParams, ...$variants);
+}
 if ($province) { $mktWhere[] = "a.province = ?";            $mktParams[] = $province; }
 if ($commType) { $mktWhere[] = "c.commission_type = ?";     $mktParams[] = $commType; }
 
@@ -199,9 +231,12 @@ $countMkt = $pdo->prepare("
 $countMkt->execute($mktParams);
 $totalMkt = (int) $countMkt->fetchColumn();
 
-$mktParams[] = $salesdeskId;
-$mktParams[] = $perPage;
-$mktParams[] = $offset;
+// FIX: placeholders must be bound in SQL order. The SELECT list's
+// on_desk subquery (?) comes BEFORE the WHERE placeholders, so the desk id
+// goes first. It used to be appended after them, which shifted every value
+// whenever a filter (search, make, brand rule) added WHERE parameters —
+// cars went missing and "on your desk" flags were wrong.
+$mktParams = array_merge([$salesdeskId], $mktParams, [$perPage, $offset]);
 $mktStmt = $pdo->prepare("
     SELECT
         c.id, c.make, c.model, c.year, c.price, c.image_urls, c.slug AS car_slug,
@@ -224,6 +259,9 @@ $mktCars = $mktStmt->fetchAll();
 // Distinct makes for filter.
 $makesStmt = $pdo->query("SELECT DISTINCT make FROM cars WHERE status='active' ORDER BY make");
 $allMakes  = $makesStmt->fetchAll(PDO::FETCH_COLUMN);
+if ($brands) {
+    $allMakes = $brands; // 0013: agents only ever see their org's brands
+}
 
 $totalPages = max(1, (int)ceil($totalMkt / $perPage));
 
@@ -408,6 +446,21 @@ ob_start();
      MARKETPLACE TAB
      ══════════════════════════════════ -->
 
+<!-- 0013: desk organisation catalogue notice -->
+<?php if ($rules['mode'] === 'agent' && $brands): ?>
+<div class="dorg-banner">
+  <i class="fa-solid fa-building"></i>
+  <span>Showing <strong><?= htmlspecialchars($rules['org']['org_name']) ?></strong> stock:</span>
+  <span class="dorg-brands"><?php foreach ($brands as $b): ?><span class="dorg-brand"><?= htmlspecialchars($b) ?></span><?php endforeach; ?></span>
+</div>
+<?php elseif (!$rules['can_add']): ?>
+<div class="dorg-banner <?= $rules['mode'] === 'pending' ? 'dorg-banner-pending' : 'dorg-banner-suspended' ?>">
+  <i class="fa-solid <?= $rules['mode'] === 'pending' ? 'fa-clock' : 'fa-pause' ?>"></i>
+  <span><?= htmlspecialchars($rules['message']) ?></span>
+  <a href="/app/broker/desk-org">Details</a>
+</div>
+<?php endif; ?>
+
 <!-- Filter bar -->
 <form method="GET" action="" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem;align-items:flex-end;">
   <input type="hidden" name="tab" value="market">
@@ -519,6 +572,10 @@ ob_start();
       <button class="btn btn-ghost btn-sm" disabled style="width:100%;margin-top:8px;opacity:.6">
         <i class="fa-solid fa-check"></i> Already on your desk
       </button>
+      <?php elseif (!$rules['can_add']): ?>
+      <button class="btn btn-ghost btn-sm" disabled style="width:100%;margin-top:8px">
+        <i class="fa-solid fa-lock"></i> <?= $rules['mode'] === 'pending' ? 'Awaiting approval' : 'Unavailable' ?>
+      </button>
       <?php elseif ($atLimit): ?>
       <button class="btn btn-ghost btn-sm" disabled style="width:100%;margin-top:8px"
               title="Desk full (<?= $carLimit ?> cars max)">
@@ -616,4 +673,5 @@ function copyShare(id) {
 
 <?php
 $pageContent = ob_get_clean();
+$pageStyles  = ['/assets/css/desk-org.css'];
 require_once '../../views/layout-app.php';

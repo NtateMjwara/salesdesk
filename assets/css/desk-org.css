@@ -1,0 +1,74 @@
+/* ============================================================
+   SalesDesk — Broker desk organisation UI  (0013)
+   Loaded via $pageStyles by:
+     app/broker/desk-org.php   — apply / status page
+     app/broker/dashboard.php  — membership banner
+     app/broker/inventory.php  — catalogue notice
+   ============================================================ */
+
+.dorg-intro { font-size: 14px; color: var(--text2); line-height: 1.65; max-width: 720px; margin: 0 0 1.25rem; }
+.dorg-gap   { margin-bottom: 1rem; }
+.dorg-desc  { font-size: 13px; color: var(--muted); }
+
+/* ── Status card ────────────────────────────────────────────── */
+.dorg-status {
+  display: flex; gap: 14px; align-items: flex-start;
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--r-xl); padding: 1.25rem; max-width: 720px;
+}
+.dorg-status h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; color: var(--text); }
+.dorg-status p  { font-size: 14px; color: var(--text2); line-height: 1.6; margin: 0 0 12px; }
+.dorg-status-icon {
+  flex: 0 0 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+}
+.dorg-status-body { min-width: 0; }
+.dorg-status-ok        .dorg-status-icon { background: var(--gr-bg);  color: var(--green); }
+.dorg-status-pending   .dorg-status-icon { background: var(--amb-bg); color: var(--amber); }
+.dorg-status-suspended .dorg-status-icon { background: var(--bg);     color: var(--faint); }
+.dorg-status-pending { border-color: var(--amb-b); }
+.dorg-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.dorg-actions form { margin: 0; }
+
+/* ── Org cards ──────────────────────────────────────────────── */
+.dorg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.dorg-card {
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--r-xl);
+  padding: 1rem; display: flex; flex-direction: column; gap: 10px;
+}
+.dorg-card form { margin-top: auto; }
+.dorg-card-head { display: flex; gap: 10px; align-items: center; }
+.dorg-logo { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; background: var(--bg); flex: 0 0 40px; }
+.dorg-logo-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--p-light); color: var(--p); font-weight: 700; font-size: 16px;
+}
+.dorg-card-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.dorg-card-meta { font-size: 12px; color: var(--muted); }
+.dorg-card-desc { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0; }
+.dorg-brands { display: flex; gap: 6px; flex-wrap: wrap; }
+.dorg-brand {
+  font-size: 11px; font-weight: 600; color: var(--p);
+  background: var(--p-light); border: 1px solid var(--p-b);
+  border-radius: 9999px; padding: 2px 9px;
+}
+
+/* ── Slim banner (dashboard / inventory) ───────────────────── */
+.dorg-banner {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  border: 1px solid var(--border); background: var(--white);
+  border-radius: var(--r-lg); padding: 10px 14px; margin-bottom: 1rem;
+  font-size: 13px; color: var(--text2);
+}
+.dorg-banner i { color: var(--p); }
+.dorg-banner-pending   { border-color: var(--amb-b); background: var(--amb-bg); }
+.dorg-banner-pending i { color: var(--amber); }
+.dorg-banner-suspended { border-color: var(--red-b); background: var(--red-bg); }
+.dorg-banner-suspended i { color: var(--red); }
+.dorg-banner a { margin-left: auto; color: var(--p); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.dorg-banner .dorg-brands { display: inline-flex; }
+
+@media (max-width: 600px) {
+  .dorg-status { flex-direction: column; }
+  .dorg-banner a { margin-left: 0; }
+}

@@ -1,0 +1,127 @@
+/* ============================================================
+   SalesDesk — Admin: dealerships, desk orgs, exec approvals (0012)
+   Loaded via $pageStyles by:
+     app/admin/dealerships.php, dealerships-view.php,
+     exec-approvals.php, desk-orgs.php, desk-orgs-view.php
+   Builds on components.css (.roster, .badge, .btn, .modal, .card…).
+   ============================================================ */
+
+/* ── Header row ─────────────────────────────────────────────── */
+.section-head { flex-wrap: wrap; }
+.adm-head-action { margin-left: auto; }
+.adm-link { text-decoration: none; }
+.adm-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted); text-decoration: none;
+  margin-bottom: .75rem;
+}
+.adm-back:hover { color: var(--p); }
+
+/* ── Text helpers ───────────────────────────────────────────── */
+.adm-strong { font-weight: 600; color: var(--text); font-size: 13px; text-decoration: none; }
+a.adm-strong:hover { color: var(--p); }
+.adm-sub    { font-size: 11px; color: var(--faint); margin-top: 2px; }
+.adm-muted  { font-size: 12px; color: var(--muted); }
+.adm-mono   { font-family: var(--mono); font-size: 12px; }
+.adm-text-red { color: var(--red); }
+.adm-h2 {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  margin: 0 0 .75rem; display: flex; align-items: center; gap: 8px;
+}
+.adm-gap { margin-bottom: 1.5rem; }
+
+/* ── Filter bar ─────────────────────────────────────────────── */
+.adm-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+.adm-filter .finput { max-width: 280px; }
+
+/* ── Stat tiles ─────────────────────────────────────────────── */
+.adm-stats {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px; margin-bottom: 1.25rem;
+}
+.adm-stat {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--r-lg, 10px); padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.adm-stat-n { font-size: 1.35rem; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.adm-stat-l { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.adm-tabs {
+  display: flex; gap: 4px; margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border); overflow-x: auto;
+}
+.adm-tab {
+  padding: 8px 16px; font-size: 13px; color: var(--muted);
+  text-decoration: none; white-space: nowrap;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.adm-tab:hover { color: var(--text); }
+.adm-tab.is-active { color: var(--p); font-weight: 600; border-bottom-color: var(--p); }
+.adm-tab-count {
+  background: var(--amb-bg); color: var(--amber); border: 1px solid var(--amb-b);
+  border-radius: 9999px; font-size: 10px; font-family: var(--mono); padding: 1px 7px;
+}
+
+/* ── Cards / forms ──────────────────────────────────────────── */
+.adm-card { margin-bottom: 1.25rem; max-width: 720px; }
+.adm-danger { border-color: var(--red-b); }
+.adm-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.adm-checks { display: flex; flex-direction: column; gap: 8px; margin: .25rem 0 .5rem; font-size: 13px; color: var(--text2); }
+.adm-checks label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.adm-checks input { margin-top: 2px; }
+.adm-inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.adm-inline .finput { flex: 1 1 220px; }
+.adm-inline .adm-select-sm, .adm-select-sm { flex: 0 0 auto; width: auto; min-width: 110px; padding-top: 6px; padding-bottom: 6px; }
+.adm-inline-form .flabel { display: block; margin-bottom: 6px; }
+.adm-modal-wide { max-width: 560px; max-height: calc(100vh - 32px); overflow-y: auto; }
+
+/* ── Table actions ──────────────────────────────────────────── */
+.adm-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.adm-actions form { display: inline; margin: 0; }
+
+/* ── Managers list ──────────────────────────────────────────── */
+.adm-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+.adm-list-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.adm-list-row:last-child { border-bottom: 0; }
+.adm-list-row form { margin: 0; }
+
+/* ── Brand chips + brand picker (0013) ──────────────────────── */
+.adm-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.adm-chip {
+  font-size: 11px; font-weight: 600; color: var(--p);
+  background: var(--p-light); border: 1px solid var(--p-b);
+  border-radius: 9999px; padding: 1px 8px; white-space: nowrap;
+}
+.adm-brands { border: 0; padding: 0; margin: 0 0 1rem; }
+.adm-brands legend { margin-bottom: 6px; }
+.adm-brands-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+
+/* ── Database updates page ──────────────────────────────────── */
+.adm-migration-error { margin-top: 8px; }
+.adm-section-gap { margin-top: 1.75rem; }
+.adm-h3 { font-size: 14px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
+.adm-tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.adm-tools .adm-card { max-width: none; margin-bottom: 0; }
+.adm-steps { font-size: 12px; color: var(--text2); margin: 0 0 10px 18px; padding: 0; line-height: 1.7; }
+.adm-pre {
+  font-family: var(--mono); font-size: 11px; white-space: pre-wrap; word-break: break-word;
+  background: var(--white); border: 1px solid var(--red-b); border-radius: 6px;
+  padding: 8px 10px; margin: 6px 0 0; max-height: 180px; overflow: auto; color: var(--text2);
+}
+form.adm-head-action { margin: 0 0 0 auto; }
+
+/* ── Responsive ─────────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adm-grid-2 { grid-template-columns: 1fr; }
+  .adm-brands-row { grid-template-columns: 1fr; }
+  .adm-head-action { margin-left: 0; width: 100%; justify-content: center; }
+  .adm-filter .finput { max-width: none; flex: 1 1 100%; }
+  .adm-actions { justify-content: flex-start; }
+}

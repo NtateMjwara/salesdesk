@@ -355,7 +355,7 @@ $orgStmt = $pdo->prepare("
     SELECT o.name, o.slug, o.verification_status
     FROM organization_members om
     JOIN organizations o ON o.id = om.organization_id
-    WHERE om.user_id = ? AND o.is_active = 1
+    WHERE om.user_id = ? AND o.is_active = 1" . sdVerifiedMemberSql('om') . "   -- 0013
     LIMIT 1
 ");
 $orgStmt->execute([(int) $desk['user_id']]);

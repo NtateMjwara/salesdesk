@@ -15,6 +15,12 @@
 --   0011_vehicle_imports.sql       — vehicle_imports table, cars.import_id,
 --                                     corrects 0010's VIN uniqueness (global -> per-dealer),
 --                                     adds cars.source_image_urls
+--   0012_admin_managed_dealers_orgs.sql — dealers.user_id NULLable (admin-managed
+--                                     dealerships), dealer_managers, organization_managers,
+--                                     created_by_admin_id on dealers + organizations
+--   0013_desk_orgs_online_dealerships.sql — org brands/description/agent_car_limit/
+--                                     accepting_applications; member approval status;
+--                                     one org per broker
 --
 -- Net effect of the 0010 -> 0011 correction baked in below:
 --   • vin uniqueness is scoped (dealer_id, vin) — NOT globally unique —
@@ -167,6 +173,10 @@ CREATE TABLE IF NOT EXISTS organizations (
     uuid                CHAR(36)     NOT NULL UNIQUE,
     name                VARCHAR(120) NOT NULL,
     slug                VARCHAR(60)  NOT NULL UNIQUE,
+    brands              TEXT         DEFAULT NULL COMMENT 'JSON array of 1–3 makes the org sells. NULL = unrestricted (0013)',
+    description         TEXT         DEFAULT NULL,
+    agent_car_limit     SMALLINT UNSIGNED DEFAULT NULL COMMENT 'Max desk cars per agent; NULL = platform default (0013)',
+    accepting_applications TINYINT(1) NOT NULL DEFAULT 1 COMMENT '0 = hidden from signup / apply lists (0013)',
     cipc_number         VARCHAR(30)  DEFAULT NULL,
     owner_user_id       INT UNSIGNED NOT NULL,
     address_id          INT UNSIGNED DEFAULT NULL COMMENT 'FK → addresses',
@@ -174,9 +184,11 @@ CREATE TABLE IF NOT EXISTS organizations (
     verified_at         DATETIME     DEFAULT NULL,
     logo_url            VARCHAR(512) DEFAULT NULL,
     is_active           TINYINT(1)   NOT NULL DEFAULT 1,
+    created_by_admin_id INT UNSIGNED DEFAULT NULL COMMENT 'Admin who created it; NULL = broker-created (0012)',
     created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_org_owner   FOREIGN KEY (owner_user_id) REFERENCES users(id)     ON DELETE RESTRICT,
+    CONSTRAINT fk_org_created_by FOREIGN KEY (created_by_admin_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_org_address FOREIGN KEY (address_id)    REFERENCES addresses(id) ON DELETE SET NULL,
     INDEX idx_org_owner   (owner_user_id),
     INDEX idx_org_address (address_id),
@@ -185,17 +197,28 @@ CREATE TABLE IF NOT EXISTS organizations (
 
 -- ============================================================
 -- ORGANIZATION MEMBERS
--- Links brokers to an org. Brokers keep their personal desk.
--- role: 'owner' | 'admin' | 'agent'
+-- Links brokers (agents) to a desk organisation. Brokers keep their
+-- personal desk. ONE org per broker (0013).
+-- status: pending → verified | rejected ; verified → suspended  (0013,
+--         mirrors sales_executives; approved by the org's managing admins)
+-- role: legacy — every member is 'agent' since 0013 (admins run orgs)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS organization_members (
     id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     organization_id INT UNSIGNED NOT NULL,
     user_id         INT UNSIGNED NOT NULL,
     role            ENUM('owner','admin','agent') NOT NULL DEFAULT 'agent',
+    status          ENUM('pending','verified','rejected','suspended') NOT NULL DEFAULT 'pending',
+    verified_by     INT UNSIGNED DEFAULT NULL,
+    verified_at     DATETIME     DEFAULT NULL,
+    rejection_reason VARCHAR(255) DEFAULT NULL,
     invited_by      INT UNSIGNED DEFAULT NULL,
     joined_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_org_member (organization_id, user_id),
+    UNIQUE KEY uq_orgmem_one_org (user_id),
+    CONSTRAINT fk_orgmem_verified_by FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_orgmem_status (status),
     CONSTRAINT fk_orgmem_org  FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
     CONSTRAINT fk_orgmem_user FOREIGN KEY (user_id)         REFERENCES users(id)         ON DELETE CASCADE,
     CONSTRAINT fk_orgmem_inv  FOREIGN KEY (invited_by)      REFERENCES users(id)         ON DELETE SET NULL,
@@ -210,7 +233,8 @@ CREATE TABLE IF NOT EXISTS organization_members (
 CREATE TABLE IF NOT EXISTS dealers (
     id                  INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     uuid                CHAR(36)     NOT NULL UNIQUE,
-    user_id             INT UNSIGNED NOT NULL UNIQUE,
+    user_id             INT UNSIGNED DEFAULT NULL UNIQUE
+                            COMMENT 'Dealer principal. NULL = admin-managed (0012)',
     company_name        VARCHAR(120) NOT NULL DEFAULT 'My Dealership',
     slug                VARCHAR(80)  NOT NULL UNIQUE,
     logo_url            VARCHAR(512) DEFAULT NULL,
@@ -220,14 +244,63 @@ CREATE TABLE IF NOT EXISTS dealers (
     cipc_doc_url        VARCHAR(512) DEFAULT NULL,
     verified_at         DATETIME     DEFAULT NULL,
     is_active           TINYINT(1)   NOT NULL DEFAULT 0,
+    created_by_admin_id INT UNSIGNED DEFAULT NULL COMMENT 'Admin who created it; NULL = self-registered (0012)',
     created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_dealer_user    FOREIGN KEY (user_id)    REFERENCES users(id)     ON DELETE CASCADE,
+    CONSTRAINT fk_dealer_created_by FOREIGN KEY (created_by_admin_id) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_dealer_address FOREIGN KEY (address_id) REFERENCES addresses(id) ON DELETE SET NULL,
     INDEX idx_dealer_user    (user_id),
     INDEX idx_dealer_address (address_id),
     INDEX idx_dealer_slug    (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- SCHEMA_MIGRATIONS  (0012)
+-- Records one-off migration steps so migrations are safe to re-run.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    name       VARCHAR(100) NOT NULL PRIMARY KEY,
+    applied_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO schema_migrations (name) VALUES
+    ('0012_admin_managed_dealers_orgs'),
+    ('0013_backup'),
+    ('0013_members_verified'),
+    ('0013_desk_orgs_online_dealerships');
+
+-- ============================================================
+-- DEALER_MANAGERS / ORGANIZATION_MANAGERS  (0012)
+-- Admins who manage a dealership / desk organisation.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dealer_managers (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    dealer_id     INT UNSIGNED NOT NULL,
+    admin_user_id INT UNSIGNED NOT NULL,
+    added_by      INT UNSIGNED DEFAULT NULL,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_dealer_manager (dealer_id, admin_user_id),
+    CONSTRAINT fk_dm_dealer FOREIGN KEY (dealer_id)     REFERENCES dealers(id) ON DELETE CASCADE,
+    CONSTRAINT fk_dm_admin  FOREIGN KEY (admin_user_id) REFERENCES users(id)   ON DELETE CASCADE,
+    CONSTRAINT fk_dm_added  FOREIGN KEY (added_by)      REFERENCES users(id)   ON DELETE SET NULL,
+    INDEX idx_dm_admin (admin_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Admins who manage a dealership (create/edit, approve sales execs).';
+
+CREATE TABLE IF NOT EXISTS organization_managers (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    organization_id INT UNSIGNED NOT NULL,
+    admin_user_id   INT UNSIGNED NOT NULL,
+    added_by        INT UNSIGNED DEFAULT NULL,
+    created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_org_manager (organization_id, admin_user_id),
+    CONSTRAINT fk_om_org   FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_om_admin FOREIGN KEY (admin_user_id)   REFERENCES users(id)         ON DELETE CASCADE,
+    CONSTRAINT fk_om_added FOREIGN KEY (added_by)        REFERENCES users(id)         ON DELETE SET NULL,
+    INDEX idx_orgmgr_admin (admin_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='Admins who manage a desk organisation (members, roles, details).';
 
 -- ============================================================
 -- SALES_EXECUTIVES  (0003)

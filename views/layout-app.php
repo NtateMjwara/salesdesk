@@ -29,6 +29,8 @@
  *   string $flashError     — red flash message
  *   string $assetVersion   — cache-buster suffix (default: today YYYYMMDD)
  *   bool   $hideNav        — set true to suppress the top nav (e.g. onboarding)
+ *   array  $pageStyles     — extra stylesheet paths for this page (e.g. ['/assets/css/admin.css'])
+ *   array  $pageScripts    — extra script paths, loaded after global.js
  */
 
 require_once __DIR__ . '/../includes/functions.php';
@@ -108,6 +110,7 @@ $navLinks = match ($currentUserRole) {
         '/app/broker/inventory.php'  => 'Marketplace',
         '/app/broker/leads.php'      => 'My Leads',
         '/app/broker/earnings.php'   => 'Earnings',
+        '/app/broker/desk-org'       => 'Organisation',
     ],
     'dealer'     => [
         '/app/dealer/dashboard.php'  => 'Dashboard',
@@ -123,6 +126,9 @@ $navLinks = match ($currentUserRole) {
     ],
     'admin'      => [
         '/app/admin/users.php'       => 'Users',
+        '/app/admin/dealerships'     => 'Dealerships',
+        '/app/admin/approvals'       => 'Approvals',
+        '/app/admin/desk-orgs'       => 'Desk orgs',
         '/app/admin/payouts.php'     => 'Payouts',
         '/app/admin/audit.php'       => 'Audit',
     ],
@@ -169,6 +175,11 @@ $settingsPath = match ($currentUserRole) {
   <link rel="stylesheet" href="/assets/css/dealer-settings-leads-team-patch.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="/assets/css/exec-leads-patch.css?v=<?= $assetVersion ?>">
   <?php endif; ?>
+
+  <!-- Page-specific CSS -->
+  <?php foreach (($pageStyles ?? []) as $pageStyleHref): ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($pageStyleHref) ?>?v=<?= $assetVersion ?>">
+  <?php endforeach; ?>
 
   <style>
     /* ══════════════════════════════════════════════════════════
@@ -1148,6 +1159,11 @@ $settingsPath = match ($currentUserRole) {
 
 <!-- ── Global JS ───────────────────────────────────────────── -->
 <script src="/assets/js/global.js?v=<?= $assetVersion ?>"></script>
+
+<!-- Page-specific JS -->
+<?php foreach (($pageScripts ?? []) as $pageScriptSrc): ?>
+<script src="<?= htmlspecialchars($pageScriptSrc) ?>?v=<?= $assetVersion ?>" defer></script>
+<?php endforeach; ?>
 
 <script>
 /* ══════════════════════════════════════════════════════════════

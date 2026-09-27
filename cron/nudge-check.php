@@ -61,7 +61,11 @@ try {
             c.make,
             c.model,
             c.year,
-            u.email          AS dealer_email,
+            COALESCE(u.email, (
+                SELECT mu.email FROM dealer_managers dm
+                JOIN users mu ON mu.id = dm.admin_user_id AND mu.status = 'active'
+                WHERE dm.dealer_id = d.id ORDER BY dm.id LIMIT 1
+            ))               AS dealer_email,
             p.first_name     AS dealer_first,
             d.company_name   AS dealer_company,
             TIMESTAMPDIFF(HOUR, l.status_updated_at, NOW()) AS hours_stale,
@@ -71,7 +75,7 @@ try {
             MAX(CASE WHEN n.nudge_type = '10d_flag' THEN 1 ELSE 0 END) AS sent_10d
         FROM leads l
         JOIN dealers d  ON d.id = l.dealer_id
-        JOIN users   u  ON u.id = d.user_id
+        LEFT JOIN users u ON u.id = d.user_id   -- 0012: NULL = admin-managed
         JOIN cars    c  ON c.id = l.car_id
         LEFT JOIN profiles p ON p.user_id = d.user_id
         LEFT JOIN nudges n   ON n.lead_id = l.id
@@ -188,8 +192,18 @@ function insertNudgeNotification(
     $pdo->prepare("
         INSERT IGNORE INTO notifications (user_id, type, title, body, meta, created_at)
         SELECT d.user_id, 'lead_nudge', ?, ?, ?, NOW()
-        FROM dealers d WHERE d.id = ?
+        FROM dealers d WHERE d.id = ? AND d.user_id IS NOT NULL
+        UNION ALL
+        -- 0012: admin-managed dealership → nudge its managing admins
+        SELECT dm.admin_user_id, 'lead_nudge', ?, ?, ?, NOW()
+        FROM dealers d
+        JOIN dealer_managers dm ON dm.dealer_id = d.id
+        WHERE d.id = ? AND d.user_id IS NULL
     ")->execute([
+        $titles[$nudgeType] ?? 'Lead reminder',
+        "{$buyerName} is waiting for a response on the {$carLabel}.",
+        json_encode(['lead_id' => $leadId]),
+        $dealerId,
         $titles[$nudgeType] ?? 'Lead reminder',
         "{$buyerName} is waiting for a response on the {$carLabel}.",
         json_encode(['lead_id' => $leadId]),

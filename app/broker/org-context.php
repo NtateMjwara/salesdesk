@@ -10,6 +10,10 @@
  *   - Manage member roles (owner only)
  *   - Org CIPC verification status
  *
+ * 0013: desk organisations are admin-run online dealerships. This page is
+ * now a read-only team view for VERIFIED agents; inviting, role changes and
+ * removals happen in the admin panel (app/admin/desk-orgs-view.php).
+ *
  * Requires active org context in $_SESSION['org_context'].
  * Context is set by the switcher in broker/dashboard.php.
  */
@@ -42,6 +46,7 @@ $orgStmt = $pdo->prepare("
            om.role AS my_role
     FROM organizations o
     JOIN organization_members om ON om.organization_id = o.id AND om.user_id = ?
+                                 " . sdVerifiedMemberSql('om') . "   -- 0013
     WHERE o.id = ? AND o.is_active = 1
     LIMIT 1
 ");
@@ -54,145 +59,19 @@ if (!$org) {
     redirect('/app/broker/dashboard.php');
 }
 
-$myRole    = $org['my_role'];
-$isOwner   = ($myRole === 'owner');
-$isAdmin   = ($myRole === 'owner' || $myRole === 'admin');
+// 0013: org roles no longer grant broker-side management — admins run orgs.
+$myRole    = 'agent';
+$isOwner   = false;
+$isAdmin   = false;
 $csrf      = generateCSRFToken();
 
 $flash      = $_SESSION['flash_ok']    ?? '';
 $flashError = $_SESSION['flash_error'] ?? '';
 unset($_SESSION['flash_ok'], $_SESSION['flash_error']);
 
-// ── Handle POST actions ───────────────────────────────────────
+// 0013: no broker-side write actions any more (see docblock).
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    validateCSRF();
-    $action = $_POST['action'] ?? '';
-
-    // Invite a member (o4)
-    if ($action === 'invite_member' && $isAdmin) {
-        $inviteEmail = filter_var(trim($_POST['invite_email'] ?? ''), FILTER_VALIDATE_EMAIL);
-        $inviteRole  = in_array($_POST['invite_role'] ?? '', ['admin','agent'], true)
-                       ? $_POST['invite_role'] : 'agent';
-
-        if (!$inviteEmail) {
-            $_SESSION['flash_error'] = 'Please enter a valid email address.';
-            redirect('/app/broker/org-context.php');
-        }
-
-        // Check if already a member
-        $memberCheck = $pdo->prepare("
-            SELECT om.id FROM organization_members om
-            JOIN users u ON u.id = om.user_id
-            WHERE om.organization_id = ? AND u.email = ?
-        ");
-        $memberCheck->execute([$orgId, $inviteEmail]);
-        if ($memberCheck->fetch()) {
-            $_SESSION['flash_error'] = 'That person is already a member of this organisation.';
-            redirect('/app/broker/org-context.php');
-        }
-
-        // Check if registered broker
-        $userCheck = $pdo->prepare("SELECT id, status FROM users WHERE email = ? AND role = 'broker' LIMIT 1");
-        $userCheck->execute([$inviteEmail]);
-        $invitee = $userCheck->fetch();
-
-        if ($invitee && $invitee['status'] === 'active') {
-            // Already registered — add directly and notify
-            $pdo->prepare("
-                INSERT INTO organization_members (organization_id, user_id, role, invited_by, joined_at)
-                VALUES (?, ?, ?, ?, NOW())
-                ON DUPLICATE KEY UPDATE role = VALUES(role)
-            ")->execute([$orgId, $invitee['id'], $inviteRole, $userId]);
-
-            // In-app notification to invitee
-            $pdo->prepare("
-                INSERT INTO notifications (user_id, type, title, body, meta, created_at)
-                VALUES (?, 'org_invite', ?, ?, ?, NOW())
-            ")->execute([
-                $invitee['id'],
-                'You\'ve been added to ' . $org['name'],
-                'You are now a member of ' . $org['name'] . ' as ' . ucfirst($inviteRole) . '.',
-                json_encode(['org_id' => $orgId]),
-            ]);
-
-            // Email notification
-            $orgName  = $org['name'];
-            $dashUrl  = SITE_URL . '/app/broker/dashboard.php';
-            $subject  = "You've been added to {$orgName} on SalesDesk";
-            $body     = <<<HTML
-<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">You've been added to {$orgName}</h2>
-<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
-  You've been added as a <strong>{$inviteRole}</strong> in <strong>{$orgName}</strong> on SalesDesk.
-  Switch to the organisation context from your dashboard to view shared leads and commissions.
-</p>
-<a href="{$dashUrl}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
-  Go to my dashboard →
-</a>
-HTML;
-            sendEmail($inviteEmail, $subject, $body);
-
-            writeAuditLog('org.member_added', 'organization', $orgId,
-                null, ['user_email' => $inviteEmail, 'role' => $inviteRole], $userId);
-
-            $_SESSION['flash_ok'] = $inviteEmail . ' has been added as ' . ucfirst($inviteRole) . '.';
-        } else {
-            // Not registered — send invite email with register link
-            $registerUrl = SITE_URL . '/auth/register.php?org_invite=' . urlencode($org['slug']);
-            $orgName     = $org['name'];
-            $subject     = "You've been invited to join {$orgName} on SalesDesk";
-            $body        = <<<HTML
-<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">Join {$orgName} on SalesDesk</h2>
-<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
-  You've been invited to join <strong>{$orgName}</strong> as a <strong>{$inviteRole}</strong>.
-  Create your SalesDesk broker account to accept the invitation.
-</p>
-<a href="{$registerUrl}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
-  Create my account →
-</a>
-HTML;
-            sendEmail($inviteEmail, $subject, $body);
-            $_SESSION['flash_ok'] = 'Invite sent to ' . $inviteEmail . '. They\'ll receive an email to create their account.';
-        }
-        redirect('/app/broker/org-context.php');
-    }
-
-    // Change member role (owner only)
-    if ($action === 'change_role' && $isOwner) {
-        $targetUserId = (int) ($_POST['target_user_id'] ?? 0);
-        $newRole      = in_array($_POST['new_role'] ?? '', ['admin','agent'], true)
-                        ? $_POST['new_role'] : 'agent';
-
-        if ($targetUserId && $targetUserId !== $userId) {
-            $pdo->prepare("
-                UPDATE organization_members
-                SET role = ?
-                WHERE organization_id = ? AND user_id = ?
-            ")->execute([$newRole, $orgId, $targetUserId]);
-
-            writeAuditLog('org.member_role_changed', 'organization', $orgId,
-                null, ['user_id' => $targetUserId, 'new_role' => $newRole], $userId);
-
-            $_SESSION['flash_ok'] = 'Member role updated.';
-        }
-        redirect('/app/broker/org-context.php');
-    }
-
-    // Remove member (owner only)
-    if ($action === 'remove_member' && $isOwner) {
-        $targetUserId = (int) ($_POST['target_user_id'] ?? 0);
-        if ($targetUserId && $targetUserId !== $userId) {
-            $pdo->prepare("
-                DELETE FROM organization_members
-                WHERE organization_id = ? AND user_id = ? AND role != 'owner'
-            ")->execute([$orgId, $targetUserId]);
-
-            writeAuditLog('org.member_removed', 'organization', $orgId,
-                null, ['user_id' => $targetUserId], $userId);
-
-            $_SESSION['flash_ok'] = 'Member removed from organisation.';
-        }
-        redirect('/app/broker/org-context.php');
-    }
+    redirect('/app/broker/org-context.php');
 }
 
 // ── Org stats ─────────────────────────────────────────────────
@@ -206,7 +85,7 @@ $statsStmt = $pdo->prepare("
         COUNT(DISTINCT CASE WHEN l.status='closed' THEN l.id END)      AS deals_closed,
         COALESCE(SUM(CASE WHEN cm.status='paid' THEN cm.net_amount END),0) AS total_earned
     FROM organizations o
-    JOIN organization_members om2 ON om2.organization_id = o.id
+    JOIN organization_members om2 ON om2.organization_id = o.id" . sdVerifiedMemberSql('om2') . "
     LEFT JOIN leads l  ON l.organization_id = o.id
     LEFT JOIN commissions cm ON cm.lead_id = l.id AND cm.organization_id = o.id
     WHERE o.id = ?
@@ -233,7 +112,7 @@ $membersStmt = $pdo->prepare("
     LEFT JOIN salesdesks sd ON sd.user_id = u.id
     LEFT JOIN leads l  ON l.broker_id = u.id AND l.organization_id = ?
     LEFT JOIN commissions cm ON cm.lead_id = l.id AND cm.organization_id = ?
-    WHERE om.organization_id = ?
+    WHERE om.organization_id = ?" . sdVerifiedMemberSql('om') . "
     GROUP BY u.id, om.role, om.joined_at
     ORDER BY FIELD(om.role,'owner','admin','agent'), p.first_name, p.last_name
 ");
@@ -397,7 +276,7 @@ ob_start();
             <td style="font-family:var(--mono);font-size:12px;"><?= $m['total_leads'] ?></td>
             <td style="font-family:var(--mono);font-size:12px;color:var(--green);"><?= $m['deals_closed'] ?></td>
             <td style="font-family:var(--mono);font-size:12px;">
-              <?= $m['earned'] > 0 ? 'R ' . number_format($m['earned'], 0) : '—' ?>
+              <?= $m['earned'] > 0 ? 'R ' . number_format((float) $m['earned'], 0) : '—' ?>
             </td>
             <?php if ($isOwner): ?>
             <td>
@@ -521,7 +400,7 @@ ob_start();
     </div>
 
     <!-- Top agents leaderboard -->
-    <?php if ($isAdmin && count($members) > 1): ?>
+    <?php if (count($members) > 1): /* 0013: whole team sees the leaderboard */ ?>
     <div class="card card-body">
       <h3 style="font-size:13px;font-weight:600;margin-bottom:1rem;">
         <i class="fa-solid fa-trophy" style="margin-right:6px;color:var(--amber);"></i>

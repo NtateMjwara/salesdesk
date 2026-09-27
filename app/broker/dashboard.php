@@ -14,6 +14,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/org_membership.php';
 
 applyCachePolicy('auth');
 requireLogin();
@@ -48,6 +49,7 @@ $orgStmt = $pdo->prepare("
     FROM organization_members om
     JOIN organizations o ON o.id = om.organization_id
     WHERE om.user_id = ? AND o.is_active = 1
+      " . sdVerifiedMemberSql('om') . "   -- 0013: only approved agents get the org view
     ORDER BY om.joined_at ASC
     LIMIT 5
 ");
@@ -166,6 +168,34 @@ ob_start();
 </div>
 <?php endif; ?>
 
+<!-- 0013: desk organisation status -->
+<?php $membership = getBrokerMembership($userId); $mStatus = $membership['status'] ?? 'independent'; ?>
+<?php if ($mStatus === 'pending'): ?>
+<div class="dorg-banner dorg-banner-pending">
+  <i class="fa-solid fa-clock"></i>
+  <span>Your application to join <strong><?= htmlspecialchars($membership['org_name']) ?></strong> is waiting for approval.</span>
+  <a href="/app/broker/desk-org">View</a>
+</div>
+<?php elseif ($mStatus === 'suspended'): ?>
+<div class="dorg-banner dorg-banner-suspended">
+  <i class="fa-solid fa-pause"></i>
+  <span>Your agent access at <strong><?= htmlspecialchars($membership['org_name']) ?></strong> is suspended.</span>
+  <a href="/app/broker/desk-org">Details</a>
+</div>
+<?php elseif ($mStatus === 'rejected'): ?>
+<div class="dorg-banner dorg-banner-suspended">
+  <i class="fa-solid fa-circle-xmark"></i>
+  <span>Your application to <strong><?= htmlspecialchars($membership['org_name']) ?></strong> was declined. You're working independently.</span>
+  <a href="/app/broker/desk-org">See organisations</a>
+</div>
+<?php elseif ($mStatus === 'independent'): ?>
+<div class="dorg-banner">
+  <i class="fa-solid fa-people-group"></i>
+  <span>You're an independent broker. Join a desk organisation to sell its brands as one of its agents.</span>
+  <a href="/app/broker/desk-org">Browse organisations</a>
+</div>
+<?php endif; ?>
+
 <!-- Dashboard header -->
 <div class="dash-header">
   <div>
@@ -176,7 +206,7 @@ ob_start();
     </h1>
     <p class="dash-sub">
       <?= $activeOrg
-        ? 'Organisation view · ' . ucfirst($activeOrg['role'])
+        ? 'Organisation view · Agent'
         : 'Welcome back, ' . htmlspecialchars(explode(' ', $brokerName)[0]) ?>
     </p>
   </div>
@@ -397,4 +427,5 @@ ob_start();
 
 <?php
 $pageContent = ob_get_clean();
+$pageStyles  = ['/assets/css/desk-org.css'];
 require_once '../../views/layout-app.php';

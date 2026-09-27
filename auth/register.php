@@ -55,6 +55,7 @@ require_once '../includes/security.php';
 require_once '../includes/session.php';
 require_once '../includes/functions.php';
 require_once '../includes/csrf.php';
+require_once '../includes/org_membership.php';
 
 applyCachePolicy('auth');
 
@@ -158,6 +159,7 @@ if (empty($_SESSION['wz'])) {
         'dealer_id'         => null,
         'dealer_name'       => '',
         'job_title'         => '',
+        'org_id'            => 0,      // 0013: desk organisation applied to (0 = independent)
     ];
 }
 
@@ -430,6 +432,37 @@ ob_start();
     <i class="fa-solid fa-circle-info" style="color:var(--p);margin-right:5px"></i>
     Your slug is automatically generated from the name you choose. You can rename it once after setup from your account settings.
   </div>
+
+  <?php /* 0013 — choose a desk organisation (online dealership) or stay independent */
+        $openOrgs = listOpenDeskOrgs();
+        $pickedOrg = (int) ($wz['org_id'] ?? 0); ?>
+  <fieldset class="org-choice">
+    <legend class="flabel">Work as</legend>
+    <label class="org-option">
+      <input type="radio" name="org_id" value="0" <?= $pickedOrg === 0 ? 'checked' : '' ?>>
+      <span class="org-option-body">
+        <span class="org-option-name">Independent broker</span>
+        <span class="org-option-meta">Share any car on the marketplace. You can join an organisation later.</span>
+      </span>
+    </label>
+    <?php foreach ($openOrgs as $o): ?>
+    <label class="org-option">
+      <input type="radio" name="org_id" value="<?= (int) $o['id'] ?>" <?= $pickedOrg === (int) $o['id'] ? 'checked' : '' ?>>
+      <span class="org-option-body">
+        <span class="org-option-name"><?= htmlspecialchars($o['name']) ?></span>
+        <span class="org-option-meta">
+          <?= $o['brand_list'] ? 'Sells ' . htmlspecialchars(implode(', ', $o['brand_list'])) : 'All brands' ?>
+          <?= $o['city'] ? ' · ' . htmlspecialchars($o['city']) : '' ?>
+          · <?= (int) $o['agent_count'] ?> agent<?= (int) $o['agent_count'] === 1 ? '' : 's' ?>
+        </span>
+      </span>
+    </label>
+    <?php endforeach; ?>
+    <?php if ($openOrgs): ?>
+    <p class="org-choice-note">Joining an organisation makes you one of its agents: an admin approves you, then you share its brands and still earn your full commission.</p>
+    <?php endif; ?>
+  </fieldset>
+
   <button class="btn-auth" type="submit" id="desk-submit-btn" disabled>Continue <i class="fa-solid fa-arrow-right"></i></button>
 </form>
 

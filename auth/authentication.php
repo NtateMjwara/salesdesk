@@ -295,6 +295,26 @@ function handleWizardDesk(): never
     $wz['desk_display_name'] = $displayName;
     $wz['desk_slug']         = $slug;
 
+    // 0013: desk organisation choice. 0 = independent broker.
+    // Choosing an org creates a 'pending' agent application that the
+    // org's managing admins approve at /app/admin/approvals.
+    require_once __DIR__ . '/../includes/org_membership.php';
+    $orgId   = (int) ($_POST['org_id'] ?? 0);
+    $current = getBrokerMembership($userId);
+
+    if ($orgId > 0 && (!$current || (int) $current['org_id'] !== $orgId)) {
+        if ($current && $current['status'] === 'pending') {
+            brokerLeaveOrg($userId); // changed their mind on the back button
+        }
+        [$ok, $msg] = applyBrokerToOrg($userId, $orgId, (string) ($wz['email'] ?? ''));
+        if (!$ok) {
+            wizardRedirect(3, $msg);
+        }
+    } elseif ($orgId === 0 && $current && $current['status'] === 'pending') {
+        brokerLeaveOrg($userId);
+    }
+    $wz['org_id'] = $orgId;
+
     wizardRedirect(4);
 }
 
@@ -428,13 +448,29 @@ function handleWizardDealership(): never
         $pdo->prepare("UPDATE profiles SET onboarding_step = 3 WHERE user_id = ?")
             ->execute([$userId]);
 
-        $principalStmt = $pdo->prepare("SELECT u.email FROM users u WHERE u.id = ?");
-        $principalStmt->execute([$dealer['user_id']]);
-        $principal = $principalStmt->fetch();
-
-        if ($principal) {
-            $execEmail = $wz['email'] ?? '';
-            sendSalesExecJoinRequest($principal['email'], $dealerName, $execEmail);
+        // 0012: notify the dealer principal — or, for an admin-managed
+        // dealership with no principal, each of its managing admins
+        // (who review the request at /app/admin/approvals).
+        $execEmail = $wz['email'] ?? '';
+        $notify    = $pdo->prepare("
+            INSERT INTO notifications (user_id, type, title, body, meta, created_at)
+            VALUES (?, 'exec_join_request', ?, ?, ?, NOW())
+        ");
+        foreach (getDealerContacts($dealerId) as $contact) {
+            sendSalesExecJoinRequest(
+                $contact['email'],
+                $dealerName,
+                $execEmail,
+                $contact['is_admin'] ? SITE_URL . '/app/admin/approvals?tab=execs' : null
+            );
+            if ($contact['is_admin']) {
+                $notify->execute([
+                    $contact['user_id'],
+                    'Sales exec request — ' . $dealerName,
+                    $execEmail . ' wants to join ' . $dealerName . '.',
+                    json_encode(['dealer_id' => $dealerId, 'exec_user_id' => $userId]),
+                ]);
+            }
         }
 
         $wz['dealer_id']   = $dealerId;

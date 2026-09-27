@@ -52,9 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($newStatus) {
                 $pdo->prepare("
                     UPDATE cars
-                    SET status = ?, sold_at = IF(? = 'sold', NOW(), sold_at), updated_at = NOW()
+                    SET status = ?, sold_at = " . ($newStatus === 'sold' ? 'NOW()' : 'sold_at') . ", updated_at = NOW()
                     WHERE id = ?
-                ")->execute([$newStatus, $newStatus, $carId]);
+                ")->execute([$newStatus, $carId]);   // sold_at decided in PHP: avoids collation error 1267
 
                 writeAuditLog("car.status_changed", 'car', $carId,
                     ['status' => $carRow['status']], ['status' => $newStatus]);

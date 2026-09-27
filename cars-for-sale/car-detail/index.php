@@ -195,7 +195,7 @@ $carStmt = $pdo->prepare("
         u_d.email               AS dealer_email
     FROM cars c
     JOIN dealers d  ON d.id  = c.dealer_id
-    JOIN users u_d  ON u_d.id = d.user_id
+    LEFT JOIN users u_d ON u_d.id = d.user_id  -- 0012: NULL for admin-managed dealerships
     LEFT JOIN addresses a ON a.id = d.address_id
     WHERE c.slug = ?
     LIMIT 1
@@ -373,7 +373,7 @@ if (!$isPlatformCar) {
         SELECT o.name, o.slug, o.verification_status
         FROM organization_members om
         JOIN organizations o ON o.id = om.organization_id
-        WHERE om.user_id = ? AND o.is_active = 1
+        WHERE om.user_id = ? AND o.is_active = 1" . sdVerifiedMemberSql('om') . "   -- 0013
         LIMIT 1
     ");
     $orgStmt->execute([(int)$deskRow['broker_user_id']]);

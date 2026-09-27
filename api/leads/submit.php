@@ -189,12 +189,13 @@ try {
                 eu.email                AS exec_email,
                 ep.first_name           AS exec_first,
                 (SELECT om.organization_id FROM organization_members om
-                 WHERE om.user_id = sd.user_id LIMIT 1) AS organization_id
+                 WHERE om.user_id = sd.user_id" . sdVerifiedMemberSql('om') . "   -- 0013: approved agents only
+                 LIMIT 1) AS organization_id
             FROM broker_inventory bi
             JOIN salesdesks sd        ON sd.id  = bi.salesdesk_id
             JOIN cars c               ON c.id   = bi.car_id
             JOIN dealers d            ON d.id   = c.dealer_id
-            JOIN users du             ON du.id  = d.user_id
+            LEFT JOIN users du        ON du.id  = d.user_id
             LEFT JOIN profiles dp     ON dp.user_id = du.id
             JOIN users bu             ON bu.id  = sd.user_id
             LEFT JOIN profiles bp     ON bp.user_id = bu.id
@@ -235,12 +236,13 @@ try {
                 eu.email                AS exec_email,
                 ep.first_name           AS exec_first,
                 (SELECT om.organization_id FROM organization_members om
-                 WHERE om.user_id = sd.user_id LIMIT 1) AS organization_id
+                 WHERE om.user_id = sd.user_id" . sdVerifiedMemberSql('om') . "   -- 0013: approved agents only
+                 LIMIT 1) AS organization_id
             FROM salesdesks sd
             JOIN broker_inventory bi  ON bi.salesdesk_id = sd.id
             JOIN cars c               ON c.id   = bi.car_id
             JOIN dealers d            ON d.id   = c.dealer_id
-            JOIN users du             ON du.id  = d.user_id
+            LEFT JOIN users du        ON du.id  = d.user_id
             LEFT JOIN profiles dp     ON dp.user_id = du.id
             JOIN users bu             ON bu.id  = sd.user_id
             LEFT JOIN profiles bp     ON bp.user_id = bu.id
@@ -293,7 +295,7 @@ try {
                 NULL                    AS organization_id
             FROM cars c
             JOIN dealers d             ON d.id  = c.dealer_id
-            JOIN users du              ON du.id = d.user_id
+            LEFT JOIN users du         ON du.id = d.user_id
             LEFT JOIN profiles dp      ON dp.user_id = du.id
             LEFT JOIN sales_executives se ON se.id = c.uploaded_by_exec_id
             LEFT JOIN users eu         ON eu.id  = se.user_id
@@ -450,20 +452,21 @@ try {
         ]);
     }
 
-    // Notify dealer (in-app)
-    $dealerUserStmt = $pdo->prepare("SELECT user_id FROM dealers WHERE id = ? LIMIT 1");
-    $dealerUserStmt->execute([$track['dealer_id']]);
-    $dealerUserId = (int) ($dealerUserStmt->fetchColumn() ?: 0);
-
-    if ($dealerUserId) {
-        $pdo->prepare("
-            INSERT INTO notifications (user_id, type, title, body, meta, created_at)
-            VALUES (?, 'new_lead', ?, ?, ?, NOW())
-        ")->execute([
-            $dealerUserId,
-            'New lead on ' . $track['year'] . ' ' . $track['make'] . ' ' . $track['model'],
+    // Notify dealer (in-app).
+    // 0012: getDealerContacts() returns the principal, or — for an
+    // admin-managed dealership with no principal — its managing admins.
+    $dealerContacts = getDealerContacts((int) $track['dealer_id']);
+    $dealerNotify   = $pdo->prepare("
+        INSERT INTO notifications (user_id, type, title, body, meta, created_at)
+        VALUES (?, 'new_lead', ?, ?, ?, NOW())
+    ");
+    foreach ($dealerContacts as $contact) {
+        $dealerNotify->execute([
+            $contact['user_id'],
+            'New lead on ' . $track['year'] . ' ' . $track['make'] . ' ' . $track['model']
+                . ($contact['is_admin'] ? ' (' . $track['dealer_name'] . ')' : ''),
             $buyerName . ' submitted an enquiry.',
-            json_encode(['lead_id' => $leadId, 'car_id' => $track['car_id']]),
+            json_encode(['lead_id' => $leadId, 'car_id' => $track['car_id'], 'dealer_id' => (int) $track['dealer_id']]),
         ]);
     }
 
@@ -499,13 +502,16 @@ try {
         );
     }
 
-    // Dealer principal — was in-app only until now.
-    sendNewLeadEmail(
-        $track['dealer_email'] ?? '',
-        $track['dealer_first'] ?? '',
-        'dealer',
-        $leadEmailContext
-    );
+    // Dealer principal — or, for an admin-managed dealership (0012),
+    // each managing admin.
+    foreach ($dealerContacts as $contact) {
+        sendNewLeadEmail(
+            $contact['email'],
+            $contact['first_name'] ?? '',
+            'dealer',
+            $leadEmailContext
+        );
+    }
 
     // Sales exec — only when the car was uploaded by a verified exec.
     // Mirrors the verification gate used elsewhere (e.g. exec_guard.php),

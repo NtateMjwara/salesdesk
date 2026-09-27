@@ -211,6 +211,43 @@ function checkApiRateLimit(
 // DEALER MANAGEMENT
 // ============================================================
 
+/**
+ * Who should hear about things happening at a dealership
+ * (exec join requests, new leads, nudges).  (0012)
+ *
+ *   - Dealer principal, if the dealership has one.
+ *   - Otherwise every active admin in dealer_managers
+ *     (admin-managed dealership with no principal).
+ *
+ * @return array<int, array{user_id:int, email:string, first_name:?string, is_admin:bool}>
+ */
+function getDealerContacts(int $dealerId): array
+{
+    $pdo  = Database::getInstance();
+    $stmt = $pdo->prepare("
+        SELECT u.id AS user_id, u.email, p.first_name, 0 AS is_admin
+        FROM dealers d
+        JOIN users u ON u.id = d.user_id AND u.status = 'active'
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE d.id = ?
+        UNION ALL
+        SELECT u.id, u.email, p.first_name, 1
+        FROM dealers d
+        JOIN dealer_managers dm ON dm.dealer_id = d.id
+        JOIN users u ON u.id = dm.admin_user_id AND u.status = 'active' AND u.role = 'admin'
+        LEFT JOIN profiles p ON p.user_id = u.id
+        WHERE d.id = ? AND d.user_id IS NULL
+    ");
+    $stmt->execute([$dealerId, $dealerId]);
+
+    return array_map(static fn(array $r): array => [
+        'user_id'    => (int) $r['user_id'],
+        'email'      => (string) $r['email'],
+        'first_name' => $r['first_name'],
+        'is_admin'   => (bool) $r['is_admin'],
+    ], $stmt->fetchAll());
+}
+
 function suspendDealer(int $dealerId, int $adminId): array
 {
     $pdo = Database::getInstance();
@@ -355,6 +392,43 @@ function reinstateDealer(int $dealerId, int $adminId): array
         'cars_reinstated'      => $carsReinstated,
         'commissions_unfrozen' => $commissionsUnfrozen,
     ];
+}
+
+
+// ============================================================
+// DESK ORGANISATION SCHEMA (0013)
+// ============================================================
+
+/**
+ * Has migration 0013 been applied? Broker-facing pages degrade to
+ * "independent" instead of crashing if the files are deployed first.
+ */
+function sdOrgSchemaReady(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $ready = (bool) Database::getInstance()->query("
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organizations' AND COLUMN_NAME = 'brands'
+        ")->fetchColumn() && (bool) Database::getInstance()->query("
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organization_members' AND COLUMN_NAME = 'status'
+        ")->fetchColumn();
+        if (!$ready) {
+            error_log('[SalesDesk] Desk organisation features are off: run db/0013_desk_orgs_online_dealerships.sql');
+        }
+    }
+    return $ready;
+}
+
+/**
+ * SQL condition limiting organization_members (alias) to approved agents.
+ * Before migration 0013 the status column doesn't exist; then every
+ * membership counts, as it did before, instead of the page crashing.
+ */
+function sdVerifiedMemberSql(string $alias = 'om'): string
+{
+    return sdOrgSchemaReady() ? " AND {$alias}.status = 'verified'" : '';
 }
 
 
@@ -616,7 +690,11 @@ function getCommissionById(int $commissionId): array|false
             bu.email        AS broker_email,
             bp.first_name   AS broker_first,
             bp.last_name    AS broker_last,
-            du.email        AS dealer_email,
+            COALESCE(du.email, (
+                SELECT mu.email FROM dealer_managers dm
+                JOIN users mu ON mu.id = dm.admin_user_id
+                WHERE dm.dealer_id = d.id ORDER BY dm.id LIMIT 1
+            ))              AS dealer_email,
             d.company_name  AS dealer_company,
             o.name          AS org_name
         FROM commissions c
@@ -625,7 +703,7 @@ function getCommissionById(int $commissionId): array|false
         LEFT JOIN users  bu   ON bu.id = c.broker_id
         LEFT JOIN profiles bp ON bp.user_id = c.broker_id
         JOIN dealers     d    ON d.id = c.dealer_id
-        JOIN users       du   ON du.id = d.user_id
+        LEFT JOIN users  du   ON du.id = d.user_id
         LEFT JOIN organizations o ON o.id = c.organization_id
         WHERE c.id = ?
     ");
@@ -752,11 +830,11 @@ function getPendingVerifications(): array
             d.cipc_doc_url,
             d.verification_status,
             d.created_at        AS submitted_at,
-            u.email,
+            COALESCE(u.email, '')  AS email,
             a.city,
             a.province
         FROM dealers d
-        JOIN users u ON u.id = d.user_id
+        LEFT JOIN users u ON u.id = d.user_id
         LEFT JOIN addresses a ON a.id = d.address_id
         WHERE d.verification_status = 'pending'
           AND d.cipc_doc_url IS NOT NULL

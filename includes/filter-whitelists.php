@@ -36,3 +36,54 @@ function sdDrivetrainWhitelist(): array
 {
     return ['FWD', 'RWD', 'AWD', '4WD'];
 }
+
+/**
+ * Car makes a desk organisation can sell (0013) — same list the dealer
+ * upload wizard offers (app/dealer/car-upload.php), so an org's brands
+ * always match real cars.make values. Matching against cars.make is
+ * case-insensitive (utf8mb4_unicode_ci), so importer values such as
+ * "VOLKSWAGEN" still match "Volkswagen".
+ */
+function sdCarMakes(): array
+{
+    return [
+        'Acura','Alfa Romeo','Aston Martin','Audi','BAIC','Bentley','BMW','BYD','Cadillac','Changan',
+        'Chery','Chevrolet','Chrysler','Citroën','Daihatsu','Datsun','Dodge','Ferrari','Fiat','Ford',
+        'Foton','Geely','Genesis','GWM','Haval','Honda','Hyundai','Infiniti','Isuzu','JAC','Jaecoo',
+        'Jaguar','Jeep','Jetour','Kia','Lamborghini','Land Rover','LDV','Lexus','Lincoln','Mahindra',
+        'Maserati','Mazda','McLaren','Mercedes-Benz','MG','Mini','Mitsubishi','NIO','Nissan','OMODA',
+        'Opel','Peugeot','Polestar','Porsche','RAM','Range Rover','Renault','Rivian','Rolls-Royce',
+        'SEAT','Skoda','Smart','Ssangyong','Subaru','Suzuki','Tata','Tesla','Toyota','Volkswagen',
+        'Volvo','Xpeng','Zeekr',
+    ];
+}
+
+/**
+ * Other spellings of a make seen in cars.make (dealer typing, importers),
+ * so an org selling "Volkswagen" also matches cars saved as "VW".  (0013)
+ * Keys are sdCarMakes() values. Matching is case-insensitive.
+ */
+function sdCarMakeAliases(): array
+{
+    return [
+        'Volkswagen'    => ['VW', 'Volkswagon'],
+        'Mercedes-Benz' => ['Mercedes', 'Mercedes Benz', 'Merc', 'MB'],
+        'Land Rover'    => ['Landrover', 'Land-Rover'],
+        'Range Rover'   => ['Range-Rover'],
+        'Citroën'       => ['Citroen'],
+        'GWM'           => ['Great Wall', 'Great Wall Motors'],
+        'Alfa Romeo'    => ['Alfa'],
+        'Rolls-Royce'   => ['Rolls Royce'],
+        'Ssangyong'     => ['SsangYong', 'KGM'],
+        'Mini'          => ['MINI Cooper'],
+        'Chevrolet'     => ['Chev', 'Chevy'],
+        'Mahindra'      => ['Mahindra & Mahindra'],
+        'OMODA'         => ['Omoda'],
+    ];
+}
+
+/** A brand plus all its aliases. */
+function sdMakeVariants(string $make): array
+{
+    return array_values(array_unique(array_merge([$make], sdCarMakeAliases()[$make] ?? [])));
+}

@@ -304,9 +304,10 @@ HTML;
 function sendSalesExecJoinRequest(
     string $principalEmail,
     string $dealerName,
-    string $execEmail
+    string $execEmail,
+    ?string $reviewUrl = null   // 0012: admins review at /app/admin/approvals
 ): bool {
-    $teamUrl = SITE_URL . '/app/dealer/team.php';
+    $teamUrl = $reviewUrl ?? (SITE_URL . '/app/dealer/team.php');
     $body    = <<<HTML
 <h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">
   New team join request
@@ -373,6 +374,80 @@ function sendSalesExecRejected(
 </p>
 HTML;
     return sendEmail($execEmail, "Your join request for {$dealerName} was declined", $body);
+}
+
+
+// ============================================================
+// DESK ORGANISATION AGENT EMAILS  (0013)
+// Brokers apply to join a desk organisation (an admin-run online
+// dealership) as agents; managing admins approve or decline.
+// ============================================================
+
+function sendAgentApplication(string $adminEmail, string $orgName, string $brokerEmail): bool
+{
+    $orgName     = htmlspecialchars($orgName);
+    $brokerEmail = htmlspecialchars($brokerEmail);
+    $reviewUrl   = SITE_URL . '/app/admin/approvals?tab=agents';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">New agent application</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">
+  A broker has applied to join <strong>{$orgName}</strong> as an agent:
+</p>
+<div style="background:#f8faff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:0 0 20px;">
+  <p style="font-size:13px;color:#64748b;margin:0 0 3px;">Email address</p>
+  <p style="font-size:15px;font-weight:600;color:#1e293b;font-family:monospace;margin:0;">{$brokerEmail}</p>
+</div>
+<a href="{$reviewUrl}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
+  Review application →
+</a>
+HTML;
+    return sendEmail($adminEmail, 'New agent application — ' . html_entity_decode($orgName), $body);
+}
+
+function sendAgentApproved(string $brokerEmail, string $brokerName, string $orgName, array $brands = []): bool
+{
+    $name     = htmlspecialchars($brokerName ?: 'there');
+    $org      = htmlspecialchars($orgName);
+    $brandTxt = $brands ? ' You can now add ' . htmlspecialchars(implode(', ', $brands)) . ' cars to your desk.' : '';
+    $url      = SITE_URL . '/app/broker/inventory';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#15803d;margin:0 0 8px;">You're an agent at {$org}</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">Hi {$name},</p>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
+  Your application to join <strong>{$org}</strong> has been
+  <strong style="color:#15803d;">approved</strong>.{$brandTxt}
+  Commission on your leads is still paid to you.
+</p>
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
+  Browse cars →
+</a>
+HTML;
+    return sendEmail($brokerEmail, "You're approved — welcome to {$orgName}", $body);
+}
+
+function sendAgentRejected(string $brokerEmail, string $brokerName, string $orgName, string $reason = ''): bool
+{
+    $name        = htmlspecialchars($brokerName ?: 'there');
+    $org         = htmlspecialchars($orgName);
+    $reasonBlock = $reason
+        ? '<p style="font-size:13px;color:#7f1d1d;background:#fef2f2;border:1px solid #fecaca;'
+          . 'border-radius:8px;padding:12px 14px;margin:0 0 18px;"><strong>Reason:</strong> '
+          . htmlspecialchars($reason) . '</p>'
+        : '';
+    $url  = SITE_URL . '/app/broker/desk-org';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#dc2626;margin:0 0 8px;">Application declined</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 12px;">Hi {$name},</p>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 16px;">
+  Your application to join <strong>{$org}</strong> was declined. You can keep working as an
+  independent broker, or apply to a different desk organisation.
+</p>
+{$reasonBlock}
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
+  See desk organisations →
+</a>
+HTML;
+    return sendEmail($brokerEmail, "Your application to {$orgName} was declined", $body);
 }
 
 

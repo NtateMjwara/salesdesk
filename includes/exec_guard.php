@@ -125,7 +125,7 @@ function _renderStatusPage(
             'iconBg'  => 'background:var(--amb-bg);color:var(--amber)',
             'title'   => 'Awaiting approval',
             'message' => "Your request to join <strong>{$dealer}</strong> is pending. "
-                       . "The dealer principal will review your request and you'll receive an email once approved.",
+                       . "The dealership will review your request and you'll receive an email once approved.",
             'actions' => '<a href="/app/exec/dashboard.php" class="btn btn-ghost" style="text-decoration:none">Refresh status</a>',
         ],
         'rejected' => [

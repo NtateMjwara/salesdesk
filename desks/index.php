@@ -124,7 +124,7 @@ $sql = "
     JOIN users u                     ON u.id = sd.user_id
     LEFT JOIN profiles p             ON p.user_id = u.id
     LEFT JOIN addresses a            ON a.id = p.address_id
-    LEFT JOIN organization_members om ON om.user_id = u.id
+    LEFT JOIN organization_members om ON om.user_id = u.id" . sdVerifiedMemberSql('om') . "   -- 0013
     LEFT JOIN organizations o        ON o.id = om.organization_id AND o.is_active = 1
     LEFT JOIN broker_inventory bi    ON bi.salesdesk_id = sd.id
     LEFT JOIN cars c                 ON c.id = bi.car_id AND c.status = 'active'

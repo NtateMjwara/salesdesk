@@ -24,7 +24,8 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/listing_consistency.php';
 
 applyCachePolicy('auth');
-requireRole('admin');
+require_once __DIR__ . '/../../includes/superadmin.php';
+requireSuperadmin();   // 0014: scans and changes listings platform-wide
 
 $pdo    = Database::getInstance();
 $adminId = (int) $_SESSION['user_id'];

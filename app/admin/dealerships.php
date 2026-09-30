@@ -112,7 +112,7 @@ $sql = "
            (SELECT COUNT(*) FROM cars c
              WHERE c.dealer_id = d.id AND c.status = 'active')                  AS active_cars
     FROM dealers d
-    JOIN dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
+    " . adminScopeJoin($adminId) . " dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?   -- 0014: superadmins see all
     LEFT JOIN addresses a   ON a.id = d.address_id
 ";
 $params = [$adminId];
@@ -133,7 +133,7 @@ ob_start();
 ?>
 <div class="section-head">
   <h1 class="section-title">Dealerships</h1>
-  <span class="section-count"><?= count($dealers) ?> managed by you</span>
+  <span class="section-count"><?= count($dealers) ?> <?= isSuperadmin($adminId) ? 'on the platform' : 'managed by you' ?></span>
   <?php if ($totalPending > 0): ?>
   <a class="section-count alert-count adm-link" href="/app/admin/approvals?tab=execs">
     <?= (int) $totalPending ?> exec request<?= $totalPending === 1 ? '' : 's' ?> waiting
@@ -188,7 +188,19 @@ ob_start();
         <td class="adm-muted"><?= $d['user_id'] ? 'Linked' : 'Admin-managed' ?></td>
         <td class="adm-mono"><?= (int) $d['team_size'] ?></td>
         <td class="adm-mono"><?= (int) $d['active_cars'] ?></td>
-        <td><a class="btn btn-ghost btn-sm" href="/app/admin/dealerships-view?id=<?= (int) $d['id'] ?>">Manage</a></td>
+        <td class="adm-actions">
+          <a class="btn btn-ghost btn-sm" href="/app/admin/dealerships-view?id=<?= (int) $d['id'] ?>">Manage</a>
+          <?php if ($d['is_active'] && ($wsRow = sdResolveDealerAccess($adminId, 'admin', (int) $d['id']))): ?>
+          <form method="POST" action="/app/admin/workspace">
+            <?= csrf_hidden_field() ?>
+            <input type="hidden" name="action" value="enter">
+            <input type="hidden" name="dealer_id" value="<?= (int) $d['id'] ?>">
+            <button class="btn btn-ghost btn-sm" type="submit" title="<?= $wsRow['mode'] === 'operator' ? 'Run it in the dealer portal' : 'View it in the dealer portal (read-only)' ?>">
+              <i class="fa-solid <?= $wsRow['mode'] === 'operator' ? 'fa-screwdriver-wrench' : 'fa-eye' ?>"></i> Open
+            </button>
+          </form>
+          <?php endif; ?>
+        </td>
       </tr>
     <?php endforeach; ?>
     </tbody>

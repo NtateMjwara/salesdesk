@@ -27,7 +27,7 @@ adminRequireSchema('Dealership');   // clear 'run migration' screen if the DB is
 $pdo      = Database::getInstance();
 $adminId  = (int) $_SESSION['user_id'];
 $dealerId = (int) ($_GET['id'] ?? $_POST['dealer_id'] ?? 0);
-$tab      = in_array($_GET['tab'] ?? '', ['team', 'details', 'managers'], true) ? $_GET['tab'] : 'team';
+$tab      = in_array($_GET['tab'] ?? '', ['team', 'details', 'managers', 'platform'], true) ? $_GET['tab'] : 'team';
 
 $dealer = $dealerId ? getManagedDealer($adminId, $dealerId) : false;
 if (!$dealer) {
@@ -121,7 +121,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($self . '&tab=details');
     }
 
-    // Co-managers
+    // 0017: platform controls (superadmin only) — listing holds, handover
+    if (in_array($action, ['hold_listing', 'release_hold', 'handover'], true)) {
+        if (!isSuperadmin($adminId)) {
+            $_SESSION['flash_error'] = 'Only a superadmin can do that.';
+            redirect($self . '&tab=platform');
+        }
+        if ($action === 'handover') {
+            sdRequireStepUp($self . '&tab=platform');
+            [$ok, $msg] = saHandoverToPrincipal($dealerId, (string) ($_POST['email'] ?? ''),
+                (string) ($_POST['first_name'] ?? ''), (string) ($_POST['last_name'] ?? ''), $adminId);
+        } else {
+            $carId = (int) ($_POST['car_id'] ?? 0);
+            $own   = $pdo->prepare("SELECT 1 FROM cars WHERE id = ? AND dealer_id = ?");
+            $own->execute([$carId, $dealerId]);
+            [$ok, $msg] = !$own->fetchColumn()
+                ? [false, 'That listing isn’t at this dealership.']
+                : ($action === 'hold_listing'
+                    ? sdHoldListing($carId, (string) ($_POST['reason'] ?? ''), $adminId)
+                    : sdReleaseHold($carId, $adminId));
+        }
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($self . '&tab=platform');
+    }
+
+    // 0015: View / Operate for a managing admin (superadmin only)
+    if ($action === 'set_access') {
+        if (!isSuperadmin($adminId)) {
+            $_SESSION['flash_error'] = 'Only a superadmin can change what an admin may do here.';
+        } else {
+            [$ok, $msg] = saSetDealerAccess($dealerId, (int) ($_POST['admin_user_id'] ?? 0),
+                (string) ($_POST['access'] ?? ''), $adminId);
+            $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        }
+        redirect($self . '&tab=managers');
+    }
+
+    // Co-managers — 0014: assigning admins is a superadmin action
+    if (in_array($action, ['add_manager', 'remove_manager'], true) && !isSuperadmin($adminId)) {
+        $_SESSION['flash_error'] = 'Only a superadmin can change who manages this.';
+        redirect($self . '&tab=managers');
+    }
     if ($action === 'add_manager') {
         [$ok, $msg] = adminAddManager('dealer', $dealerId, (string) ($_POST['email'] ?? ''), $adminId);
         $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
@@ -176,6 +216,19 @@ ob_start();
   <?= adminStatusBadge($dealer['is_active'] ? 'active' : 'inactive') ?>
   <?= adminStatusBadge($dealer['verification_status']) ?>
   <span class="section-count"><?= $dealer['user_id'] ? 'Principal: ' . htmlspecialchars($dealer['principal_email'] ?? '') : 'Admin-managed' ?></span>
+  <?php $wsCtx = sdResolveDealerAccess($adminId, 'admin', $dealerId); ?>
+  <?php if ($wsCtx && $dealer['is_active']): ?>
+  <form method="POST" action="/app/admin/workspace" class="adm-head-action">
+    <?= csrf_hidden_field() ?>
+    <input type="hidden" name="action" value="enter">
+    <input type="hidden" name="dealer_id" value="<?= (int) $dealerId ?>">
+    <?php $wsCanWrite = in_array($wsCtx['mode'], ['operator', 'delegate'], true); ?>
+    <button class="btn <?= $wsCanWrite ? 'btn-primary' : 'btn-ghost' ?> btn-sm" type="submit">
+      <i class="fa-solid <?= $wsCtx['mode'] === 'delegate' ? 'fa-handshake' : ($wsCanWrite ? 'fa-screwdriver-wrench' : 'fa-eye') ?>"></i>
+      <?= $wsCtx['mode'] === 'delegate' ? 'Help run (access granted)' : ($wsCanWrite ? 'Run in dealer portal' : 'View in dealer portal') ?>
+    </button>
+  </form>
+  <?php endif; ?>
 </div>
 
 <div class="adm-stats">
@@ -186,7 +239,9 @@ ob_start();
 </div>
 
 <nav class="adm-tabs" aria-label="Dealership sections">
-  <?php foreach (['team' => 'Team & requests', 'details' => 'Details', 'managers' => 'Managers'] as $key => $label): ?>
+  <?php $dvTabs = ['team' => 'Team & requests', 'details' => 'Details', 'managers' => 'Managers'];
+        if (isSuperadmin($adminId)) { $dvTabs['platform'] = 'Platform controls'; } ?>
+  <?php foreach ($dvTabs as $key => $label): ?>
   <a href="<?= $self ?>&amp;tab=<?= $key ?>" class="adm-tab<?= $tab === $key ? ' is-active' : '' ?>"
      <?= $tab === $key ? 'aria-current="page"' : '' ?>>
     <?= $label ?>
@@ -327,9 +382,13 @@ ob_start();
   </div>
   <?php endif; ?>
 
+<?php elseif ($tab === 'platform' && isSuperadmin($adminId)): /* 0017 */ ?>
+
+  <?php include __DIR__ . '/../../views/partials/admin/dealer-platform-controls.php'; ?>
+
 <?php else: /* managers */ ?>
 
-  <?php $managerEntityField = 'dealer_id'; $managerEntityId = $dealerId; include __DIR__ . '/../../views/partials/admin/managers-panel.php'; ?>
+  <?php $managerEntityField = 'dealer_id'; $managerEntityId = $dealerId; $managerHasPrincipal = $dealer['user_id'] !== null; include __DIR__ . '/../../views/partials/admin/managers-panel.php'; ?>
 
 <?php endif; ?>
 

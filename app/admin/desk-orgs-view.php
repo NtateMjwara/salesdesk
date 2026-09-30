@@ -129,7 +129,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($self . '&tab=details');
     }
 
-    // Co-managers
+    // Co-managers — 0014: assigning admins is a superadmin action
+    if (in_array($action, ['add_manager', 'remove_manager'], true) && !isSuperadmin($adminId)) {
+        $_SESSION['flash_error'] = 'Only a superadmin can change who manages this.';
+        redirect($self . '&tab=managers');
+    }
     if ($action === 'add_manager') {
         [$ok, $msg] = adminAddManager('org', $orgId, (string) ($_POST['email'] ?? ''), $adminId);
         $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;

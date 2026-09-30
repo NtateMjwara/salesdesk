@@ -114,7 +114,7 @@ $sql = "
            (SELECT COUNT(*) FROM organization_members m WHERE m.organization_id = o.id AND m.status = 'pending')  AS pending_count,
            (SELECT COUNT(*) FROM leads l WHERE l.organization_id = o.id)                                          AS lead_count
     FROM organizations o
-    JOIN organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
+    " . adminScopeJoin($adminId) . " organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?   -- 0014: superadmins see all
     LEFT JOIN addresses a ON a.id = o.address_id
 ";
 $params = [$adminId];
@@ -136,7 +136,7 @@ ob_start();
 ?>
 <div class="section-head">
   <h1 class="section-title">Desk organisations</h1>
-  <span class="section-count"><?= count($orgs) ?> managed by you</span>
+  <span class="section-count"><?= count($orgs) ?> <?= isSuperadmin($adminId) ? 'on the platform' : 'managed by you' ?></span>
   <?php if ($totalPending > 0): ?>
   <a class="section-count alert-count adm-link" href="/app/admin/approvals?tab=agents">
     <?= (int) $totalPending ?> agent application<?= $totalPending === 1 ? '' : 's' ?> waiting

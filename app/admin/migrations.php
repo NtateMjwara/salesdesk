@@ -18,7 +18,8 @@ require_once '../../includes/admin_scope.php';
 require_once '../../includes/migrations.php';
 
 applyCachePolicy('auth');
-requireRole('admin');
+require_once __DIR__ . '/../../includes/superadmin.php';
+requireSuperadmin();   // 0014: platform-wide page — superadmins only
 
 $adminId = (int) $_SESSION['user_id'];
 $runLog     = $_SESSION['migration_log'] ?? null;

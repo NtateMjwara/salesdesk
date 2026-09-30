@@ -5,10 +5,40 @@
  * IMPORTANT: Protect this file in production (IP restriction, .htaccess, or delete after use).
  */
 
-session_start();
 require_once '../../includes/config.php';
 
-// ─── ACCESS CONTROL ──────────────────────────────────────────────────────────
+// ─── ACCESS CONTROL (0014) ───────────────────────────────────────────────────
+// This page had NO access check: anyone who found /app/admin/database could
+// read, edit or drop tables. It also called session_start() before
+// includes/session.php, so the SD_SESS login cookie was never read.
+// Now: superadmins only, behind a fresh step-up code, and every change is
+// refused unless the request comes from this site (the tool uses plain GET
+// links for delete / drop / truncate, which a malicious page could trigger).
+require_once '../../includes/security.php';
+require_once '../../includes/session.php';
+require_once '../../includes/database.php';
+require_once '../../includes/functions.php';
+require_once '../../includes/superadmin.php';
+
+applyCachePolicy('auth');
+requireSuperadmin();
+sdRequireStepUp('/app/admin/database', 'Confirm it’s you to open the database tool.');
+
+$sdDbMutating = ['ajax_save_cell', 'delete_row', 'do_insert', 'do_add_column', 'do_drop_column',
+                 'do_modify_column', 'do_drop_table', 'do_truncate', 'do_create_table', 'run_sql'];
+if (in_array($_GET['action'] ?? '', $sdDbMutating, true)) {
+    $fetchSite = $_SERVER['HTTP_SEC_FETCH_SITE'] ?? '';
+    $refHost   = parse_url($_SERVER['HTTP_REFERER'] ?? '', PHP_URL_HOST);
+    $sameSite  = $fetchSite !== ''
+        ? $fetchSite === 'same-origin'
+        : ($refHost !== null && $refHost === ($_SERVER['HTTP_HOST'] ?? ''));
+    if (!$sameSite) {
+        http_response_code(403);
+        exit('Refused: database changes must be made from the SalesDesk admin panel.');
+    }
+    writeAuditLog('database.' . $_GET['action'], 'database', 0, null,
+        ['table' => $_GET['table'] ?? null], (int) $_SESSION['user_id']);
+}
 
 
 // ─── DATABASE CONNECTION ──────────────────────────────────────────────────────

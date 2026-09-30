@@ -9,6 +9,10 @@
  *
  * Guards:
  *   requireRole('admin') — hard gate, session check insufficient
+ *   0014 scope: admins only see / act on users connected to the
+ *   dealerships and orgs they manage (principals, sales execs, agents
+ *   and applicants), and only those CIPC reviews. Superadmins see
+ *   everyone. Admin accounts never appear here — see /app/admin/admins.
  *   All write actions validate CSRF
  *   All state changes write to audit_logs
  *
@@ -26,6 +30,7 @@ require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/mailer.php';
 require_once '../../includes/response.php';
+require_once '../../includes/superadmin.php';
 
 applyCachePolicy('auth');
 requireRole('admin');
@@ -40,6 +45,22 @@ $flashType = 'ok';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
+
+    // ── 0014: scope check before ANY action ────────────────────
+    $targetUser   = (int) ($_POST['user_id']   ?? 0);
+    $targetDealer = (int) ($_POST['dealer_id'] ?? 0);
+    $targetOrg    = (int) ($_POST['org_id']    ?? 0);
+    $allowed = match ($action) {
+        'suspend_user', 'reactivate_user', 'set_car_limit'  => adminCanActOnUser($adminId, $targetUser),
+        'suspend_dealer', 'reinstate_dealer',
+        'approve_dealer_cipc', 'reject_dealer_cipc'         => $targetDealer > 0 && adminCanActOnDealer($adminId, $targetDealer),
+        'approve_org_cipc', 'reject_org_cipc'               => $targetOrg > 0 && adminCanActOnOrg($adminId, $targetOrg),
+        default                                             => false,
+    };
+    if (!$allowed) {
+        $_SESSION['flash_error'] = 'That account isn’t connected to a dealership or organisation you manage.';
+        redirect('/app/admin/users.php?tab=' . (str_contains($action, 'cipc') ? 'verifications' : 'users'));
+    }
 
     // ── Suspend dealer (full cascade via suspendDealer()) ──────
     if ($action === 'suspend_dealer') {
@@ -235,10 +256,12 @@ $users = getUsersForAdmin(
     $statusFilter ?: null,
     $search       ?: null,
     limit: 50,
-    offset: 0
+    offset: 0,
+    scopeAdminId: $adminId        // 0014: admins see only their users
 );
 
-$pendingVerifications = getPendingVerifications();
+$pendingVerifications = getPendingVerifications($adminId);
+$isSuperadmin         = isSuperadmin($adminId);
 
 $defaultCarLimit = getPlatformConfigInt('broker_car_limit_default', 10);
 
@@ -247,7 +270,7 @@ ob_start();
 ?>
 <div class="section-head">
   <h1 class="section-title">Users &amp; Verifications</h1>
-  <span class="section-count"><?= count($users) ?> users</span>
+  <span class="section-count"><?= count($users) ?> users<?= $isSuperadmin ? '' : ' in your dealerships &amp; orgs' ?></span>
   <?php if (count($pendingVerifications['dealers']) + count($pendingVerifications['orgs']) > 0): ?>
   <span class="section-count alert-count">
     <?= count($pendingVerifications['dealers']) + count($pendingVerifications['orgs']) ?> pending CIPC
@@ -288,7 +311,7 @@ ob_start();
          placeholder="Search email…" style="max-width:240px;">
   <select class="finput" name="role" style="max-width:140px;">
     <option value="">All roles</option>
-    <?php foreach (['broker','dealer','sales_exec','admin'] as $r): ?>
+    <?php foreach (['broker','dealer','sales_exec'] as $r): ?>
     <option value="<?= $r ?>" <?= $roleFilter === $r ? 'selected' : '' ?>><?= ucfirst(str_replace('_',' ',$r)) ?></option>
     <?php endforeach; ?>
   </select>

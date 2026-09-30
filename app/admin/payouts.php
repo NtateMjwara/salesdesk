@@ -12,6 +12,9 @@
  *   4. Recent paid        — last 30 days, read-only
  *
  * Guards: requireRole('admin'), validateCSRF() on all writes.
+ * 0014: every action is superadmin-only and needs a fresh step-up code
+ * (app/admin/confirm). Admins get a READ-ONLY view limited to the
+ * commissions and payouts of the dealerships / orgs they manage.
  * Every state change goes through transitionCommissionStatus()
  * which enforces valid transitions and writes audit_logs.
  *
@@ -27,12 +30,17 @@ require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/mailer.php';
 require_once '../../includes/response.php';
+require_once '../../includes/superadmin.php';
 
 applyCachePolicy('auth');
 requireRole('admin');
 
 $pdo     = Database::getInstance();
 $adminId = (int) $_SESSION['user_id'];
+$canAct  = isSuperadmin($adminId);                       // 0014
+[$commScope, $commScopeParams] = adminCommissionScopeSql($adminId, 'c');
+[$closerCols, $closerJoin]     = sdCloserSql('c');       // 0016: who closed each deal
+$closerCols .= sdPhase3Ready() ? ', c.dealer_confirmation' : ", 'not_required' AS dealer_confirmation";   // 0017
 
 // Encryption gate — disable live payouts until bank data is encrypted.
 $encryptionEnabled = defined('USE_BANK_ENCRYPTION') && USE_BANK_ENCRYPTION;
@@ -41,6 +49,34 @@ $encryptionEnabled = defined('USE_BANK_ENCRYPTION') && USE_BANK_ENCRYPTION;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
+
+    // 0014: money moves are superadmin-only, behind a fresh confirmation.
+    if (!$canAct) {
+        $_SESSION['flash_error'] = 'Only a superadmin can approve or pay out commissions.';
+        redirect('/app/admin/payouts.php');
+    }
+    sdRequireStepUp('/app/admin/payouts.php');
+
+    // 0016 four-eyes: the person who closed a deal can't approve, pay out or
+    // retry its commission. (transitionCommissionStatus() enforces this too.)
+    $fourEyesStatus = match ($action) {
+        'approve_commission' => 'approved',
+        'mark_paid'          => 'paid',
+        'retry_payout'       => 'scheduled',
+        default              => null,
+    };
+    if ($fourEyesStatus !== null
+        && ($why = sdConfirmationBlock((int) ($_POST['commission_id'] ?? 0), $fourEyesStatus))) {   // 0017
+        $_SESSION['flash_error'] = $why;
+        redirect('/app/admin/payouts.php');
+    }
+    if ($fourEyesStatus !== null
+        && ($why = sdFourEyesViolation((int) ($_POST['commission_id'] ?? 0), $adminId, $fourEyesStatus))) {
+        writeAuditLog('commission.four_eyes_blocked', 'commission', (int) ($_POST['commission_id'] ?? 0),
+            null, ['attempted' => $action], $adminId);
+        $_SESSION['flash_error'] = $why;
+        redirect('/app/admin/payouts.php');
+    }
 
     // ── Approve commission ────────────────────────────────────
     if ($action === 'approve_commission') {
@@ -90,9 +126,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $reference    = trim($_POST['reference_number'] ?? '');
 
         if ($payoutId > 0 && $commissionId > 0 && $reference !== '') {
-            // Move commission to processing then paid.
-            transitionCommissionStatus($commissionId, 'processing', $adminId);
-            transitionCommissionStatus($commissionId, 'paid', $adminId, "EFT ref: {$reference}");
+            // Move commission to processing then paid. 0016: only record the
+            // payout as paid if BOTH transitions actually happened — before,
+            // a refused transition still left the payout row marked 'paid'.
+            $okProcessing = transitionCommissionStatus($commissionId, 'processing', $adminId);
+            $okPaid       = $okProcessing
+                && transitionCommissionStatus($commissionId, 'paid', $adminId, "EFT ref: {$reference}");
+            if (!$okPaid) {
+                $_SESSION['flash_error'] = 'Could not mark this payout as paid — the commission is not in a payable state. Nothing was recorded.';
+                redirect('/app/admin/payouts.php');
+            }
 
             // Update payout record.
             $pdo->prepare("
@@ -250,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 1. Pending commissions (status = pending).
 $pendingCommStmt = $pdo->prepare("
     SELECT
+        {$closerCols},
         c.id, c.uuid, c.gross_amount, c.platform_fee, c.net_amount, c.created_at,
         l.uuid          AS lead_uuid,
         l.buyer_name,
@@ -266,15 +310,17 @@ $pendingCommStmt = $pdo->prepare("
     JOIN profiles bp ON bp.user_id = c.broker_id
     JOIN dealers d  ON d.id = c.dealer_id
     LEFT JOIN organizations o ON o.id = c.organization_id
-    WHERE c.status = 'pending'
+    {$closerJoin}
+    WHERE c.status = 'pending' AND {$commScope}
     ORDER BY c.created_at ASC
 ");
-$pendingCommStmt->execute();
+$pendingCommStmt->execute($commScopeParams);
 $pendingCommissions = $pendingCommStmt->fetchAll();
 
 // 2. Scheduled payouts.
 $scheduledStmt = $pdo->prepare("
     SELECT
+        {$closerCols},
         p.id AS payout_id, p.amount, p.scheduled_at, p.retry_count,
         p.idempotency_key,
         c.id AS commission_id, c.status AS commission_status,
@@ -295,15 +341,17 @@ $scheduledStmt = $pdo->prepare("
     JOIN leads l        ON l.id = c.lead_id
     JOIN cars           ON cars.id = l.car_id
     LEFT JOIN organizations o ON o.id = p.organization_id
-    WHERE p.status = 'scheduled'
+    {$closerJoin}
+    WHERE p.status = 'scheduled' AND {$commScope}
     ORDER BY p.scheduled_at ASC
 ");
-$scheduledStmt->execute();
+$scheduledStmt->execute($commScopeParams);
 $scheduledPayouts = $scheduledStmt->fetchAll();
 
 // 3. Failed payouts.
 $failedStmt = $pdo->prepare("
     SELECT
+        {$closerCols},
         p.id AS payout_id, p.amount, p.error_message, p.retry_count, p.created_at,
         c.id AS commission_id, c.broker_id, c.organization_id,
         bu.email AS broker_email,
@@ -315,16 +363,18 @@ $failedStmt = $pdo->prepare("
     JOIN leads l       ON l.id = c.lead_id
     JOIN cars          ON cars.id = l.car_id
     LEFT JOIN organizations o ON o.id = p.organization_id
-    WHERE p.status = 'failed'
+    {$closerJoin}
+    WHERE p.status = 'failed' AND {$commScope}
     ORDER BY p.created_at DESC
     LIMIT 50
 ");
-$failedStmt->execute();
+$failedStmt->execute($commScopeParams);
 $failedPayouts = $failedStmt->fetchAll();
 
 // 4. Recent paid (last 30 days).
 $recentPaidStmt = $pdo->prepare("
     SELECT
+        {$closerCols},
         p.id AS payout_id, p.amount, p.reference_number, p.processed_at,
         bu.email AS broker_email,
         cars.make, cars.model, cars.year
@@ -333,30 +383,45 @@ $recentPaidStmt = $pdo->prepare("
     JOIN users bu      ON bu.id = p.broker_id
     JOIN leads l       ON l.id = c.lead_id
     JOIN cars          ON cars.id = l.car_id
+    {$closerJoin}
     WHERE p.status = 'paid'
       AND p.processed_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+      AND {$commScope}
     ORDER BY p.processed_at DESC
     LIMIT 50
 ");
-$recentPaidStmt->execute();
+$recentPaidStmt->execute($commScopeParams);
 $recentPaid = $recentPaidStmt->fetchAll();
 
 // ── Totals for dashboard header ───────────────────────────────
-$totals = $pdo->query("
+$totalsStmt = $pdo->prepare("
     SELECT
-        SUM(CASE WHEN status='pending'   THEN net_amount ELSE 0 END) AS pending_value,
-        SUM(CASE WHEN status='scheduled' THEN net_amount ELSE 0 END) AS scheduled_value,
-        SUM(CASE WHEN status='paid' AND paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-                 THEN net_amount ELSE 0 END) AS paid_30d_value,
-        COUNT(CASE WHEN status='pending'   THEN 1 END) AS pending_count,
-        COUNT(CASE WHEN status='scheduled' THEN 1 END) AS scheduled_count,
-        COUNT(CASE WHEN status='failed'    THEN 1 END) AS failed_count
-    FROM commissions
-")->fetch();
+        SUM(CASE WHEN c.status='pending'   THEN c.net_amount ELSE 0 END) AS pending_value,
+        SUM(CASE WHEN c.status='scheduled' THEN c.net_amount ELSE 0 END) AS scheduled_value,
+        SUM(CASE WHEN c.status='paid' AND c.paid_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 THEN c.net_amount ELSE 0 END) AS paid_30d_value,
+        COUNT(CASE WHEN c.status='pending'   THEN 1 END) AS pending_count,
+        COUNT(CASE WHEN c.status='scheduled' THEN 1 END) AS scheduled_count,
+        COUNT(CASE WHEN c.status='failed'    THEN 1 END) AS failed_count
+    FROM commissions c
+    WHERE {$commScope}
+");
+$totalsStmt->execute($commScopeParams);
+$totals = $totalsStmt->fetch();
 
 // ── Render ────────────────────────────────────────────────────
 ob_start();
 ?>
+
+<?php if (!$canAct): ?>
+<div class="alert alert-info adm-gap">
+  <span class="alert-icon">ℹ</span>
+  <div>
+    <strong>Read-only view.</strong> You're seeing commissions and payouts for the dealerships and
+    organisations you manage. Approving and paying out is done by a SalesDesk superadmin.
+  </div>
+</div>
+<?php endif; ?>
 
 <?php if (!$encryptionEnabled): ?>
 <div class="alert alert-warn" style="margin-bottom:1.5rem;">
@@ -424,7 +489,8 @@ ob_start();
     <tbody>
     <?php foreach ($pendingCommissions as $c): ?>
     <tr>
-      <td style="font-weight:500;"><?= htmlspecialchars("{$c['year']} {$c['make']} {$c['model']}") ?></td>
+      <td style="font-weight:500;"><?= htmlspecialchars("{$c['year']} {$c['make']} {$c['model']}") ?>
+        <div><?= sdClosedByBadge($c, $adminId) ?></div></td>
       <td style="font-size:12px;"><?= htmlspecialchars(trim("{$c['broker_first']} {$c['broker_last']}") ?: $c['broker_email']) ?></td>
       <td style="font-size:11px;color:var(--muted);"><?= $c['org_name'] ? htmlspecialchars($c['org_name']) : '—' ?></td>
       <td style="font-size:12px;"><?= htmlspecialchars($c['dealer_company']) ?></td>
@@ -433,6 +499,13 @@ ob_start();
       <td style="font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green);"><?= formatZAR((float)$c['net_amount']) ?></td>
       <td style="font-size:11px;color:var(--faint);"><?= date('d M Y', strtotime($c['created_at'])) ?></td>
       <td>
+        <?php $iClosedIt = (int) ($c['closed_by_user_id'] ?? 0) === $adminId; ?>
+        <?php if (($c['dealer_confirmation'] ?? '') === 'pending'): ?>
+        <span class="badge badge-awaiting-dealer" title="SalesDesk closed this deal on a principal's dealership">
+          <i class="fa-solid fa-hourglass-half"></i> Awaiting dealer confirmation</span>
+        <?php elseif ($canAct && $iClosedIt): ?>
+        <span class="adm-sub" title="Four-eyes rule">You closed this deal — another superadmin approves it</span>
+        <?php elseif ($canAct): ?>
         <form method="POST">
           <?= csrf_hidden_field() ?>
           <input type="hidden" name="action" value="approve_commission">
@@ -442,6 +515,7 @@ ob_start();
             Approve
           </button>
         </form>
+        <?php else: ?><span class="adm-sub">Superadmin</span><?php endif; ?>
       </td>
     </tr>
     <?php endforeach; ?>
@@ -483,6 +557,7 @@ ob_start();
         <div style="font-size:11px;color:var(--muted);">via <?= htmlspecialchars($p['org_name']) ?></div>
         <?php endif; ?>
         <div style="font-size:11px;color:var(--faint);"><?= htmlspecialchars($p['broker_email']) ?></div>
+        <div><?= sdClosedByBadge($p, $adminId) ?></div>
       </td>
       <td style="font-size:12px;"><?= htmlspecialchars("{$p['year']} {$p['make']} {$p['model']}") ?></td>
       <td style="font-size:12px;">
@@ -496,12 +571,19 @@ ob_start();
       </td>
       <td style="font-size:11px;color:var(--faint);"><?= date('d M Y', strtotime($p['scheduled_at'])) ?></td>
       <td>
+        <?php if ($canAct && (int) ($p['closed_by_user_id'] ?? 0) === $adminId): ?>
+        <span class="adm-sub">—</span>
+        <?php elseif ($canAct): ?>
         <input type="text" id="ref-<?= $p['payout_id'] ?>"
                placeholder="EFT-2025-XXXX"
                style="padding:5px 8px;border:1px solid var(--border);border-radius:6px;
                       font-size:12px;font-family:var(--mono);width:140px;">
+        <?php else: ?><span class="adm-sub">—</span><?php endif; ?>
       </td>
       <td>
+        <?php if ($canAct && (int) ($p['closed_by_user_id'] ?? 0) === $adminId): ?>
+        <span class="adm-sub" title="Four-eyes rule">You closed this deal — another superadmin pays it</span>
+        <?php elseif ($canAct): ?>
         <?php if ($encryptionEnabled): ?>
         <form method="POST" id="payForm-<?= $p['payout_id'] ?>">
           <?= csrf_hidden_field() ?>
@@ -521,6 +603,7 @@ ob_start();
                 onclick="openMarkFailedModal(<?= $p['payout_id'] ?>, <?= $p['commission_id'] ?>)">
           Mark failed
         </button>
+        <?php else: ?><span class="adm-sub">Superadmin</span><?php endif; ?>
       </td>
     </tr>
     <?php endforeach; ?>
@@ -544,11 +627,15 @@ ob_start();
     <?php foreach ($failedPayouts as $fp): ?>
     <tr>
       <td style="font-size:12px;"><?= htmlspecialchars($fp['broker_email']) ?></td>
-      <td style="font-size:12px;"><?= htmlspecialchars("{$fp['year']} {$fp['make']} {$fp['model']}") ?></td>
+      <td style="font-size:12px;"><?= htmlspecialchars("{$fp['year']} {$fp['make']} {$fp['model']}") ?>
+        <div><?= sdClosedByBadge($fp, $adminId) ?></div></td>
       <td style="font-family:var(--mono);font-size:12px;"><?= formatZAR((float)$fp['amount']) ?></td>
       <td style="font-size:11px;color:var(--red);"><?= htmlspecialchars($fp['error_message'] ?? 'Unknown error') ?></td>
       <td style="font-family:var(--mono);font-size:12px;text-align:center;"><?= (int)$fp['retry_count'] ?></td>
       <td>
+        <?php if ($canAct && (int) ($fp['closed_by_user_id'] ?? 0) === $adminId): ?>
+        <span class="adm-sub" title="Four-eyes rule">You closed this deal — another superadmin pays it</span>
+        <?php elseif ($canAct): ?>
         <form method="POST">
           <?= csrf_hidden_field() ?>
           <input type="hidden" name="action" value="retry_payout">
@@ -559,6 +646,7 @@ ob_start();
           <button class="btn btn-info btn-sm" type="submit"
                   onclick="return confirm('Schedule a retry payout for this commission?')">Retry</button>
         </form>
+        <?php else: ?><span class="adm-sub">Superadmin</span><?php endif; ?>
       </td>
     </tr>
     <?php endforeach; ?>
@@ -658,9 +746,9 @@ document.querySelectorAll('.modal-bg').forEach(function (bg) {
 <?php
 $pageContent = ob_get_clean();
 
-function csrf_hidden_field(): string {
-    return '<input type="hidden" name="' . CSRF_TOKEN_NAME . '" value="' . htmlspecialchars(generateCSRFToken()) . '">';
-}
+// 0014: removed a local csrf_hidden_field() — it duplicated the one in
+// includes/csrf.php and made this page fail with "Cannot redeclare".
 
 $pageTitle = 'Payouts | Admin';
+$pageStyles  = ['/assets/css/admin.css'];
 require_once '../../views/layout-app.php';

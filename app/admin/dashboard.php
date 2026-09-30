@@ -23,7 +23,8 @@ require_once '../../includes/functions.php';
 require_once '../../includes/response.php';
 
 applyCachePolicy('auth');
-requireRole('admin');
+require_once __DIR__ . '/../../includes/superadmin.php';
+requireSuperadmin();   // 0014: platform-wide page — superadmins only
 
 $pdo = Database::getInstance();
 

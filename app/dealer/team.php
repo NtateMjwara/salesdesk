@@ -33,22 +33,22 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/mailer.php';
+require_once '../../includes/dealer_context.php';
 
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
 
 $pdo          = Database::getInstance();
-$principalId  = (int) $_SESSION['user_id'];
+$principalId  = (int) $_SESSION['user_id'];   // the ACTOR (principal or operating admin) — stored as verified_by
 
 // Verify this user is an active dealer principal with a verified dealer record.
 $dealerStmt = $pdo->prepare("
     SELECT d.id AS dealer_id, d.company_name
     FROM dealers d
-    WHERE d.user_id = ? AND d.is_active = 1
+    WHERE d.id = ? AND d.is_active = 1
     LIMIT 1
 ");
-$dealerStmt->execute([$principalId]);
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealerRow = $dealerStmt->fetch();
 
 if (!$dealerRow) {

@@ -28,9 +28,13 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 
+require_once __DIR__ . '/../../includes/dealer_context.php';
+
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+// 0017: delegates may help run the dealership, but company / verification /
+// address settings stay with the principal.
+$ws = requireDealerWorkspace(['principal_only' => true]);   // 0015: principal, or admin in a dealer workspace
+$staffWorkspace = sdInStaffWorkspace();   // admins never see / edit the principal's personal profile
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
@@ -59,13 +63,13 @@ $dataStmt = $pdo->prepare("
         a.postal_code,
         d.address_id
     FROM dealers d
-    JOIN users u ON u.id = d.user_id
+    LEFT JOIN users u ON u.id = d.user_id          -- 0015: admin-run dealerships have no principal
     LEFT JOIN profiles p ON p.user_id = d.user_id
     LEFT JOIN addresses a ON a.id = d.address_id
-    WHERE d.user_id = ?
+    WHERE d.id = ?
     LIMIT 1
 ");
-$dataStmt->execute([$userId]);
+$dataStmt->execute([$ws['dealer_id']]);
 $data = $dataStmt->fetch();
 if (!$data) redirect('/auth/register.php');
 
@@ -76,6 +80,9 @@ $flashError = $_SESSION['flash_error'] ?? '';
 unset($_SESSION['flash_ok'], $_SESSION['flash_error']);
 
 $section = $_GET['section'] ?? 'company';
+if ($staffWorkspace && in_array($section, ['profile', 'access'], true)) {
+    $section = 'company';
+}
 
 // ── POST handler ──────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -213,7 +220,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/app/dealer/settings.php?section=address');
     }
 
+    // ── 0017: SalesDesk access (principal only) ───────────────
+    if (in_array($action, ['grant_access', 'revoke_access'], true)) {
+        if ($staffWorkspace) {
+            $_SESSION['flash_error'] = 'Only the principal can change SalesDesk’s access.';
+        } else {
+            [$ok, $msg] = $action === 'grant_access'
+                ? sdGrantDelegation($dealerId, $userId, (int) ($_POST['days'] ?? 0), (string) ($_POST['note'] ?? ''))
+                : sdRevokeDelegation($dealerId, $userId);
+            $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        }
+        redirect('/app/dealer/settings.php?section=access');
+    }
+
     // ── Account holder profile ────────────────────────────────
+    // 0015: the principal's personal profile is theirs alone.
+    if ($action === 'save_profile' && $staffWorkspace) {
+        $_SESSION['flash_error'] = 'The account holder profile can only be changed by the dealer principal.';
+        redirect('/app/dealer/settings.php?section=company');
+    }
     if ($action === 'save_profile') {
         $firstName = trim($_POST['first_name'] ?? '');
         $lastName  = trim($_POST['last_name']  ?? '');
@@ -268,6 +293,12 @@ ob_start();
       'address'      => ['fa-location-dot',      'Address'],
       'profile'      => ['fa-user',              'Account holder'],
     ];
+    if (!$staffWorkspace && sdPhase3Ready()) {
+        $navItems['access'] = ['fa-handshake', 'SalesDesk access'];   // 0017
+    }
+    if ($staffWorkspace) {
+        unset($navItems['profile']);
+    }
     foreach ($navItems as $key => [$icon, $label]):
     ?>
     <a href="?section=<?= $key ?>"
@@ -562,6 +593,91 @@ ob_start();
           </a>
         </div>
       </form>
+    </div>
+
+    <?php elseif ($section === 'access'): ?>
+    <!-- ══════════════════════════════
+         0017: SALESDESK ACCESS (principal only)
+         ══════════════════════════════ -->
+    <?php
+      $activeDeleg = sdActiveDelegation($dealerId);
+      $delegHist   = sdDelegationHistory($dealerId, 5);
+      $staffFeed   = sdStaffChangesFeed($dealerId, 25);
+    ?>
+    <div class="card card-body">
+      <h2 class="d-card-heading">SalesDesk <em>access</em></h2>
+      <p class="sd-access__lead">
+        SalesDesk staff can always <strong>view</strong> your dealership to support you. If you'd like them to do work for
+        you — upload stock, run imports, work your leads — let them in for a while. They can't change these settings,
+        every change they make is listed below, and any sale they close needs your confirmation before it's invoiced.
+      </p>
+
+      <?php if ($activeDeleg): ?>
+      <div class="sd-access__state sd-access__state--on">
+        <i class="fa-solid fa-handshake" aria-hidden="true"></i>
+        <div>
+          <strong>SalesDesk can help run your dealership</strong> until
+          <?= htmlspecialchars(date('j M Y, H:i', strtotime($activeDeleg['expires_at']))) ?>.
+          <?php if ($activeDeleg['note']): ?><div class="sd-access__note">Your request: “<?= htmlspecialchars($activeDeleg['note']) ?>”</div><?php endif; ?>
+        </div>
+        <form method="POST" class="sd-access__revoke">
+          <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+          <input type="hidden" name="action" value="revoke_access">
+          <button class="btn btn-ghost btn-sm" type="submit">Switch off now</button>
+        </form>
+      </div>
+      <?php else: ?>
+      <div class="sd-access__state">
+        <i class="fa-regular fa-eye" aria-hidden="true"></i>
+        <div><strong>View only.</strong> SalesDesk can see your dealership but can't change anything.</div>
+      </div>
+      <?php endif; ?>
+
+      <form method="POST" class="sd-access__grant">
+        <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+        <input type="hidden" name="action" value="grant_access">
+        <label class="flabel" for="accessNote"><?= $activeDeleg ? 'Extend or change' : 'Let SalesDesk help' ?></label>
+        <input class="finput" id="accessNote" name="note" maxlength="255"
+               placeholder="What would you like them to do? e.g. Upload our new stock from the website">
+        <div class="sd-access__days">
+          <label><input type="radio" name="days" value="7" checked> 7 days</label>
+          <label><input type="radio" name="days" value="30"> 30 days</label>
+          <button class="btn btn-primary btn-sm" type="submit">Grant access</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card card-body sd-access__feed">
+      <h2 class="d-card-heading">Changes by <em>SalesDesk</em></h2>
+      <?php if (!$staffFeed): ?>
+      <p class="sd-access__lead">Nothing yet — SalesDesk staff haven't opened or changed your dealership.</p>
+      <?php else: ?>
+      <ul class="sd-access__list">
+        <?php foreach ($staffFeed as $row):
+          $who = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')) ?: (string) ($row['email'] ?? 'SalesDesk'); ?>
+        <li>
+          <span class="sd-access__when"><?= htmlspecialchars(date('j M, H:i', strtotime($row['created_at']))) ?></span>
+          <span><strong><?= htmlspecialchars($who) ?></strong> · <?= htmlspecialchars(sdActionLabel($row['action'])) ?></span>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+
+      <?php if ($delegHist): ?>
+      <h3 class="sd-access__h3">Access you've granted</h3>
+      <ul class="sd-access__list">
+        <?php foreach ($delegHist as $h): ?>
+        <li>
+          <span class="sd-access__when"><?= htmlspecialchars(date('j M Y', strtotime($h['starts_at']))) ?></span>
+          <span>
+            <?= (int) round((strtotime($h['expires_at']) - strtotime($h['starts_at'])) / 86400) ?> days
+            · <?= $h['is_active'] ? 'active' : ($h['revoked_at'] ? 'switched off ' . htmlspecialchars(date('j M', strtotime($h['revoked_at']))) : 'expired') ?>
+            <?= $h['note'] ? ' · “' . htmlspecialchars($h['note']) . '”' : '' ?>
+          </span>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
 

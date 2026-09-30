@@ -121,11 +121,13 @@ if ($isExec) {
     $dealerId = (int) $exec['dealer_id'];
     $execId   = (int) $exec['id'];
 } else {
-    requireRole('dealer');
+    // 0015: principal, or admin in a dealer workspace
+    require_once '../../includes/dealer_context.php';
+    $ws = requireDealerWorkspace();
     $dealerStmt = $pdo->prepare("
-        SELECT id AS dealer_id, company_name FROM dealers WHERE user_id = ? AND is_active = 1
+        SELECT id AS dealer_id, company_name FROM dealers WHERE id = ? AND is_active = 1
     ");
-    $dealerStmt->execute([$userId]);
+    $dealerStmt->execute([$ws['dealer_id']]);
     $dealerRow = $dealerStmt->fetch();
     if (!$dealerRow) redirect('/app/dealer/dashboard.php');
     $dealerId = (int) $dealerRow['dealer_id'];
@@ -133,6 +135,11 @@ if ($isExec) {
 }
 
 // ── Wizard session state ──────────────────────────────────────
+// 0015: an admin can switch dealership mid-wizard — a half-finished car
+// must never be saved to a different dealership than it was started for.
+if (!empty($_SESSION['car_wz']) && ($_SESSION['car_wz']['_dealer_id'] ?? $dealerId) !== $dealerId) {
+    unset($_SESSION['car_wz']);
+}
 if (empty($_SESSION['car_wz'])) {
     $_SESSION['car_wz'] = [
         'step'             => 1,
@@ -188,6 +195,7 @@ if (empty($_SESSION['car_wz'])) {
         'commission_value' => '',
     ];
 }
+$_SESSION['car_wz']['_dealer_id'] = $dealerId;   // 0015
 $wz   = &$_SESSION['car_wz'];
 $step = (int) ($wz['step'] ?? 1);
 $csrf = generateCSRFToken();

@@ -22,10 +22,10 @@ require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/dealer_context.php';
 
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
@@ -37,10 +37,10 @@ $dealerStmt = $pdo->prepare("
            a.city, a.province
     FROM dealers d
     LEFT JOIN addresses a ON a.id = d.address_id
-    WHERE d.user_id = ?
+    WHERE d.id = ?
     LIMIT 1
 ");
-$dealerStmt->execute([$userId]);
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealer = $dealerStmt->fetch();
 
 if (!$dealer) {

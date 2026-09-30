@@ -14,15 +14,15 @@ require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+require_once __DIR__ . '/../../includes/dealer_context.php';
+$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
 
 // ── Dealer record ─────────────────────────────────────────────
-$dealerStmt = $pdo->prepare("SELECT id AS dealer_id, company_name FROM dealers WHERE user_id = ? AND is_active = 1");
-$dealerStmt->execute([$userId]);
+$dealerStmt = $pdo->prepare("SELECT id AS dealer_id, company_name FROM dealers WHERE id = ? AND is_active = 1");
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealer = $dealerStmt->fetch();
 if (!$dealer) redirect('/app/dealer/dashboard.php');
 
@@ -45,6 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newStatus = null;
             if ($action === 'pause'  && $carRow['status'] === 'active')  $newStatus = 'paused';
             if ($action === 'resume' && $carRow['status'] === 'paused')  $newStatus = 'active';
+            // 0017: a SalesDesk enforcement hold can only be released by SalesDesk.
+            if ($newStatus === 'active' && ($hold = sdCarHold($carId))) {
+                $newStatus = null;
+                $_SESSION['flash_error'] = 'SalesDesk has put this listing on hold: “' . $hold . '”. Contact SalesDesk to release it.';
+            }
             if ($action === 'sold'   && in_array($carRow['status'], ['active','paused'], true)) {
                 $newStatus = 'sold';
             }
@@ -125,6 +130,7 @@ $carsStmt = $pdo->prepare("
         c.commission_type, c.commission_value,
         c.image_urls, c.status, c.created_at, c.sold_at,
         c.uploaded_by_exec_id,
+        " . (sdPhase3Ready() ? "c.hold_reason," : "NULL AS hold_reason,") . "   -- 0017
         COUNT(DISTINCT bi.id) AS broker_count,
         COUNT(DISTINCT l.id)  AS lead_count,
         COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS deals_count,
@@ -329,6 +335,10 @@ ob_start();
             <i class="fa-solid fa-check"></i> Sold
           </button>
         </form>
+        <?php elseif ($car['status'] === 'paused' && !empty($car['hold_reason'])): ?>
+        <div class="car-hold" title="Contact SalesDesk to release this hold">
+          <i class="fa-solid fa-lock" aria-hidden="true"></i> On hold by SalesDesk: <?= htmlspecialchars($car['hold_reason']) ?>
+        </div>
         <?php elseif ($car['status'] === 'paused'): ?>
         <form method="POST" style="margin:0;flex:1;">
           <input type="hidden" name="csrf_token" value="<?= $csrf ?>">

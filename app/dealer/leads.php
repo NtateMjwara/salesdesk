@@ -26,10 +26,10 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/mailer.php';
+require_once '../../includes/dealer_context.php';
 
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
@@ -37,9 +37,9 @@ $userId = (int) $_SESSION['user_id'];
 // Dealer record
 $dealerStmt = $pdo->prepare("
     SELECT d.id AS dealer_id, d.company_name
-    FROM dealers d WHERE d.user_id = ? AND d.is_active = 1
+    FROM dealers d WHERE d.id = ? AND d.is_active = 1
 ");
-$dealerStmt->execute([$userId]);
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealer = $dealerStmt->fetch();
 if (!$dealer) redirect('/app/dealer/dashboard.php');
 
@@ -51,6 +51,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
     $leadId = (int) ($_POST['lead_id'] ?? 0);
+
+    // 0017: the principal confirms or disputes a deal SalesDesk staff closed.
+    if (in_array($action, ['confirm_deal', 'dispute_deal'], true)) {
+        $commissionId = (int) ($_POST['commission_id'] ?? 0);
+        if ($ws['mode'] !== 'principal') {
+            $_SESSION['flash_error'] = 'Only the dealership’s principal can confirm or dispute this deal.';
+        } else {
+            [$ok, $msg] = $action === 'confirm_deal'
+                ? sdConfirmDeal($commissionId, $dealerId, $userId)
+                : sdDisputeDeal($commissionId, $dealerId, $userId, (string) ($_POST['reason'] ?? ''));
+            $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        }
+        redirect('/app/dealer/leads.php?id=' . $leadId);
+    }
 
     if ($leadId > 0) {
         $leadCheck = $pdo->prepare("SELECT id, status, car_id, broker_id FROM leads WHERE id = ? AND dealer_id = ?");
@@ -109,20 +123,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $existsCheck->execute([$leadId]);
                             if (!$existsCheck->fetch()) {
                                 $commUuid = generateUuidV4();
-                                $pdo->prepare("
-                                    INSERT INTO commissions
-                                        (uuid, lead_id, broker_id, organization_id, dealer_id,
-                                         gross_amount, platform_fee, net_amount, status, created_at, updated_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
-                                ")->execute([
-                                    $commUuid, $leadId,
-                                    $carData['broker_id'], $carData['organization_id'], $dealerId,
-                                    $gross, $fee, $net
-                                ]);
+                                // 0016: record who closed the deal (four-eyes on payouts)
+                                [$closedBy, $closedVia] = sdCurrentCloser();
+                                if (sdMoneySchemaReady()) {
+                                    $pdo->prepare("
+                                        INSERT INTO commissions
+                                            (uuid, lead_id, broker_id, organization_id, dealer_id,
+                                             closed_by_user_id, closed_via,
+                                             gross_amount, platform_fee, net_amount, status, created_at, updated_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+                                    ")->execute([
+                                        $commUuid, $leadId,
+                                        $carData['broker_id'], $carData['organization_id'], $dealerId,
+                                        $closedBy ?: null, $closedVia,
+                                        $gross, $fee, $net
+                                    ]);
+                                } else {
+                                    $pdo->prepare("
+                                        INSERT INTO commissions
+                                            (uuid, lead_id, broker_id, organization_id, dealer_id,
+                                             gross_amount, platform_fee, net_amount, status, created_at, updated_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NOW(), NOW())
+                                    ")->execute([
+                                        $commUuid, $leadId,
+                                        $carData['broker_id'], $carData['organization_id'], $dealerId,
+                                        $gross, $fee, $net
+                                    ]);
+                                }
 
                                 $commId = (int) $pdo->lastInsertId();
                                 writeAuditLog('commission.created', 'commission', $commId, null,
-                                    ['status' => 'pending', 'gross' => $gross, 'net' => $net]);
+                                    ['status' => 'pending', 'gross' => $gross, 'net' => $net,
+                                     'closed_by' => $closedBy, 'closed_via' => $closedVia]);
+
+                                // 0017: SalesDesk staff closed a deal on a principal's
+                                // dealership → the principal confirms it before any
+                                // invoice goes out or money moves.
+                                $needsConfirm = sdDealNeedsConfirmation($dealerId, $closedVia);
+                                if ($needsConfirm) {
+                                    $pdo->prepare("UPDATE commissions SET dealer_confirmation = 'pending' WHERE id = ?")
+                                        ->execute([$commId]);
+                                    $principalId = sdDealerPrincipalId($dealerId);
+                                    $carTitle    = "{$carData['year']} {$carData['make']} {$carData['model']}";
+                                    sdNotify((int) $principalId, 'deal_confirmation', 'Please confirm a sale — ' . $carTitle,
+                                        'SalesDesk marked this lead as sold while helping run your dealership. Nothing is invoiced until you confirm.',
+                                        ['lead_id' => $leadId, 'commission_id' => $commId]);
+                                    $pEmail = $pdo->prepare("SELECT email FROM users WHERE id = ?");
+                                    $pEmail->execute([(int) $principalId]);
+                                    sendDealConfirmationRequest((string) $pEmail->fetchColumn(), $dealer['company_name'], $carTitle, $gross, $leadId);
+                                }
 
                                 // Notify broker (in-app)
                                 $pdo->prepare("
@@ -135,10 +184,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     json_encode(['lead_id' => $leadId, 'commission_id' => $commId]),
                                 ]);
 
-                                // Send invoice to dealer principal
-                                $dealerEmailStmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
-                                $dealerEmailStmt->execute([$userId]);
-                                $dealerEmail = $dealerEmailStmt->fetchColumn();
+                                // Send invoice to the dealership's contacts: the
+                                // principal, or (0015) for an admin-run dealership
+                                // its active managing admins — not simply whoever
+                                // clicked "closed".
+                                $invoiceTo = array_column(getDealerContacts($dealerId), 'email');
+                                if (!$invoiceTo) {
+                                    $dealerEmailStmt = $pdo->prepare("SELECT email FROM users WHERE id = ?");
+                                    $dealerEmailStmt->execute([$userId]);
+                                    $invoiceTo = [(string) $dealerEmailStmt->fetchColumn()];
+                                }
 
                                 $leadForInvoice = $pdo->prepare("
                                     SELECT l.uuid, l.buyer_name, l.buyer_email,
@@ -149,12 +204,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $leadForInvoice->execute([$leadId]);
                                 $invoiceLead = $leadForInvoice->fetch();
 
-                                sendDealerCommissionInvoice(
-                                    ['email' => $dealerEmail, 'company_name' => $dealer['company_name']],
-                                    $invoiceLead,
-                                    ['id' => $commId, 'gross_amount' => $gross,
-                                     'platform_fee' => $fee, 'net_amount' => $net]
-                                );
+                                // 0017: held back until the principal confirms (see above).
+                                foreach ($needsConfirm ? [] : array_unique(array_filter($invoiceTo)) as $dealerEmail) {
+                                    sendDealerCommissionInvoice(
+                                        ['email' => $dealerEmail, 'company_name' => $dealer['company_name']],
+                                        $invoiceLead,
+                                        ['id' => $commId, 'gross_amount' => $gross,
+                                         'platform_fee' => $fee, 'net_amount' => $net]
+                                    );
+                                }
 
                                 // Email broker -- was in-app only until now.
                                 // Lighter-weight than the dealer invoice: no banking
@@ -299,8 +357,10 @@ $leads = $leadsStmt->fetchAll();
 // Load detail lead if requested
 $detailLead = null;
 if ($detailId > 0) {
+    [$closerCols, $closerJoin] = sdCloserSql('cm');   // 0016: who closed the deal
     $detailStmt = $pdo->prepare("
         SELECT
+            {$closerCols},
             l.*,
             c.make, c.model, c.year, c.price, c.commission_type, c.commission_value,
             c.uploaded_by_exec_id,
@@ -310,6 +370,7 @@ if ($detailId > 0) {
             o.name AS org_name,
             cm.id AS commission_id, cm.status AS commission_status,
             cm.gross_amount, cm.net_amount,
+            " . (sdPhase3Ready() ? "cm.dealer_confirmation" : "'not_required' AS dealer_confirmation") . ",
             ep.first_name AS exec_first, ep.last_name AS exec_last
         FROM leads l
         JOIN cars c ON c.id = l.car_id
@@ -320,6 +381,7 @@ if ($detailId > 0) {
         LEFT JOIN commissions cm ON cm.lead_id = l.id
         LEFT JOIN sales_executives se ON se.id = c.uploaded_by_exec_id
         LEFT JOIN profiles ep ON ep.user_id = se.user_id
+        {$closerJoin}
         WHERE l.id = ? AND l.dealer_id = ?
     ");
     $detailStmt->execute([$detailId, $dealerId]);
@@ -574,6 +636,40 @@ ob_start();
           <div style="font-size:11px;color:var(--muted);">
             Status: <?= htmlspecialchars($detailLead['commission_status']) ?>
           </div>
+          <?php if (($detailLead['dealer_confirmation'] ?? '') === 'pending'): ?>
+          <div class="lead-confirm">
+            <?php if ($ws['mode'] === 'principal'): ?>
+            <p class="lead-confirm__text"><strong>Please confirm this sale.</strong> SalesDesk closed it while helping run your
+              dealership. Nothing is invoiced until you confirm.</p>
+            <form method="POST" class="lead-confirm__form">
+              <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+              <input type="hidden" name="action" value="confirm_deal">
+              <input type="hidden" name="lead_id" value="<?= (int) $detailLead['id'] ?>">
+              <input type="hidden" name="commission_id" value="<?= (int) $detailLead['commission_id'] ?>">
+              <button class="btn btn-primary btn-sm" type="submit">Confirm sale</button>
+            </form>
+            <form method="POST" class="lead-confirm__form lead-confirm__dispute">
+              <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+              <input type="hidden" name="action" value="dispute_deal">
+              <input type="hidden" name="lead_id" value="<?= (int) $detailLead['id'] ?>">
+              <input type="hidden" name="commission_id" value="<?= (int) $detailLead['commission_id'] ?>">
+              <label class="sr-only" for="disputeReason">Why isn't this right?</label>
+              <input class="finput" id="disputeReason" name="reason" maxlength="255" required placeholder="Not sold — what happened?">
+              <button class="btn btn-ghost btn-sm" type="submit">Dispute</button>
+            </form>
+            <?php else: ?>
+            <p class="lead-confirm__text"><strong>Waiting for the principal to confirm this sale.</strong>
+              No invoice is sent and it can't be paid out until they do.</p>
+            <?php endif; ?>
+          </div>
+          <?php endif; ?>
+          <?php if (($detailLead['closed_via'] ?? null) === 'staff'): ?>
+          <div class="lead-closed-by">
+            <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>
+            Closed by SalesDesk<?= trim(($detailLead['closer_first'] ?? '') . ' ' . ($detailLead['closer_last'] ?? '')) !== ''
+                ? ' (' . htmlspecialchars(trim($detailLead['closer_first'] . ' ' . $detailLead['closer_last'])) . ')' : '' ?> on the dealership’s behalf
+          </div>
+          <?php endif; ?>
         </div>
         <?php endif; ?>
 

@@ -53,16 +53,16 @@ require_once '../../includes/importers/MotusApiImporter.php';
 const MOTUS_DISCOVER_TIME_BUDGET_SECONDS = 25;
 
 applyCachePolicy('auth');
-requireLogin();
-requireRole('dealer');
+require_once __DIR__ . '/../../includes/dealer_context.php';
+$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
 
 $dealerStmt = $pdo->prepare("
-    SELECT id AS dealer_id, company_name FROM dealers WHERE user_id = ? AND is_active = 1
+    SELECT id AS dealer_id, company_name FROM dealers WHERE id = ? AND is_active = 1
 ");
-$dealerStmt->execute([$userId]);
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealerRow = $dealerStmt->fetch();
 if (!$dealerRow) redirect('/app/dealer/dashboard.php');
 $dealerId = (int) $dealerRow['dealer_id'];

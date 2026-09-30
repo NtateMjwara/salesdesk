@@ -587,6 +587,7 @@
 .cd-seller__name { font: 600 16px/1.3 var(--font-d); color: var(--text); }
 .cd-seller__sub { font-size: 13px; color: var(--muted); }
 .cd-seller__org { justify-self: start; margin-top: 4px; }
+a.cd-seller__org:hover { text-decoration: none; border-color: var(--p); }
 .cd-verified { font-size: 13px; color: var(--green); margin-left: 4px; }
 
 .cd-seller__stats {

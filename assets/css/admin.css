@@ -116,6 +116,38 @@ a.adm-strong:hover { color: var(--p); }
 }
 form.adm-head-action { margin: 0 0 0 auto; }
 
+/* ── Superadmin (0014): admins, portfolios, step-up ─────────── */
+.badge-superadmin {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--p); background: var(--p-light); border: 1px solid var(--p-b);
+}
+.badge-superadmin i { font-size: 10px; }
+.adm-card-wide { max-width: 880px; }
+.adm-list-row .badge { margin-left: 6px; vertical-align: middle; }
+/* ── Unplaced sales execs (0018) ────────────────────────────── */
+.adm-invite-form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0; }
+.adm-invite-form .finput { flex: 1 1 160px; min-width: 0; padding-top: 6px; padding-bottom: 6px; }
+
+/* ── Platform controls (0017) ───────────────────────────────── */
+.adm-hold-form { flex: 0 1 360px; }
+.adm-hold-form .finput { min-width: 0; }
+.badge-awaiting-dealer { display: inline-flex; align-items: center; gap: 5px; color: var(--teal); background: var(--teal-bg); border: 1px solid var(--teal-b); }
+
+/* ── Money controls (0016) ───────────────────────────────────── */
+.badge-closed-staff { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; color: var(--purple); background: var(--pur-bg); border: 1px solid var(--pur-b); }
+.badge-closed-staff i { font-size: 10px; }
+.badge-closed-principal { display: inline-flex; margin-top: 4px; color: var(--amber); background: var(--amb-bg); border: 1px solid var(--amb-b); }
+
+/* ── Dealer workspace (0015) ────────────────────────────────── */
+.badge-ws-operate { display: inline-flex; align-items: center; gap: 5px; color: var(--p); background: var(--p-light); border: 1px solid var(--p-b); }
+.badge-ws-view    { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); }
+.badge-ws-operate i, .badge-ws-view i { font-size: 10px; }
+.adm-access-form { display: inline-flex; gap: 4px; margin: 0; }
+.adm-code-input {
+  flex: 0 1 180px; font-family: var(--mono); font-size: 18px;
+  letter-spacing: .3em; text-align: center;
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 720px) {
   .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

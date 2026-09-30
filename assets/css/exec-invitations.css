@@ -1,0 +1,26 @@
+/**
+ * SalesDesk — Sales exec: dealership invitations (0018)
+ * Page: app/exec/invitations.php
+ */
+.inv-gap { margin-bottom: 1.25rem; }
+.inv-gap-top { margin-top: 12px; }
+
+.inv-list { display: grid; gap: 12px; max-width: 720px; }
+
+.inv-card__head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.inv-card__icon {
+  display: grid; place-items: center; flex-shrink: 0;
+  width: 44px; height: 44px;
+  color: var(--p); background: var(--p-light); border: 1px solid var(--p-b);
+  border-radius: var(--r-lg);
+}
+.inv-card__name { margin: 0; font-size: 16px; font-weight: 700; color: var(--text); }
+.inv-card__meta { font-size: 12px; color: var(--muted); }
+.inv-card__msg {
+  margin: 0 0 10px; padding: 10px 12px;
+  font-size: 13px; color: var(--text2);
+  background: var(--bg); border-left: 3px solid var(--p); border-radius: var(--r-sm);
+}
+.inv-card__what { margin: 0 0 12px; font-size: 13px; line-height: 1.55; color: var(--text2); }
+.inv-card__actions { display: flex; gap: 8px; }
+.inv-card__actions form { margin: 0; }

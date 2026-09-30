@@ -1,0 +1,89 @@
+/**
+ * SalesDesk — Dealer workspace (0015)
+ * Loaded by views/layout-app.php only while an admin works inside a
+ * dealership (body.sd-ws). Banner + read-only affordances for viewers.
+ * Read-only is ENFORCED server-side (requireDealerWorkspace); the styles
+ * below only make it obvious so nobody fills in a form for nothing.
+ */
+
+.ws-banner {
+  border-bottom: 1px solid var(--p-b);
+  background: var(--p-light);
+  color: var(--text);
+}
+
+.ws-banner--viewer {
+  border-bottom-color: var(--amb-b);
+  background: var(--amb-bg);
+}
+
+.ws-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 10px 1.5rem;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.ws-banner__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--r-full);
+  background: var(--white);
+  color: var(--p);
+  border: 1px solid var(--p-b);
+}
+
+.ws-banner--viewer .ws-banner__icon { color: var(--amber); border-color: var(--amb-b); }
+
+.ws-banner__text { flex: 1 1 320px; min-width: 0; }
+.ws-banner__reason { display: block; color: var(--muted); font-size: 12px; }
+
+.ws-banner__actions { display: flex; gap: 8px; align-items: center; }
+.ws-banner__form { margin: 0; }
+
+.ws-banner__btn {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  font: 600 12.5px/1 var(--sans);
+  color: var(--text);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.ws-banner__btn:hover { border-color: var(--p); color: var(--p); text-decoration: none; }
+.ws-banner__btn--exit { color: var(--p); border-color: var(--p-b); }
+
+/* ── View-only: make every change control look (and feel) inert ──
+   (the banner's own Exit form is excluded) */
+.sd-ws--viewer form[method="post" i]:not(.ws-banner__form) button[type="submit"],
+.sd-ws--viewer form[method="post" i]:not(.ws-banner__form) input[type="submit"],
+.sd-ws--viewer form[method="post" i]:not(.ws-banner__form) button:not([type]) {
+  opacity: .45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .ws-banner__inner { padding: 10px 1rem; }
+  .ws-banner__actions { width: 100%; }
+}
+
+/* ── 0017: delegated access (principal let SalesDesk in) ── */
+.ws-banner--delegate {
+  border-bottom-color: var(--teal-b);
+  background: var(--teal-bg);
+}
+.ws-banner--delegate .ws-banner__icon { color: var(--teal); border-color: var(--teal-b); }

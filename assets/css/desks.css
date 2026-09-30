@@ -25,6 +25,7 @@
  *   7. Storefront inventory head
  *   8. Storefront CTA
  *   9. Error page (404/500)
+ *  10. Organisations (directory section, org cards, hub hero brands)
  */
 
 
@@ -845,6 +846,69 @@
   .err__search-icon { display: none; }
   .err__search-input { flex: 1 1 100%; height: 42px; font-size: 16px; padding-inline: 8px; }
   .err__search-btn { width: 100%; }
+}
+
+
+/* ══════════════════════════════════════
+   10. ORGANISATIONS
+       /desks/ org section + org / independent cards,
+       /desks/{org-slug}/ hub hero brand pills,
+       storefront org tag as a link.
+   ══════════════════════════════════════ */
+.dk-orgs {
+  margin-top: clamp(24px, 3vw, 36px);
+  margin-bottom: clamp(28px, 4vw, 48px);
+}
+
+.dk-section-title { margin-top: clamp(24px, 3vw, 36px); }
+.dk-orgs + .dk-section-title { margin-top: 0; }
+
+.dk-avatar--org {
+  color: var(--p);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.dk-avatar--org img { object-fit: contain; padding: 6px; }
+.dk-avatar--org i { font-size: 22px; }
+
+.dk-card__brands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dk-card--independent { background: linear-gradient(180deg, var(--white) 0%, var(--bg) 100%); }
+
+.dk-hero__brands {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-hero__brand {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--on-ink);
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: var(--r-full);
+}
+
+.ds-tag--link { transition: background var(--dur-2), border-color var(--dur-2); }
+.ds-tag--link:hover {
+  text-decoration: none;
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .26);
 }
 
 

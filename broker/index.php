@@ -96,6 +96,8 @@ require_once '../includes/visitor.php';
 require_once '../includes/functions.php';
 require_once '../includes/session.php';
 require_once '../includes/filter-whitelists.php';
+require_once '../includes/desk-seo.php';
+require_once '../includes/structured-data.php';
 
 applyCachePolicy('public');
 
@@ -351,15 +353,10 @@ $statsStmt->execute([$salesdeskId]);
 $stats = $statsStmt->fetch();
 
 // ── Org membership ─────────────────────────────────────────────
-$orgStmt = $pdo->prepare("
-    SELECT o.name, o.slug, o.verification_status
-    FROM organization_members om
-    JOIN organizations o ON o.id = om.organization_id
-    WHERE om.user_id = ? AND o.is_active = 1" . sdVerifiedMemberSql('om') . "   -- 0013
-    LIMIT 1
-");
-$orgStmt->execute([(int) $desk['user_id']]);
-$org = $orgStmt->fetch();
+// Approved agent of an active org, or null = independent broker.
+// SEO-1: presentation only (title / breadcrumb / schema) — never used
+// for attribution.
+$org = sdDeskOrg((int) $desk['user_id']);
 
 // ── Wishlist state ─────────────────────────────────────────────
 $wishlistedIds = [];
@@ -470,19 +467,30 @@ $brokerInitials = strtoupper(
 ) ?: 'SD';
 $location = implode(', ', array_filter([$desk['suburb'], $desk['city'], $desk['province']]));
 
+// SEO-1: "{Desk} | {Org} | SalesDesk" (or "| Independent Car Broker |"),
+// suffixes dropped from the right when the title runs long.
 $siteUrl       = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
-$pageTitle     = $desk['display_name'] . ' — Cars for sale | SalesDesk';
-$ogTitle       = $desk['display_name'] . ' — Car Broker on SalesDesk';
-$ogDescription = ($desk['tagline'] ?: 'Browse ' . (int) ($stats['cars_on_desk'] ?? 0) . ' cars listed by '
-    . $brokerName . ' on SalesDesk South Africa.');
+$orgSegment    = sdOrgTitleSegment($org);
+$pageTitle     = sdSeoTitle($desk['display_name'], [$orgSegment, 'SalesDesk'], 60);
+$ogTitle       = $desk['display_name'] . ' — ' . ($org ? $org['name'] . ' agent' : 'Car Broker') . ' on SalesDesk';
+$ogDescription = sdDeskMetaDescription(
+    $desk['display_name'],
+    $org,
+    implode(', ', array_filter([$desk['city'], $desk['province']])),
+    (int) ($stats['cars_on_desk'] ?? 0),
+    $desk['tagline']
+);
 $ogImage       = $desk['logo_url'] ?: '';
 $canonicalUrl  = $siteUrl . $deskPath;
+// SEO-2: a desk still called "My SalesDesk" isn't worth indexing yet.
+$metaRobotsNoindex = !sdDeskHasRealName($desk['display_name']);
 $layoutVariant  = 'wide';
 $showBreadcrumb = true;
-$breadcrumbs    = [['Find a SalesDesk', '/desks/'], [$desk['display_name'], null]];
+// SEO-3: Find a SalesDesk › {Org | Independent brokers} › {Desk}
+$breadcrumbs    = [['Find a SalesDesk', '/desks/'], sdOrgCrumb($org), [$desk['display_name'], null]];
 
 $shareUrl   = $canonicalUrl;
-$shareTitle = $desk['display_name'] . ' — Car Broker on SalesDesk';
+$shareTitle = $ogTitle;
 
 // ── DS-4: canonical param set + URL builder for every link here ──
 $currentParams = array_filter([
@@ -597,6 +605,19 @@ require_once __DIR__ . '/../views/partials/body-type-icon.php';
 $e = static fn($v): string => htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 
 ob_start();
+
+// SEO-4: AutoDealer JSON-LD for the desk, with memberOf → its org hub.
+echo renderLocalBusinessSchema(
+    [
+        'display_name' => $desk['display_name'],
+        'logo_url'     => $desk['logo_url'],
+        'avatar_url'   => $desk['avatar_url'],
+        'city'         => $desk['city'],
+        'province'     => $desk['province'],
+    ],
+    $canonicalUrl,
+    $org ? ['name' => $org['name'], 'url' => $siteUrl . sdOrgHubPath($org)] : null
+);
 ?>
 
 <div class="sd-container ds">
@@ -620,14 +641,16 @@ ob_start();
         <div>
           <h1 class="ds-hero__name" id="dsName"><?= $e($desk['display_name']) ?></h1>
           <p class="ds-hero__broker">
-            <?= $e($brokerName) ?> · Independent SalesDesk broker
+            <?= $e($brokerName) ?> · <?= $org ? 'Agent at ' . $e($org['name']) : 'Independent SalesDesk broker' ?>
           </p>
           <div class="ds-hero__tags">
             <?php if ($location): ?>
             <span class="ds-tag"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($location) ?></span>
             <?php endif; ?>
-            <?php if ($isOrgVerified): ?>
-            <span class="ds-tag ds-tag--verified"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <?= $e($org['name']) ?></span>
+            <?php if ($org): ?>
+            <a class="ds-tag ds-tag--link<?= $isOrgVerified ? ' ds-tag--verified' : '' ?>" href="<?= $e(sdOrgHubPath($org)) ?>">
+              <i class="fa-solid <?= $isOrgVerified ? 'fa-circle-check' : 'fa-building' ?>" aria-hidden="true"></i> <?= $e($org['name']) ?>
+            </a>
             <?php endif; ?>
             <span class="ds-tag"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Commission-protected</span>
           </div>

@@ -41,6 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newStatus = null;
             if ($action === 'pause'  && $carRow['status'] === 'active') $newStatus = 'paused';
             if ($action === 'resume' && $carRow['status'] === 'paused') $newStatus = 'active';
+            // 0017: a SalesDesk enforcement hold can only be released by SalesDesk.
+            if ($newStatus === 'active' && ($hold = sdCarHold($carId))) {
+                $newStatus = null;
+                $_SESSION['flash_error'] = 'SalesDesk has put this listing on hold: “' . $hold . '”. Ask your dealer principal to contact SalesDesk.';
+            }
 
             if ($newStatus) {
                 $pdo->prepare("UPDATE cars SET status = ?, updated_at = NOW() WHERE id = ?")

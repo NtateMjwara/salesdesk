@@ -70,6 +70,7 @@ require_once '../../includes/database.php';
 require_once '../../includes/visitor.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/session.php';
+require_once '../../includes/desk-seo.php';
 
 applyCachePolicy('public');
 
@@ -367,17 +368,30 @@ if (!$isPlatformCar) {
 // ── Org membership (for desk badge) ───────────────────────────
 // broker_user_id is null on the platform branch — skip the lookup
 // rather than querying organization_members for user_id = 0.
+// SEO-1: presentation only (title / breadcrumb / badge) — the lead
+// form still posts desk_slug + tracking_code, unchanged.
 $org = null;
 if (!$isPlatformCar) {
-    $orgStmt = $pdo->prepare("
-        SELECT o.name, o.slug, o.verification_status
-        FROM organization_members om
-        JOIN organizations o ON o.id = om.organization_id
-        WHERE om.user_id = ? AND o.is_active = 1" . sdVerifiedMemberSql('om') . "   -- 0013
+    $org = sdDeskOrg((int)$deskRow['broker_user_id']);
+}
+
+// ── SEO-5: platform page steps aside when a desk carries the car ──
+// Desks own their organic traffic. /cars-for-sale/car/{slug}/ stays
+// usable (and still converts as a platform lead), but it's noindex
+// whenever at least one live desk lists this car, so it never
+// competes with the desks' own /cars-for-sale/{desk}/{car}/ pages.
+$platformPageNoindex = false;
+if ($isPlatformCar) {
+    $onDeskStmt = $pdo->prepare("
+        SELECT 1
+        FROM broker_inventory bi
+        JOIN salesdesks sd ON sd.id = bi.salesdesk_id AND sd.is_active = 1
+        JOIN users u       ON u.id  = sd.user_id AND u.status = 'active'
+        WHERE bi.car_id = ?
         LIMIT 1
     ");
-    $orgStmt->execute([(int)$deskRow['broker_user_id']]);
-    $org = $orgStmt->fetch();
+    $onDeskStmt->execute([(int)$car['id']]);
+    $platformPageNoindex = (bool) $onDeskStmt->fetchColumn();
 }
 
 // ── Page meta computations ────────────────────────────────────
@@ -433,21 +447,45 @@ $shareUrl   = $activeTrackingCode
 $shareTitle = "{$carTitle} — {$priceDisp}";
 
 // ── SEO / OG ──────────────────────────────────────────────────
-$pageTitle     = "{$carTitle} — {$priceDisp} | SalesDesk";
+// SEO-1: desk pages → "{car} — {price} | {Desk} | {Org} | SalesDesk",
+// suffixes dropped from the right when long. Platform pages unchanged.
+$deskHasRealName = !$isPlatformCar && sdDeskHasRealName($deskRow['desk_name']);
+$pageTitle = $isPlatformCar
+    ? "{$carTitle} — {$priceDisp} | SalesDesk"
+    : sdSeoTitle("{$carTitle} — {$priceDisp}", [
+        $deskHasRealName ? $deskRow['desk_name'] : '',
+        $org['name'] ?? '',
+        'SalesDesk',
+    ], 70);
 $ogTitle       = $shareTitle;
-$ogDescription = "Listed by {$brokerDisplayName}"
-    . ($dealerLoc ? " · {$dealerLoc}" : '')
-    . ". {$conditionLabel}"
-    . ($car['mileage'] ? ', ' . number_format((int)$car['mileage']) . ' km.' : '.')
-    . ' Enquire on SalesDesk.';
+$carPlace      = implode(', ', array_filter([$car['dealer_city'], $car['dealer_province']]));
+$sellerLabel   = $isPlatformCar
+    ? 'SalesDesk'
+    : $deskRow['desk_name'] . ($org ? " ({$org['name']} agent)" : '');
+$ogDescription = mb_strimwidth(
+    "{$carTitle} for sale" . ($carPlace ? " in {$carPlace}" : '')
+    . " · {$priceDisp}"
+    . ($car['mileage'] ? ' · ' . number_format((int)$car['mileage'], 0, '.', ' ') . ' km' : '')
+    . ". {$conditionLabel}. Listed by {$sellerLabel}. Enquire on SalesDesk.",
+    0, 160, '…'
+);
 $ogImage = $coverImg;
+$metaRobotsNoindex = $platformPageNoindex;
 
 $showBreadcrumb = true;
-$breadcrumbs    = [
-    ['Cars for sale', '/cars-for-sale/'],
-    [$car['make'],   '/cars-for-sale/?make=' . urlencode($car['make'])],
-    ["{$carTitle}",  null],
-];
+// SEO-3: desk pages → Find a SalesDesk › {Org | Independent brokers} › {Desk} › {car}
+$breadcrumbs = $isPlatformCar
+    ? [
+        ['Cars for sale', '/cars-for-sale/'],
+        [$car['make'],   '/cars-for-sale/?make=' . urlencode($car['make'])],
+        ["{$carTitle}",  null],
+    ]
+    : [
+        ['Find a SalesDesk', '/desks/'],
+        sdOrgCrumb($org),
+        [$deskRow['desk_name'], '/' . rawurlencode($deskRow['desk_slug']) . '/'],
+        ["{$carTitle}", null],
+    ];
 
 $isAvailable = ($car['status'] === 'active');
 
@@ -917,10 +955,10 @@ ob_start();
                 <span class="cd-seller__role">Your SalesDesk broker</span>
                 <span class="cd-seller__name"><?= $e($deskRow['desk_name']) ?></span>
                 <?php if ($brokerDisplayName !== $deskRow['desk_name']): ?>
-                <span class="cd-seller__sub"><?= $e($brokerDisplayName) ?> · Independent broker</span>
+                <span class="cd-seller__sub"><?= $e($brokerDisplayName) ?> · <?= $org ? 'Agent' : 'Independent broker' ?></span>
                 <?php endif; ?>
-                <?php if ($org && $org['verification_status'] === 'verified'): ?>
-                <span class="pub-badge pub-badge-desk cd-seller__org"><i class="fa-solid fa-building" aria-hidden="true"></i><?= $e($org['name']) ?></span>
+                <?php if ($org): ?>
+                <a class="pub-badge pub-badge-desk cd-seller__org" href="<?= $e(sdOrgHubPath($org)) ?>"><i class="fa-solid <?= $org['verification_status'] === 'verified' ? 'fa-circle-check' : 'fa-building' ?>" aria-hidden="true"></i><?= $e($org['name']) ?></a>
                 <?php endif; ?>
               </span>
             </div>

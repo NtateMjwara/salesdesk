@@ -28,9 +28,10 @@ require_once '../../../includes/csrf.php';
 require_once '../../../includes/response.php';
 require_once '../../../includes/importers/MotusApiImporter.php';
 
+require_once '../../../includes/dealer_context.php';
+
 applyCachePolicy('api');
-requireLogin();
-requireRole('dealer');
+$ws = requireDealerWorkspace(['api' => true]);   // 0015: principal or operating admin (viewers get JSON 403)
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['error' => 'POST required.'], 405);
@@ -45,9 +46,9 @@ $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
 
 $dealerStmt = $pdo->prepare("
-    SELECT id AS dealer_id FROM dealers WHERE user_id = ? AND is_active = 1
+    SELECT id AS dealer_id FROM dealers WHERE id = ? AND is_active = 1
 ");
-$dealerStmt->execute([$userId]);
+$dealerStmt->execute([$ws['dealer_id']]);
 $dealerRow = $dealerStmt->fetch();
 if (!$dealerRow) {
     jsonResponse(['error' => 'No active dealer account found.'], 403);

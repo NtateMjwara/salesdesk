@@ -138,7 +138,7 @@ $navLinks = match ($navRole) {
         return isSuperadmin() ? [
             '/app/admin/dashboard'       => 'Dashboard',
             '/app/admin/admins'          => 'Admins',
-            '/app/admin/users.php'       => 'Users',
+            '/app/admin/users'           => 'Users',
             '/app/admin/dealerships'     => 'Dealerships',
             '/app/admin/workspace'       => 'Workspaces',
             '/app/admin/approvals'       => 'Approvals',
@@ -152,7 +152,7 @@ $navLinks = match ($navRole) {
             '/app/admin/desk-orgs'       => 'Desk orgs',
             '/app/admin/approvals'       => 'Approvals',
             '/app/admin/unplaced-execs'  => 'Unplaced execs',
-            '/app/admin/users.php'       => 'Users',
+            '/app/admin/users'           => 'Users',
             '/app/admin/payouts.php'     => 'Payouts',
         ];
     })(),

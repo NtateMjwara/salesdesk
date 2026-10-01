@@ -179,8 +179,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
   <?php endif; ?>
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/icon.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logo.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logos.png">
 
   <!-- Open Graph -->
   <meta property="og:type"        content="website">
@@ -285,8 +285,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
     <!-- Brand -->
     <a href="/" class="pub-nav__brand" aria-label="SalesDesk home">
-      <img class="pub-nav__mark" src="/assets/img/icon-mark.png" alt="" width="44" height="15">
-      <span class="pub-nav__name">Sales<span>Desk</span></span>
+      <img class="pub-nav__mark" src="/assets/img/logo-mark.png" alt="" width="44" height="15">
+      <span class="pub-nav__name">sales<span>desk</span></span>
     </a>
 
     <!-- Primary links (hidden ≤ 1100px — drawer takes over) -->
@@ -820,7 +820,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
       <div class="sd-footer__col sd-footer__col--brand">
         <a href="/" class="sd-footer__brand" aria-label="SalesDesk home">
-          <img class="sd-footer__logo" src="/assets/img/icon-mark.png" alt="" width="44" height="15" loading="lazy">
+          <img class="sd-footer__logo" src="/assets/img/logo-icon.png" alt="" width="44" height="15" loading="lazy">
           <span class="sd-footer__name">Sales<span>Desk</span></span>
         </a>
         <p class="sd-footer__desc">
@@ -896,7 +896,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
     </div>
 
     <div class="sd-footer__bottom">
-      <span>&copy; <?= date('Y') ?> SalesDesk (Pty) Ltd &middot; South Africa &middot; A subsidiary of SAUDI Group Holdings.</span>
+      <span>&copy; <?= date('Y') ?> SalesDesk (Pty) Ltd &middot; South Africa &middot;</span>
       <nav class="sd-footer__legal" aria-label="Legal">
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>

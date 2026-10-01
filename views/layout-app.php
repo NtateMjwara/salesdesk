@@ -103,8 +103,15 @@ if (!$userInitials) {
 
 $currentUserDisplayName = trim("{$currentUserFirstName} {$currentUserLastName}") ?: '';
 
+// 0015: an admin working inside a dealership gets the DEALER portal nav
+// and styles, plus the workspace banner below. $sdWorkspace is set by
+// requireDealerWorkspace() on /app/dealer/* pages only.
+$sdWorkspace   = $GLOBALS['sdWorkspace'] ?? null;
+$inStaffWs     = $sdWorkspace && ($sdWorkspace['mode'] ?? 'principal') !== 'principal';
+$navRole       = $inStaffWs ? 'dealer' : $currentUserRole;
+
 // Role-specific nav links.
-$navLinks = match ($currentUserRole) {
+$navLinks = match ($navRole) {
     'broker'     => [
         '/app/broker/dashboard.php'  => 'Dashboard',
         '/app/broker/inventory.php'  => 'Marketplace',
@@ -124,14 +131,31 @@ $navLinks = match ($currentUserRole) {
         '/app/exec/inventory.php'    => 'My Listings',
         '/app/exec/leads.php'        => 'Leads',
     ],
-    'admin'      => [
-        '/app/admin/users.php'       => 'Users',
-        '/app/admin/dealerships'     => 'Dealerships',
-        '/app/admin/approvals'       => 'Approvals',
-        '/app/admin/desk-orgs'       => 'Desk orgs',
-        '/app/admin/payouts.php'     => 'Payouts',
-        '/app/admin/audit.php'       => 'Audit',
-    ],
+    // 0014: superadmins get the platform-wide pages; admins only see
+    // the pages scoped to their own dealerships and orgs.
+    'admin'      => (function (): array {
+        require_once __DIR__ . '/../includes/superadmin.php';
+        return isSuperadmin() ? [
+            '/app/admin/dashboard'       => 'Dashboard',
+            '/app/admin/admins'          => 'Admins',
+            '/app/admin/users.php'       => 'Users',
+            '/app/admin/dealerships'     => 'Dealerships',
+            '/app/admin/workspace'       => 'Workspaces',
+            '/app/admin/approvals'       => 'Approvals',
+            '/app/admin/unplaced-execs'  => 'Unplaced execs',
+            '/app/admin/desk-orgs'       => 'Desk orgs',
+            '/app/admin/payouts.php'     => 'Payouts',
+            '/app/admin/audit.php'       => 'Audit',
+        ] : [
+            '/app/admin/dealerships'     => 'Dealerships',
+            '/app/admin/workspace'       => 'Workspaces',
+            '/app/admin/desk-orgs'       => 'Desk orgs',
+            '/app/admin/approvals'       => 'Approvals',
+            '/app/admin/unplaced-execs'  => 'Unplaced execs',
+            '/app/admin/users.php'       => 'Users',
+            '/app/admin/payouts.php'     => 'Payouts',
+        ];
+    })(),
     default      => [],
 };
 
@@ -166,14 +190,18 @@ $settingsPath = match ($currentUserRole) {
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logo.png">   
 
   <!-- Role-specific CSS -->
-  <?php if ($currentUserRole === 'broker'): ?>
+  <?php if ($navRole === 'broker'): ?>
   <link rel="stylesheet" href="/assets/css/broker.css?v=<?= $assetVersion ?>">
-  <?php elseif (in_array($currentUserRole, ['dealer', 'sales_exec'])): ?>
+  <?php elseif (in_array($navRole, ['dealer', 'sales_exec'])): ?>
   <link rel="stylesheet" href="/assets/css/dealer.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="/assets/css/dealer-dashboard-patch.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="/assets/css/dealer-analytics-patch.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="/assets/css/dealer-settings-leads-team-patch.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="/assets/css/exec-leads-patch.css?v=<?= $assetVersion ?>">
+  <?php endif; ?>
+
+  <?php if ($inStaffWs): ?>
+  <link rel="stylesheet" href="/assets/css/workspace.css?v=<?= $assetVersion ?>">
   <?php endif; ?>
 
   <!-- Page-specific CSS -->
@@ -879,7 +907,7 @@ $settingsPath = match ($currentUserRole) {
     }
   </style>
 </head>
-<body>
+<body<?= $inStaffWs ? ' class="sd-ws sd-ws--' . htmlspecialchars($sdWorkspace['mode']) . '"' : '' ?>>
 
 <!-- ── Mobile nav overlay (backdrop) ───────────────────────── -->
 <div class="app-nav-overlay" id="appNavOverlay" aria-hidden="true"></div>
@@ -1132,6 +1160,41 @@ $settingsPath = match ($currentUserRole) {
   </div><!-- /nav-avatar-wrap -->
 
 </nav>
+<?php endif; ?>
+
+<?php if ($inStaffWs): ?>
+<!-- ── 0015: dealer workspace banner ──────────────────────── -->
+<div class="ws-banner ws-banner--<?= htmlspecialchars($sdWorkspace['mode']) ?>" role="status">
+  <div class="ws-banner__inner">
+    <span class="ws-banner__icon" aria-hidden="true">
+      <i class="fa-solid <?= $sdWorkspace['mode'] === 'operator' ? 'fa-screwdriver-wrench' : ($sdWorkspace['mode'] === 'delegate' ? 'fa-handshake' : 'fa-eye') ?>"></i>
+    </span>
+    <span class="ws-banner__text">
+      <?php if ($sdWorkspace['mode'] === 'operator'): ?>
+      You’re running <strong><?= htmlspecialchars($sdWorkspace['company_name']) ?></strong> as SalesDesk staff.
+      Changes are recorded against your name.
+      <?php elseif ($sdWorkspace['mode'] === 'delegate'): ?>
+      You’re helping run <strong><?= htmlspecialchars($sdWorkspace['company_name']) ?></strong> — the principal granted
+      SalesDesk access until <?= htmlspecialchars(date('j M Y, H:i', strtotime($sdWorkspace['delegation_expires_at']))) ?>.
+      They see every change, and deals you close need their confirmation.
+      <?php if (!empty($sdWorkspace['delegation_note'])): ?>
+      <span class="ws-banner__reason">Their request: “<?= htmlspecialchars($sdWorkspace['delegation_note']) ?>”</span>
+      <?php endif; ?>
+      <?php else: ?>
+      You’re viewing <strong><?= htmlspecialchars($sdWorkspace['company_name']) ?></strong> — read-only.
+      <span class="ws-banner__reason"><?= htmlspecialchars($sdWorkspace['reason']) ?></span>
+      <?php endif; ?>
+    </span>
+    <span class="ws-banner__actions">
+      <a class="ws-banner__btn" href="/app/admin/workspace">Switch</a>
+      <form method="POST" action="/app/admin/workspace" class="ws-banner__form">
+        <input type="hidden" name="<?= htmlspecialchars(CSRF_TOKEN_NAME) ?>" value="<?= htmlspecialchars(generateCSRFToken()) ?>">
+        <input type="hidden" name="action" value="exit">
+        <button class="ws-banner__btn ws-banner__btn--exit" type="submit">Exit to admin</button>
+      </form>
+    </span>
+  </div>
+</div>
 <?php endif; ?>
 
 <!-- ── Flash messages ───────────────────────────────────────── -->

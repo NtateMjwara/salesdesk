@@ -1,33 +1,37 @@
 <?php
 /**
- * SalesDesk — Find a SalesDesk (Broker Directory)  (v2)
+ * SalesDesk — Find a SalesDesk (Organisations + Broker Directory)  (v3)
  * Route: /desks/  →  /desks/index.php
  *
- * Public, searchable directory of active broker storefronts.
- * Linked from the site footer ("Find a SalesDesk").
+ * Public, searchable directory. Linked from the site footer
+ * ("Find a SalesDesk").
+ *
+ *   1. Organisations — one card per desk organisation with live desks,
+ *      plus an "Independent brokers" tile. Each links to its hub
+ *      (/desks/{org-slug}/, /desks/independent/ → desks/org.php).
+ *      Shown on the unsearched first page; a province filter narrows
+ *      it to orgs with desks in that province.
+ *   2. All brokers — every desk, searchable by name, filterable by
+ *      province, sortable. Unchanged behaviour from v2.
  *
  * Filters:  q (name/broker search), province, sort
  * Sort:     active (most cars) | popular (most views) | newest | name
  *
- * v2 (public UX/UI overhaul — desk pages pass):
- *   DK-1  Page rebuilt on the shared design system: ink hero with the
- *         search + province in one form, sticky results toolbar with
- *         province chips and sort, redesigned desk cards, helpful empty
- *         state, CTA band.
- *   DK-2  Desk cards now show a 3-photo preview of that desk's newest
- *         cars (one extra grouped query for the whole page, not one per
- *         card) — a directory of brokers is much easier to scan when you
- *         can see what they actually have in stock.
- *   DK-3  The two-filter sidebar + its drawer are gone: with only a name
- *         search and a province, a full filter drawer was more chrome
- *         than content. Both now live in the hero / toolbar and apply
- *         with the shared [data-autosubmit] handler in public.js — so
- *         this page needs no page-level JS at all.
- *   DK-4  ALL inline <style>, <script> and style="" removed.
- *         Page CSS: assets/css/desks.css.
- *   DK-5  Cars count now only counts ACTIVE cars (the old query counted
- *         every broker_inventory row, so a desk whose cars had been sold
- *         or removed still advertised them).
+ * v3 (organisations as the directory's top level):
+ *   ORG-1  Organisation cards + independent tile above the desk list.
+ *   ORG-2  Queries moved to includes/desk-directory.php and cards to
+ *          views/partials/desk-card.php — shared with the org hubs.
+ *   ORG-3  Desk org badge shows for every approved agent (verified
+ *          orgs keep the green check; others get the building icon).
+ *   SEO-6  Canonical no longer echoes every query string: search and
+ *          non-default sorts are noindex,follow and canonicalise to
+ *          /desks/ (+ province / page). Title no longer says
+ *          "Independent" now that most desks belong to organisations.
+ *   FIX-1  Views / closed deals no longer multiply each other (the old
+ *          single GROUP BY joined inventory AND leads).
+ *
+ * v2: DK-1 … DK-5 (design-system rebuild, photo previews, no drawer,
+ *     no inline CSS/JS, active-only car counts) — carried forward.
  */
 
 declare(strict_types=1);
@@ -37,6 +41,8 @@ require_once '../includes/session.php';
 require_once '../includes/database.php';
 require_once '../includes/functions.php';
 require_once '../includes/visitor.php';
+require_once '../includes/desk-directory.php';
+require_once '../views/partials/desk-card.php';
 
 applyCachePolicy('public');
 
@@ -46,132 +52,49 @@ $visitor = initVisitorSession();
 // ============================================================
 // INPUT
 // ============================================================
-$q         = trim($_GET['q'] ?? '');
-$province  = trim($_GET['province'] ?? '');
-$sort      = trim($_GET['sort'] ?? 'active');
-$page      = max(1, (int) ($_GET['page'] ?? 1));
-$perPage   = 12;
+$q        = trim($_GET['q'] ?? '');
+$province = trim($_GET['province'] ?? '');
+$sort     = trim($_GET['sort'] ?? 'active');
+$page     = max(1, (int) ($_GET['page'] ?? 1));
 
-$allowedSorts = ['active', 'popular', 'newest', 'name'];
-if (!in_array($sort, $allowedSorts, true)) {
+if (!array_key_exists($sort, sdDeskSorts())) {
     $sort = 'active';
 }
 
 // ============================================================
-// WHERE CLAUSE (shared between count + main query)
+// PROVINCES (chips + select) — only accept a real one
 // ============================================================
-$where  = ['sd.is_active = 1', "u.status = 'active'"];
-$params = [];
-
-if ($q !== '') {
-    $where[]  = '(sd.display_name LIKE ? OR p.first_name LIKE ? OR p.last_name LIKE ?)';
-    $like     = '%' . $q . '%';
-    $params[] = $like;
-    $params[] = $like;
-    $params[] = $like;
+$provinceCounts = sdDeskProvinceCounts(null);
+$provinces      = $provinceCounts ? array_keys($provinceCounts) : sdAllProvinces();
+if ($province !== '' && !in_array($province, $provinces, true)) {
+    $province = '';
 }
 
-if ($province !== '') {
-    $where[]  = 'a.province = ?';
-    $params[] = $province;
-}
-
-$whereSql = implode(' AND ', $where);
-
 // ============================================================
-// TOTAL COUNT (for pagination)
+// ORGANISATIONS (unsearched first page only)
 // ============================================================
-$countStmt = $pdo->prepare("
-    SELECT COUNT(DISTINCT sd.id) AS total
-    FROM salesdesks sd
-    JOIN users u          ON u.id = sd.user_id
-    LEFT JOIN profiles p  ON p.user_id = u.id
-    LEFT JOIN addresses a ON a.id = p.address_id
-    WHERE {$whereSql}
-");
-$countStmt->execute($params);
-$totalDesks = (int) ($countStmt->fetch()['total'] ?? 0);
-$totalPages = max(1, (int) ceil($totalDesks / $perPage));
-$page       = min($page, $totalPages);
-$offset     = ($page - 1) * $perPage;
+$showOrgs    = ($q === '' && $page === 1);
+$orgs        = $showOrgs ? sdOrgDirectory($province) : [];
+$orgPreviews = $orgs ? sdOrgPreviews(array_map(static fn($o) => (int) $o['id'], $orgs)) : [];
+$indStats    = $showOrgs ? sdIndependentStats($province) : ['desk_count' => 0, 'car_count' => 0];
+$showOrgs    = $showOrgs && ($orgs || $indStats['desk_count'] > 0);
 
 // ============================================================
-// SORT MAP
+// ALL BROKERS
 // ============================================================
-$orderBy = match ($sort) {
-    'popular' => 'total_views DESC, cars_count DESC',
-    'newest'  => 'sd.created_at DESC',
-    'name'    => 'sd.display_name ASC',
-    default   => 'cars_count DESC, total_views DESC', // 'active'
-};
-
-// ============================================================
-// MAIN QUERY
-// DK-5: cars_count counts only cars that are still active.
-// ============================================================
-$sql = "
-    SELECT
-        sd.id, sd.uuid, sd.slug, sd.display_name, sd.tagline,
-        sd.logo_url, sd.primary_colour, sd.created_at,
-        p.first_name, p.last_name, p.avatar_url,
-        a.city, a.province, a.suburb,
-        o.name                 AS org_name,
-        o.verification_status  AS org_verification,
-        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN bi.id END) AS cars_count,
-        COALESCE(SUM(bi.views), 0) AS total_views,
-        COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS deals_closed
-    FROM salesdesks sd
-    JOIN users u                     ON u.id = sd.user_id
-    LEFT JOIN profiles p             ON p.user_id = u.id
-    LEFT JOIN addresses a            ON a.id = p.address_id
-    LEFT JOIN organization_members om ON om.user_id = u.id" . sdVerifiedMemberSql('om') . "   -- 0013
-    LEFT JOIN organizations o        ON o.id = om.organization_id AND o.is_active = 1
-    LEFT JOIN broker_inventory bi    ON bi.salesdesk_id = sd.id
-    LEFT JOIN cars c                 ON c.id = bi.car_id AND c.status = 'active'
-    LEFT JOIN leads l                ON l.salesdesk_id = sd.id
-    WHERE {$whereSql}
-    GROUP BY sd.id
-    ORDER BY {$orderBy}
-    LIMIT {$perPage} OFFSET {$offset}
-";
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$desks = $stmt->fetchAll();
-
-// ============================================================
-// DK-2: newest 3 car photos per desk on this page — ONE query for
-// the whole page (not one per card).
-// ============================================================
-$deskPreviews = [];
-if ($desks) {
-    $ids = array_map(static fn($d) => (int) $d['id'], $desks);
-    $ph  = implode(',', array_fill(0, count($ids), '?'));
-    try {
-        $prevStmt = $pdo->prepare("
-            SELECT salesdesk_id, image_urls, make, model
-            FROM (
-                SELECT bi.salesdesk_id, c.image_urls, c.make, c.model,
-                       ROW_NUMBER() OVER (PARTITION BY bi.salesdesk_id ORDER BY bi.added_at DESC) AS rn
-                FROM broker_inventory bi
-                JOIN cars c ON c.id = bi.car_id AND c.status = 'active'
-                WHERE bi.salesdesk_id IN ({$ph})
-            ) ranked
-            WHERE rn <= 3
-        ");
-        $prevStmt->execute($ids);
-        foreach ($prevStmt->fetchAll() as $row) {
-            $imgs = json_decode($row['image_urls'] ?? '[]', true) ?: [];
-            if (!empty($imgs[0])) {
-                $deskPreviews[(int) $row['salesdesk_id']][] = [
-                    'src' => $imgs[0],
-                    'alt' => trim(($row['make'] ?? '') . ' ' . ($row['model'] ?? '')),
-                ];
-            }
-        }
-    } catch (Throwable) {
-        $deskPreviews = [];   // window functions unavailable — cards render without previews
-    }
-}
+$listing = sdDeskListing([
+    'scope'    => null,
+    'q'        => $q,
+    'province' => $province,
+    'sort'     => $sort,
+    'page'     => $page,
+    'per_page' => 12,
+]);
+$desks        = $listing['desks'];
+$deskPreviews = $listing['previews'];
+$totalDesks   = $listing['total'];
+$totalPages   = $listing['total_pages'];
+$page         = $listing['page'];
 
 // ============================================================
 // PLATFORM-WIDE STAT STRIP
@@ -179,45 +102,24 @@ if ($desks) {
 $globalStatsStmt = $pdo->prepare("
     SELECT
         COUNT(DISTINCT sd.id) AS desk_count,
-        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN bi.id END) AS listing_count,
-        COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS closed_count
+        COUNT(DISTINCT CASE WHEN c.id IS NOT NULL THEN bi.id END) AS listing_count
     FROM salesdesks sd
     JOIN users u ON u.id = sd.user_id AND u.status = 'active'
     LEFT JOIN broker_inventory bi ON bi.salesdesk_id = sd.id
     LEFT JOIN cars c ON c.id = bi.car_id AND c.status = 'active'
-    LEFT JOIN leads l ON l.salesdesk_id = sd.id
     WHERE sd.is_active = 1
 ");
 $globalStatsStmt->execute();
-$globalStats = $globalStatsStmt->fetch() ?: ['desk_count' => 0, 'listing_count' => 0, 'closed_count' => 0];
+$globalStats = $globalStatsStmt->fetch() ?: ['desk_count' => 0, 'listing_count' => 0];
+$globalStats['closed_count'] = (int) $pdo->query("
+    SELECT COUNT(*) FROM leads l
+    JOIN salesdesks sd ON sd.id = l.salesdesk_id AND sd.is_active = 1
+    WHERE l.status = 'closed'
+")->fetchColumn();
+$orgCount = ($q === '' && $page === 1 && $province === '') ? count($orgs) : count(sdOrgDirectory(''));
 
 // ============================================================
-// PROVINCE LIST (for filter — distinct provinces actually in use)
-// ============================================================
-$provinceStmt = $pdo->prepare("
-    SELECT a.province, COUNT(DISTINCT sd.id) AS desk_count
-    FROM salesdesks sd
-    JOIN users u ON u.id = sd.user_id AND u.status = 'active'
-    JOIN profiles p ON p.user_id = u.id
-    JOIN addresses a ON a.id = p.address_id
-    WHERE sd.is_active = 1 AND a.province IS NOT NULL AND a.province != ''
-    GROUP BY a.province
-    ORDER BY a.province ASC
-");
-$provinceStmt->execute();
-$provinceCounts = $provinceStmt->fetchAll(PDO::FETCH_KEY_PAIR);
-$provinces      = array_keys($provinceCounts);
-
-// Fallback to the full canonical SA province list if the DB has none yet.
-if (empty($provinces)) {
-    $provinces = [
-        'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
-        'Mpumalanga', 'North West', 'Northern Cape', 'Western Cape',
-    ];
-}
-
-// ============================================================
-// QUERY-STRING HELPER (preserves filters across pagination/sort links)
+// URL HELPERS (preserve filters across pagination / sort links)
 // ============================================================
 function desksQueryString(array $overrides = []): string
 {
@@ -238,22 +140,29 @@ function desksUrl(array $overrides = []): string
     return '/desks/' . ($qs !== '' ? '?' . $qs : '');
 }
 
-// Compact number for the stat rows: 1 200 → 1.2k
-function desksCompact(int $n): string
-{
-    return $n >= 1000 ? rtrim(rtrim(number_format($n / 1000, 1), '0'), '.') . 'k' : (string) $n;
-}
-
 // ============================================================
 // PAGE META
 // ============================================================
-$siteUrl        = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
-$pageTitle      = ($province ? 'Car Brokers in ' . $province : 'Find a SalesDesk')
-                . ' | Independent Car Brokers in South Africa';
-$ogTitle        = 'Find a Broker — SalesDesk Directory';
-$ogDescription  = 'Browse ' . number_format((int) $globalStats['desk_count'])
-                 . ' independent car brokers across South Africa. Find a trusted SalesDesk near you.';
-$canonicalUrl   = $siteUrl . '/desks/' . (desksQueryString() ? '?' . desksQueryString() : '');
+$siteUrl       = defined('SITE_URL') ? SITE_URL : 'https://salesdesk.co.za';
+$pageTitle     = sdSeoTitle(
+    $province ? 'Car Brokers in ' . $province : 'Find a Car Broker',
+    ['Organisations & Desks', 'SalesDesk'],
+    60
+);
+$ogTitle       = 'Find a Broker — SalesDesk Directory';
+$ogDescription = $province
+    ? 'Car broker organisations and desks in ' . $province . ': ' . number_format($totalDesks)
+      . ' broker' . ($totalDesks === 1 ? '' : 's') . ' selling cars from verified dealers. Find a trusted SalesDesk near you.'
+    : 'Browse ' . number_format($orgCount) . ' car broker organisation' . ($orgCount === 1 ? '' : 's')
+      . ' and ' . number_format((int) $globalStats['desk_count'])
+      . ' broker desks across South Africa. Find a trusted SalesDesk near you.';
+
+// SEO-6: canonical = /desks/ (+ province, + page). Name searches and
+// non-default sorts are thin duplicates → noindex,follow.
+$canonicalParams = array_filter(['province' => $province, 'page' => $page > 1 ? $page : null]);
+$canonicalUrl    = $siteUrl . '/desks/' . ($canonicalParams ? '?' . http_build_query($canonicalParams) : '');
+$metaRobotsNoindex = ($q !== '' || $sort !== 'active');
+
 $layoutVariant  = 'wide';
 $showBreadcrumb = true;
 $breadcrumbs    = [['Find a SalesDesk', null]];
@@ -285,8 +194,9 @@ ob_start();
     </h1>
 
     <p class="dk-hero__sub">
-      Every broker here runs their own storefront — verified, commission-protected and
-      backed by real dealer stock. Search by name, or browse by province.
+      Browse broker organisations by the brands they sell, or find an individual
+      broker by name or province — every desk verified, commission-protected and
+      backed by real dealer stock.
     </p>
 
     <form class="dk-search" method="GET" action="/desks/" role="search" data-clean-submit>
@@ -320,6 +230,9 @@ ob_start();
     </form>
 
     <ul class="dk-hero__stats">
+      <?php if ($orgCount > 0): ?>
+      <li><strong><?= number_format($orgCount) ?></strong> organisation<?= $orgCount === 1 ? '' : 's' ?></li>
+      <?php endif; ?>
       <li><strong><?= number_format((int) $globalStats['desk_count']) ?></strong> active brokers</li>
       <li><strong><?= number_format((int) $globalStats['listing_count']) ?></strong> cars on desks</li>
       <li><strong><?= number_format((int) $globalStats['closed_count']) ?></strong> deals closed</li>
@@ -330,9 +243,38 @@ ob_start();
 
 <div class="sd-container dk-body">
 
+  <?php if ($showOrgs): ?>
   <!-- ══════════════════════════════════
-       TOOLBAR
+       ORGANISATIONS
        ══════════════════════════════════ -->
+  <section class="dk-orgs" aria-labelledby="dkOrgsTitle">
+    <div class="pub-section__head dk-section-head">
+      <div>
+        <span class="pub-eyebrow">Organisations</span>
+        <h2 class="pub-section__title pub-section__title--sm" id="dkOrgsTitle">
+          Browse by organisation<?= $province ? ' in ' . $e($province) : '' ?>
+        </h2>
+        <p class="pub-section__sub">Each organisation sells up to three brands through its own network of broker desks.</p>
+      </div>
+    </div>
+
+    <div class="dk-grid">
+      <?php foreach ($orgs as $org): ?>
+      <?= sdOrgCard($org, $orgPreviews[(int) $org['id']] ?? [], ['heading' => 'h3']) ?>
+      <?php endforeach; ?>
+      <?php if ($indStats['desk_count'] > 0): ?>
+      <?= sdIndependentCard($indStats, ['heading' => 'h3']) ?>
+      <?php endif; ?>
+    </div>
+  </section>
+  <?php endif; ?>
+
+
+  <!-- ══════════════════════════════════
+       ALL BROKERS — TOOLBAR
+       ══════════════════════════════════ -->
+  <h2 class="pub-section__title pub-section__title--sm dk-section-title" id="dkAllTitle">All brokers</h2>
+
   <div class="dk-toolbar">
     <p class="dk-toolbar__count">
       <strong><?= number_format($totalDesks) ?></strong>
@@ -345,10 +287,9 @@ ob_start();
       <label class="sr-only" for="deskSort">Sort brokers</label>
       <i class="fa-solid fa-arrow-down-wide-short sort-form__icon" aria-hidden="true"></i>
       <select class="sort-select" id="deskSort" name="sort" data-autosubmit>
-        <option value="active"  <?= $sort === 'active'  ? 'selected' : '' ?>>Most cars listed</option>
-        <option value="popular" <?= $sort === 'popular' ? 'selected' : '' ?>>Most viewed</option>
-        <option value="newest"  <?= $sort === 'newest'  ? 'selected' : '' ?>>Newest desks</option>
-        <option value="name"    <?= $sort === 'name'    ? 'selected' : '' ?>>Name (A–Z)</option>
+        <?php foreach (sdDeskSorts() as $key => $label): ?>
+        <option value="<?= $e($key) ?>" <?= $sort === $key ? 'selected' : '' ?>><?= $e($label) ?></option>
+        <?php endforeach; ?>
       </select>
       <noscript><button class="pub-btn pub-btn-ghost pub-btn-sm" type="submit">Sort</button></noscript>
     </form>
@@ -393,7 +334,7 @@ ob_start();
 
   <div class="pub-empty dk-empty">
     <span class="pub-empty__icon"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span>
-    <h2 class="pub-empty__title">No brokers match that search</h2>
+    <h3 class="pub-empty__title">No brokers match that search</h3>
     <p class="pub-empty__sub">Try a different name, or look at every desk in the country.</p>
     <div class="pub-empty__actions">
       <?php if ($province): ?>
@@ -409,98 +350,12 @@ ob_start();
   <?php else: ?>
 
   <div class="dk-grid">
-    <?php foreach ($desks as $desk):
-      $brokerName = trim(($desk['first_name'] ?? '') . ' ' . ($desk['last_name'] ?? '')) ?: $desk['display_name'];
-      $initials   = strtoupper(substr($desk['first_name'] ?? '', 0, 1) . substr($desk['last_name'] ?? '', 0, 1)) ?: 'SD';
-      $location   = implode(', ', array_filter([$desk['city'], $desk['province']]));
-      $isOrgVerified = ($desk['org_verification'] ?? null) === 'verified';
-      $deskUrl    = '/' . rawurlencode($desk['slug']) . '/';
-      $previews   = $deskPreviews[(int) $desk['id']] ?? [];
-      $carsCount  = (int) $desk['cars_count'];
-    ?>
-    <article class="dk-card pub-reveal">
-      <div class="dk-card__head">
-        <span class="dk-avatar">
-          <?php if ($desk['avatar_url']): ?>
-          <img src="<?= $e($desk['avatar_url']) ?>" alt="" width="56" height="56" loading="lazy">
-          <?php elseif ($desk['logo_url']): ?>
-          <img src="<?= $e($desk['logo_url']) ?>" alt="" width="56" height="56" loading="lazy">
-          <?php else: ?>
-          <?= $e($initials) ?>
-          <?php endif; ?>
-        </span>
-
-        <span class="dk-card__id">
-          <h2 class="dk-card__name"><a class="dk-card__link" href="<?= $e($deskUrl) ?>"><?= $e($desk['display_name']) ?></a></h2>
-          <span class="dk-card__broker"><?= $e($brokerName) ?></span>
-          <?php if ($location): ?>
-          <span class="dk-card__loc"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($location) ?></span>
-          <?php endif; ?>
-        </span>
-      </div>
-
-      <?php if ($isOrgVerified || $desk['tagline']): ?>
-      <div class="dk-card__meta">
-        <?php if ($isOrgVerified): ?>
-        <span class="pub-badge pub-badge-verified"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> <?= $e($desk['org_name']) ?></span>
-        <?php endif; ?>
-        <?php if ($desk['tagline']): ?>
-        <p class="dk-card__tagline"><?= $e(mb_strimwidth($desk['tagline'], 0, 90, '…')) ?></p>
-        <?php endif; ?>
-      </div>
-      <?php endif; ?>
-
-      <div class="dk-card__preview" aria-hidden="true">
-        <?php if ($previews): ?>
-          <?php foreach (array_slice($previews, 0, 3) as $pv): ?>
-          <span class="dk-card__thumb"><img src="<?= $e($pv['src']) ?>" alt="" width="180" height="135" loading="lazy"></span>
-          <?php endforeach; ?>
-          <?php for ($i = count($previews); $i < 3; $i++): ?>
-          <span class="dk-card__thumb dk-card__thumb--empty"><i class="fa-solid fa-car-side"></i></span>
-          <?php endfor; ?>
-        <?php else: ?>
-          <?php for ($i = 0; $i < 3; $i++): ?>
-          <span class="dk-card__thumb dk-card__thumb--empty"><i class="fa-solid fa-car-side"></i></span>
-          <?php endfor; ?>
-        <?php endif; ?>
-      </div>
-
-      <div class="dk-card__stats">
-        <span><strong><?= $carsCount ?></strong> car<?= $carsCount === 1 ? '' : 's' ?></span>
-        <span><strong><?= (int) $desk['deals_closed'] ?></strong> closed</span>
-        <span><strong><?= desksCompact((int) $desk['total_views']) ?></strong> views</span>
-        <span class="dk-card__cta">Visit desk <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
-      </div>
-    </article>
+    <?php foreach ($desks as $desk): ?>
+    <?= sdDeskCard($desk, $deskPreviews[(int) $desk['id']] ?? [], ['heading' => 'h3', 'show_org' => true]) ?>
     <?php endforeach; ?>
   </div>
 
-  <?php if ($totalPages > 1): ?>
-  <nav class="pagination" aria-label="Pages">
-    <?php if ($page > 1): ?>
-    <a class="pagination__page pagination__page--nav" rel="prev" href="<?= $e(desksUrl(['page' => $page > 2 ? $page - 1 : null])) ?>">
-      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i><span class="pagination__label">Previous</span>
-    </a>
-    <?php endif; ?>
-
-    <?php
-    $prev = null;
-    for ($i = 1; $i <= $totalPages; $i++):
-        if (!($i === 1 || $i === $totalPages || abs($i - $page) <= 1)) continue;
-        if ($prev !== null && $i - $prev > 1): ?>
-    <span class="pagination__ellipsis" aria-hidden="true">…</span>
-        <?php endif; ?>
-    <a class="pagination__page <?= $i === $page ? 'active' : '' ?>" <?= $i === $page ? 'aria-current="page"' : '' ?>
-       href="<?= $e(desksUrl(['page' => $i > 1 ? $i : null])) ?>" aria-label="Page <?= $i ?>"><?= $i ?></a>
-    <?php $prev = $i; endfor; ?>
-
-    <?php if ($page < $totalPages): ?>
-    <a class="pagination__page pagination__page--nav" rel="next" href="<?= $e(desksUrl(['page' => $page + 1])) ?>">
-      <span class="pagination__label">Next</span><i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-    </a>
-    <?php endif; ?>
-  </nav>
-  <?php endif; ?>
+  <?= sdDirectoryPagination($page, $totalPages, static fn(int $p): string => desksUrl(['page' => $p > 1 ? $p : null])) ?>
 
   <?php endif; ?>
 
@@ -513,8 +368,9 @@ ob_start();
       <span class="pub-eyebrow">Brokers &amp; sales executives</span>
       <h2 class="dk-cta__title" id="dkCtaTitle">Your desk could be on this page.</h2>
       <p class="dk-cta__sub">
-        Create a free SalesDesk, add cars from verified dealerships, share your link —
-        and earn commission on every deal you source. No stock, no showroom, no monthly fee.
+        Create a free SalesDesk, join an organisation or stay independent, add cars from
+        verified dealerships, share your link — and earn commission on every deal you source.
+        No stock, no showroom, no monthly fee.
       </p>
     </div>
     <div class="dk-cta__actions">

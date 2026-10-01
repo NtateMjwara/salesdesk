@@ -1,6 +1,6 @@
 <?php
 /**
- * SalesDesk — In-app migration runner  (0012/0013)
+ * SalesDesk — In-app migration runner  (0012–0018)
  *
  * WHY: pasting a migration into a web SQL tool (app/admin/database.php,
  * or phpMyAdmin on some hosts) sends the SQL in the request body. Hosting
@@ -10,7 +10,7 @@
  * files from db/ on the server instead — the browser only sends the
  * migration's name — so there is nothing for the firewall to block.
  *
- * Only the files in SD_MIGRATIONS can be run. Both are idempotent.
+ * Only the files in SD_MIGRATIONS can be run. All are idempotent.
  */
 
 require_once __DIR__ . '/database.php';
@@ -19,6 +19,11 @@ require_once __DIR__ . '/functions.php';
 const SD_MIGRATIONS = [
     '0012_admin_managed_dealers_orgs.sql'   => 'Admin-managed dealerships, dealer & organisation managers',
     '0013_desk_orgs_online_dealerships.sql' => 'Desk organisations as online dealerships (brands, agent approvals)',
+    '0014_superadmin.sql'                   => 'Superadmin: users.is_superadmin + first superadmin (user #13)',
+    '0015_dealer_workspace.sql'             => 'Dealer workspace: View / Operate access for admins on dealerships',
+    '0016_money_controls.sql'               => 'Money controls: who closed each deal + four-eyes payouts',
+    '0017_principal_dealerships.sql'        => 'Principal-owned dealerships: delegation, deal confirmation, listing holds',
+    '0018_exec_invitations.sql'             => 'Unplaced sales execs: invitations to join a dealership',
 ];
 
 /**

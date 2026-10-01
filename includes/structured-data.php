@@ -221,7 +221,7 @@ function renderArticleSchema(array $post, string $canonicalUrl, string $baseUrl)
  * search ("car broker in Sandton" etc).
  * $desk expects: display_name, city, province, avatar_url or logo_url.
  */
-function renderLocalBusinessSchema(array $desk, string $canonicalUrl): string
+function renderLocalBusinessSchema(array $desk, string $canonicalUrl, ?array $memberOf = null): string
 {
     $data = [
         '@context' => 'https://schema.org',
@@ -230,7 +230,15 @@ function renderLocalBusinessSchema(array $desk, string $canonicalUrl): string
         'url'      => $canonicalUrl,
     ];
     if (!empty($desk['logo_url']) || !empty($desk['avatar_url'])) {
-        $data['image'] = $desk['logo_url'] ?? $desk['avatar_url'];
+        $data['image'] = $desk['logo_url'] ?: $desk['avatar_url'];
+    }
+    // Org hierarchy: $memberOf = ['name' => …, 'url' => absolute hub URL].
+    if ($memberOf && !empty($memberOf['name'])) {
+        $data['memberOf'] = array_filter([
+            '@type' => 'Organization',
+            'name'  => $memberOf['name'],
+            'url'   => $memberOf['url'] ?? null,
+        ]);
     }
     if (!empty($desk['city']) || !empty($desk['province'])) {
         $data['address'] = [
@@ -239,6 +247,42 @@ function renderLocalBusinessSchema(array $desk, string $canonicalUrl): string
             'addressRegion'   => $desk['province'] ?? '',
             'addressCountry'  => 'ZA',
         ];
+    }
+    return sdJsonLd($data);
+}
+
+
+/**
+ * Desk organisation hub (/desks/{org-slug}/): the org as an
+ * Organization with its brands, and the desks on this page as members.
+ * $org expects: name, brand_list, logo_url (optional), description
+ * (optional). $members: [['name' => …, 'url' => absolute URL], …].
+ */
+function renderDeskOrgSchema(array $org, string $canonicalUrl, array $members = []): string
+{
+    $data = [
+        '@context' => 'https://schema.org',
+        '@type'    => 'Organization',
+        'name'     => $org['name'] ?? '',
+        'url'      => $canonicalUrl,
+    ];
+    if (!empty($org['logo_url'])) {
+        $data['logo'] = $org['logo_url'];
+    }
+    if (!empty($org['description'])) {
+        $data['description'] = mb_strimwidth((string) $org['description'], 0, 300, '…');
+    }
+    if (!empty($org['brand_list'])) {
+        $data['brand'] = array_map(
+            static fn(string $b): array => ['@type' => 'Brand', 'name' => $b],
+            array_values($org['brand_list'])
+        );
+    }
+    if ($members) {
+        $data['member'] = array_map(
+            static fn(array $m): array => ['@type' => 'AutoDealer', 'name' => $m['name'], 'url' => $m['url']],
+            array_values($members)
+        );
     }
     return sdJsonLd($data);
 }

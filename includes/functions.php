@@ -14,6 +14,7 @@
  */
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/response.php';
+require_once __DIR__ . '/money_controls.php';   // 0016: four-eyes payouts
 
 // ============================================================
 // TOKEN / ID GENERATORS
@@ -128,6 +129,20 @@ function requireRole(string $role): void
     if (($_SESSION['user_role'] ?? '') !== $role) {
         http_response_code(403);
         exit('Access denied.');
+    }
+
+    // 0014: admin sessions are re-checked against the database on every
+    // request, so suspending / removing an admin (or changing their role)
+    // takes effect immediately instead of when their session expires.
+    if ($role === 'admin') {
+        $stmt = Database::getInstance()->prepare("SELECT role, status FROM users WHERE id = ? LIMIT 1");
+        $stmt->execute([(int) ($_SESSION['user_id'] ?? 0)]);
+        $row = $stmt->fetch();
+        if (!$row || $row['role'] !== 'admin' || $row['status'] !== 'active') {
+            session_unset();
+            session_destroy();
+            redirect('/auth/login.php?error=' . urlencode('Your admin access has changed. Please contact a SalesDesk superadmin.'));
+        }
     }
 }
 
@@ -537,6 +552,19 @@ function writeAuditLog(
 ): void {
     $pdo    = Database::getInstance();
     $actor  = $actorId ?? (isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null);
+
+    // 0015: while an admin works inside a dealership (dealer workspace),
+    // stamp every entry so the trail reads "Lindi (admin, operator) did X
+    // for Sandton VW" — never a principal who wasn't there.
+    $ws = $GLOBALS['sdWorkspace'] ?? null;
+    if ($ws && ($ws['mode'] ?? 'principal') !== 'principal') {
+        $afterData = ($afterData ?? []) + ['_workspace' => [
+            'dealer_id'     => $ws['dealer_id'],
+            'mode'          => $ws['mode'],
+            'admin_user_id' => $ws['actor_id'],
+        ]];
+    }
+
     $ip     = $_SERVER['REMOTE_ADDR'] ?? null;
     $ua     = $_SERVER['HTTP_USER_AGENT'] ?? null;
 
@@ -624,6 +652,23 @@ function transitionCommissionStatus(
             return false;
         }
 
+        // 0017: a staff-closed deal on a principal's dealership waits for
+        // the principal's confirmation before any money moves.
+        if (function_exists('sdConfirmationBlock') && sdConfirmationBlock($commissionId, $newStatus)) {
+            $pdo->rollBack();
+            error_log("[SalesDesk] transitionCommissionStatus: commission #{$commissionId} awaits dealer confirmation.");
+            return false;
+        }
+
+        // 0016 four-eyes: whoever closed the deal may not move its money.
+        if ($why = sdFourEyesViolation($commissionId, $actorId, $newStatus)) {
+            $pdo->rollBack();
+            writeAuditLog('commission.four_eyes_blocked', 'commission', $commissionId,
+                ['status' => $currentStatus], ['attempted' => $newStatus], $actorId);
+            error_log("[SalesDesk] transitionCommissionStatus: four-eyes block, user #{$actorId} on commission #{$commissionId}.");
+            return false;
+        }
+
         $timestampCol = match ($newStatus) {
             'approved' => ', approved_at = NOW()',
             'paid'     => ', paid_at = NOW()',
@@ -692,7 +737,7 @@ function getCommissionById(int $commissionId): array|false
             bp.last_name    AS broker_last,
             COALESCE(du.email, (
                 SELECT mu.email FROM dealer_managers dm
-                JOIN users mu ON mu.id = dm.admin_user_id
+                JOIN users mu ON mu.id = dm.admin_user_id AND mu.status = 'active'   -- 0014: skip suspended admins
                 WHERE dm.dealer_id = d.id ORDER BY dm.id LIMIT 1
             ))              AS dealer_email,
             d.company_name  AS dealer_company,
@@ -819,9 +864,16 @@ function generateIdempotencyKey(int $commissionId, int $brokerId, ?int $orgId): 
 // ADMIN DATA HELPERS
 // ============================================================
 
-function getPendingVerifications(): array
+/**
+ * 0014: pass $scopeAdminId to limit the queue to dealerships / orgs that
+ * admin manages (superadmins, and null, see everything).
+ */
+function getPendingVerifications(?int $scopeAdminId = null): array
 {
     $pdo = Database::getInstance();
+    $restrict = $scopeAdminId !== null && function_exists('isSuperadmin') && !isSuperadmin($scopeAdminId);
+    $dealerScope = $restrict ? ' AND d.id IN (SELECT dm.dealer_id FROM dealer_managers dm WHERE dm.admin_user_id = ?)' : '';
+    $orgScope    = $restrict ? ' AND o.id IN (SELECT om.organization_id FROM organization_managers om WHERE om.admin_user_id = ?)' : '';
 
     $dealerStmt = $pdo->prepare("
         SELECT
@@ -837,10 +889,10 @@ function getPendingVerifications(): array
         LEFT JOIN users u ON u.id = d.user_id
         LEFT JOIN addresses a ON a.id = d.address_id
         WHERE d.verification_status = 'pending'
-          AND d.cipc_doc_url IS NOT NULL
+          AND d.cipc_doc_url IS NOT NULL{$dealerScope}
         ORDER BY d.created_at ASC
     ");
-    $dealerStmt->execute();
+    $dealerStmt->execute($restrict ? [$scopeAdminId] : []);
 
     $orgStmt = $pdo->prepare("
         SELECT
@@ -855,10 +907,10 @@ function getPendingVerifications(): array
         FROM organizations o
         JOIN users u ON u.id = o.owner_user_id
         LEFT JOIN addresses a ON a.id = o.address_id
-        WHERE o.verification_status = 'pending'
+        WHERE o.verification_status = 'pending'{$orgScope}
         ORDER BY o.created_at ASC
     ");
-    $orgStmt->execute();
+    $orgStmt->execute($restrict ? [$scopeAdminId] : []);
 
     return [
         'dealers' => $dealerStmt->fetchAll(),
@@ -879,11 +931,20 @@ function getUsersForAdmin(
     ?string $status = null,
     ?string $search = null,
     int $limit      = 50,
-    int $offset     = 0
+    int $offset     = 0,
+    ?int $scopeAdminId = null
 ): array {
     $pdo    = Database::getInstance();
     $where  = ['1=1'];
     $params = [];
+
+    // 0014: limit to the users this admin is responsible for (and never
+    // admin accounts — those are managed on the Admins page).
+    if ($scopeAdminId !== null && function_exists('adminUserScopeSql')) {
+        [$scopeSql, $scopeParams] = adminUserScopeSql($scopeAdminId, 'u');
+        $where[] = $scopeSql;
+        array_push($params, ...$scopeParams);
+    }
 
     if ($role) {
         $where[]  = 'u.role = ?';
@@ -929,3 +990,11 @@ function getUsersForAdmin(
     $stmt->execute($params);
     return $stmt->fetchAll();
 }
+
+// 0017: principal-owned dealership controls (delegation, deal
+// confirmation, listing holds, handover). Loaded last: it only defines
+// functions and relies on the ones above.
+require_once __DIR__ . '/principal_controls.php';
+
+// 0018: unplaced sales execs (invitations). Loaded last, like 0017.
+require_once __DIR__ . '/exec_placement.php';

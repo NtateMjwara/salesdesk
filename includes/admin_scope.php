@@ -13,6 +13,11 @@
  * they have a row in dealer_managers / organization_managers. Every
  * page loads its entity through the scoped getters below — never by id
  * alone — so a tampered id in a POST can't reach someone else's entity.
+ *
+ * 0014: superadmins see and act on every dealership / org. The scoped
+ * queries use adminScopeJoin(): JOIN for admins, LEFT JOIN (same ON
+ * condition, same bound parameter) for superadmins — see superadmin.php.
+ * Adding / removing managing admins is a superadmin action.
  */
 
 require_once __DIR__ . '/database.php';
@@ -20,6 +25,8 @@ require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/filter-whitelists.php';
 require_once __DIR__ . '/org_membership.php';
+require_once __DIR__ . '/superadmin.php';
+require_once __DIR__ . '/dealer_context.php';
 
 const SD_PROVINCES = [
     'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
@@ -33,6 +40,9 @@ const SD_PROVINCES = [
 
 function adminManagesDealer(int $adminId, int $dealerId): bool
 {
+    if (isSuperadmin($adminId)) {
+        return true;
+    }
     $stmt = Database::getInstance()->prepare(
         "SELECT 1 FROM dealer_managers WHERE dealer_id = ? AND admin_user_id = ? LIMIT 1"
     );
@@ -42,6 +52,9 @@ function adminManagesDealer(int $adminId, int $dealerId): bool
 
 function adminManagesOrg(int $adminId, int $orgId): bool
 {
+    if (isSuperadmin($adminId)) {
+        return true;
+    }
     $stmt = Database::getInstance()->prepare(
         "SELECT 1 FROM organization_managers WHERE organization_id = ? AND admin_user_id = ? LIMIT 1"
     );
@@ -52,11 +65,12 @@ function adminManagesOrg(int $adminId, int $orgId): bool
 /** Dealership row (with address) if this admin manages it, else false. */
 function getManagedDealer(int $adminId, int $dealerId): array|false
 {
+    $join = adminScopeJoin($adminId);
     $stmt = Database::getInstance()->prepare("
         SELECT d.*, a.province, a.city, a.suburb, a.street_line1, a.postal_code,
                pu.email AS principal_email
         FROM dealers d
-        JOIN dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
+        {$join} dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
         LEFT JOIN addresses a  ON a.id  = d.address_id
         LEFT JOIN users pu     ON pu.id = d.user_id
         WHERE d.id = ?
@@ -69,10 +83,11 @@ function getManagedDealer(int $adminId, int $dealerId): array|false
 /** Organisation row (with address) if this admin manages it, else false. */
 function getManagedOrg(int $adminId, int $orgId): array|false
 {
+    $join = adminScopeJoin($adminId);
     $stmt = Database::getInstance()->prepare("
         SELECT o.*, a.province, a.city, a.suburb
         FROM organizations o
-        JOIN organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
+        {$join} organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
         LEFT JOIN addresses a ON a.id = o.address_id
         WHERE o.id = ?
         LIMIT 1
@@ -97,7 +112,14 @@ function adminUniqueSlug(string $table, string $name, int $maxLen, ?int $ignoreI
     $pdo  = Database::getInstance();
     $slug = $base;
     $n    = 2;
+    // Org slugs become /desks/{slug}/ hubs — never issue one that is a
+    // real /desks/ route or file (see .htaccess §5, desks/org.php).
+    $reserved = $table === 'organizations' ? ['independent', 'org', 'index'] : [];
     while (true) {
+        if (in_array($slug, $reserved, true)) {
+            $slug = $base . '-' . $n++;
+            continue;
+        }
         $sql    = "SELECT id FROM {$table} WHERE slug = ?" . ($ignoreId ? " AND id != ?" : '') . " LIMIT 1";
         $check  = $pdo->prepare($sql);
         $check->execute($ignoreId ? [$slug, $ignoreId] : [$slug]);
@@ -196,8 +218,11 @@ function adminListManagers(string $type, int $entityId): array
         ? ['dealer_managers', 'dealer_id']
         : ['organization_managers', 'organization_id'];
 
+    // 0015: dealer managers carry an access level (view | operate).
+    $access = ($type === 'dealer' && function_exists('sdWorkspaceSchemaReady') && sdWorkspaceSchemaReady())
+        ? 'm.access' : "'view'";
     $stmt = Database::getInstance()->prepare("
-        SELECT m.admin_user_id, m.created_at, u.email, p.first_name, p.last_name
+        SELECT m.admin_user_id, m.created_at, u.email, u.status, p.first_name, p.last_name, {$access} AS access
         FROM {$table} m
         JOIN users u ON u.id = m.admin_user_id
         LEFT JOIN profiles p ON p.user_id = u.id
@@ -324,13 +349,14 @@ function adminSetDealerOnline(int $adminId, int $dealerId, bool $online): array
 function adminReviewSalesExec(int $adminId, int $execId, string $action, string $reason = ''): array
 {
     $pdo  = Database::getInstance();
+    $join = adminScopeJoin($adminId);
     $stmt = $pdo->prepare("
         SELECT se.id, se.user_id, se.dealer_id, se.verification_status,
                d.company_name AS dealer_name,
                u.email, p.first_name, p.last_name
         FROM sales_executives se
         JOIN dealers d          ON d.id = se.dealer_id
-        JOIN dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
+        {$join} dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
         JOIN users u            ON u.id = se.user_id
         LEFT JOIN profiles p    ON p.user_id = se.user_id
         WHERE se.id = ?
@@ -431,6 +457,7 @@ function adminReviewSalesExec(int $adminId, int $execId, string $action, string 
 /** Pending exec applications across every dealership this admin manages. */
 function adminPendingExecApplications(int $adminId, ?int $dealerId = null): array
 {
+    $join = adminScopeJoin($adminId);
     $sql = "
         SELECT se.id, se.job_title, se.created_at, se.dealer_id,
                d.company_name AS dealer_name,
@@ -438,7 +465,7 @@ function adminPendingExecApplications(int $adminId, ?int $dealerId = null): arra
                p.first_name, p.last_name, p.phone
         FROM sales_executives se
         JOIN dealers d          ON d.id = se.dealer_id
-        JOIN dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
+        {$join} dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
         JOIN users u            ON u.id = se.user_id
         LEFT JOIN profiles p    ON p.user_id = se.user_id
         WHERE se.verification_status = 'pending'
@@ -509,6 +536,7 @@ function adminParseOrgBrands(array $raw): array
 /** Pending agent applications across the orgs this admin manages. */
 function adminPendingAgentApplications(int $adminId, ?int $orgId = null): array
 {
+    $join = adminScopeJoin($adminId);
     $sql = "
         SELECT m.id, m.organization_id AS org_id, m.joined_at AS applied_at,
                o.name AS org_name,
@@ -519,7 +547,7 @@ function adminPendingAgentApplications(int $adminId, ?int $orgId = null): array
                (SELECT COUNT(*) FROM leads l WHERE l.broker_id = m.user_id)              AS total_leads
         FROM organization_members m
         JOIN organizations o          ON o.id = m.organization_id
-        JOIN organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
+        {$join} organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
         JOIN users u                  ON u.id = m.user_id
         LEFT JOIN profiles p          ON p.user_id = m.user_id
         LEFT JOIN salesdesks sd       ON sd.user_id = m.user_id
@@ -545,13 +573,14 @@ function adminPendingAgentApplications(int $adminId, ?int $orgId = null): array
 function adminReviewAgent(int $adminId, int $memberId, string $action, string $reason = ''): array
 {
     $pdo  = Database::getInstance();
+    $join = adminScopeJoin($adminId);
     $stmt = $pdo->prepare("
         SELECT m.id, m.user_id, m.organization_id, m.status,
                o.name AS org_name, o.brands,
                u.email, p.first_name, p.last_name
         FROM organization_members m
         JOIN organizations o          ON o.id = m.organization_id
-        JOIN organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
+        {$join} organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
         JOIN users u                  ON u.id = m.user_id
         LEFT JOIN profiles p          ON p.user_id = m.user_id
         WHERE m.id = ?

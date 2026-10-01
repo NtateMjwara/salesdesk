@@ -3,31 +3,25 @@
  * SalesDesk — Session bootstrap.
  * T1 owns this file.
  *
- * Must be required before any output.
- * Supports both file-based sessions (dev) and Redis sessions (production).
- *
- * To enable Redis:
- *   1. Set USE_REDIS_SESSIONS = true in config.php
- *   2. Install php-redis extension: sudo apt install php-redis
- *   3. Ensure Redis is running: sudo systemctl start redis-server
- *   4. Confirm REDIS_HOST, REDIS_PORT, REDIS_SESSION_PREFIX are set in config.php
- *
- * T2 must test the full wizard flow under Redis before merging Phase B.
- * File sessions create exclusive locks that deadlock concurrent wizard POSTs.
+ * FIXES APPLIED:
+ *   FIX-02: Session timeout key normalised to '_created' throughout.
+ *           authentication.php was writing $_SESSION['created'] (no underscore)
+ *           while session.php checked $_SESSION['_created'] (with underscore).
+ *           Result: the timeout check found no key on first load, stamped
+ *           '_created', but the login handler then stamped a separate 'created'
+ *           key that was never checked — sessions never expired. This file is
+ *           the canonical definition; authentication.php is updated to match.
  */
 require_once __DIR__ . '/config.php';
 
 if (session_status() === PHP_SESSION_NONE) {
 
     // ── Redis session handler ─────────────────────────────────
-    // Activated when USE_REDIS_SESSIONS = true in config.php.
-    // Redis eliminates file-lock deadlocks on concurrent wizard POSTs.
     if (defined('USE_REDIS_SESSIONS') && USE_REDIS_SESSIONS) {
         $redisHost   = defined('REDIS_HOST')           ? REDIS_HOST           : '127.0.0.1';
         $redisPort   = defined('REDIS_PORT')           ? (int) REDIS_PORT     : 6379;
         $redisPrefix = defined('REDIS_SESSION_PREFIX') ? REDIS_SESSION_PREFIX : 'salesdesk_sess_';
 
-        // php-redis extension must be installed.
         if (!extension_loaded('redis')) {
             error_log('[SalesDesk session] php-redis extension not loaded — falling back to file sessions.');
         } else {
@@ -46,7 +40,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => $lifetime,
         'path'     => '/',
-        'domain'   => '',          // current domain only
+        'domain'   => '',
         'secure'   => $secure,
         'httponly' => true,
         'samesite' => 'Lax',
@@ -57,11 +51,11 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // ── Absolute session timeout ──────────────────────────────────
-// Enforced in application layer regardless of session backend.
+// FIX-02: Canonical key is '_created' (with leading underscore).
+// authentication.php previously used 'created' — now corrected there too.
 if (isset($_SESSION['_created'])) {
     $timeout = defined('SESSION_TIMEOUT') ? SESSION_TIMEOUT : 3600;
     if ((time() - $_SESSION['_created']) > $timeout) {
-        // Session expired — destroy and redirect to login.
         session_unset();
         session_destroy();
         session_start();

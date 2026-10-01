@@ -214,6 +214,123 @@ HTML;
     return sendEmail($to, 'Your SalesDesk password reset code: ' . $otp, $body);
 }
 
+/**
+ * Superadmin invited a new admin (0014). The account already exists
+ * with a random password; the invitee sets their own via reset.
+ */
+function sendAdminInvite(string $to, string $firstName, string $inviterName): bool
+{
+    $resetUrl = SITE_URL . '/auth/reset_password.php';
+    $name     = htmlspecialchars($firstName, ENT_QUOTES, 'UTF-8');
+    $inviter  = htmlspecialchars($inviterName, ENT_QUOTES, 'UTF-8');
+    $email    = htmlspecialchars($to, ENT_QUOTES, 'UTF-8');
+    $body     = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">You're a SalesDesk admin</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
+  Hi {$name}, {$inviter} has given you an admin account on SalesDesk for <strong>{$email}</strong>.
+  Set your password to sign in — choose <em>Forgot password</em> and use this email address.
+</p>
+<a href="{$resetUrl}" style="display:inline-block;background:#0f4c9e;color:#fff;
+   font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none;">Set my password</a>
+<p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:24px 0 0;">
+  If you weren't expecting this, reply to this email and we'll remove the account.
+</p>
+HTML;
+    return sendEmail($to, 'Your SalesDesk admin account', $body);
+}
+
+/** Step-up code for a sensitive admin action (0014). */
+function sendStepUpCode(string $to, string $otp): bool
+{
+    $expMin = (int) (OTP_EXPIRY_SECONDS / 60);
+    $body   = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">Confirm it's you</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 24px;">
+  Someone signed in as you is about to make a sensitive change in the SalesDesk admin panel
+  (admins, payouts or the database). Enter this code to continue.
+</p>
+<div style="background:#eff4ff;border:1px solid #dbeafe;border-radius:12px;
+            padding:24px;text-align:center;margin:0 0 24px;">
+  <p style="font-size:40px;font-weight:800;letter-spacing:.25em;color:#0f4c9e;
+            font-family:monospace;margin:0;">{$otp}</p>
+  <p style="font-size:12px;color:#94a3b8;margin:8px 0 0;">Expires in {$expMin} minutes</p>
+</div>
+<p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:0;">
+  If this wasn't you, change your password immediately and tell another superadmin.
+</p>
+HTML;
+    return sendEmail($to, 'SalesDesk admin confirmation code: ' . $otp, $body);
+}
+
+/** 0018: an unplaced sales exec is invited to join a dealership. */
+function sendExecInvitation(string $to, string $firstName, string $companyName, string $message, int $days): bool
+{
+    $e    = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+    $url  = SITE_URL . '/app/exec/invitations.php';
+    $name = $firstName !== '' ? $firstName : 'there';
+    $note = $message !== ''
+        ? '<p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 20px;padding:12px 14px;background:#f8fafc;border-left:3px solid #0f4c9e;">“' . $e($message) . '”</p>'
+        : '';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">You're invited to join {$e($companyName)}</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 16px;">
+  Hi {$e($name)}, {$e($companyName)} would like you on their sales team on SalesDesk. Accept and you're verified
+  straight away — you can start listing their cars and earning on leads.
+</p>
+{$note}
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:14px;font-weight:600;
+   padding:12px 24px;border-radius:8px;text-decoration:none;">View invitation</a>
+<p style="font-size:13px;color:#94a3b8;line-height:1.6;margin:24px 0 0;">
+  The invitation is open for {$days} days. Not interested? Just decline it — nothing changes on your account.
+</p>
+HTML;
+    return sendEmail($to, 'Invitation to join ' . $companyName . ' on SalesDesk', $body);
+}
+
+/** 0017: a SalesDesk-run dealership has been handed to its principal. */
+function sendDealerHandover(string $to, string $firstName, string $companyName, string $summary, bool $invited): bool
+{
+    $e       = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+    $ctaUrl  = SITE_URL . ($invited ? '/auth/reset_password.php' : '/auth/login.php');
+    $ctaText = $invited ? 'Set my password' : 'Sign in';
+    $how     = $invited
+        ? 'An account has been created for <strong>' . $e($to) . '</strong> — choose <em>Forgot password</em> to set your password.'
+        : 'Sign in with <strong>' . $e($to) . '</strong> to take over.';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">{$e($companyName)} is yours</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 16px;">
+  Hi {$e($firstName)}, SalesDesk has been running {$e($companyName)} on your behalf and is now handing it over to you:
+  {$e($summary)}
+</p>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
+  From now on SalesDesk staff can only view your dealership. If you'd like help, you can let them in for 7 or 30 days
+  from <em>Settings → SalesDesk access</em>. {$how}
+</p>
+<a href="{$ctaUrl}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:14px;font-weight:600;
+   padding:12px 24px;border-radius:8px;text-decoration:none;">{$ctaText}</a>
+HTML;
+    return sendEmail($to, 'Your dealership on SalesDesk: ' . $companyName, $body);
+}
+
+/** 0017: SalesDesk staff closed a deal for a principal — please confirm. */
+function sendDealConfirmationRequest(string $to, string $companyName, string $carTitle, float $gross, int $leadId): bool
+{
+    $e    = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+    $url  = SITE_URL . '/app/dealer/leads.php?id=' . $leadId;
+    $amt  = 'R ' . number_format($gross, 2, '.', ' ');
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">Please confirm a sale</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
+  SalesDesk marked the <strong>{$e($carTitle)}</strong> lead at {$e($companyName)} as sold while helping run your
+  dealership. The broker commission would be <strong>{$amt}</strong>. Nothing is invoiced until you confirm —
+  if it isn't right, dispute it and the lead goes back to negotiation.
+</p>
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:14px;font-weight:600;
+   padding:12px 24px;border-radius:8px;text-decoration:none;">Review the sale</a>
+HTML;
+    return sendEmail($to, 'Please confirm a sale — ' . $carTitle, $body);
+}
+
 function sendPasswordChangedNotice(string $to): bool
 {
     $loginUrl = SITE_URL . '/auth/login.php';

@@ -117,6 +117,12 @@ function _renderStatusPage(
     string $rejectionReason
 ): never {
     $greeting = $firstName ? htmlspecialchars($firstName) : 'there';
+
+    // 0018: unplaced execs may have invitations from dealerships waiting.
+    $inviteCount = 0;
+    if (in_array($status, ['no_record', 'rejected', 'pending'], true) && function_exists('sdExecInvitations')) {
+        try { $inviteCount = count(sdExecInvitations((int) ($_SESSION['user_id'] ?? 0))); } catch (Throwable) {}
+    }
     $dealer   = $dealerName ? htmlspecialchars($dealerName) : 'your dealership';
 
     $config = match ($status) {
@@ -213,6 +219,11 @@ function _renderStatusPage(
   </div>
   <div class="status-title">Hi, <em><?= $greeting ?></em></div>
   <p class="status-message"><?= $config['message'] ?></p>
+  <?php if ($inviteCount > 0): ?>
+  <p class="status-message"><strong><?= $inviteCount ?> dealership<?= $inviteCount === 1 ? ' has' : 's have' ?> invited you to join.</strong></p>
+  <div style="margin-bottom:12px"><a href="/app/exec/invitations.php" class="btn btn-primary" style="text-decoration:none">
+    <i class="fa-regular fa-envelope-open"></i> View invitation<?= $inviteCount === 1 ? '' : 's' ?></a></div>
+  <?php endif; ?>
   <div><?= $config['actions'] ?></div>
 </div>
 </body>

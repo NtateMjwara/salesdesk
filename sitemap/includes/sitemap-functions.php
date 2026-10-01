@@ -90,6 +90,7 @@ function smPolicy(string $urlClass): array
         'legal'       => ['priority' => '0.3', 'changefreq' => 'yearly'],
         'car'         => ['priority' => '0.6', 'changefreq' => 'weekly'],
         'car_recent'  => ['priority' => '0.8', 'changefreq' => 'daily'],
+        'org_hub'     => ['priority' => '0.7', 'changefreq' => 'daily'],
         'desk'        => ['priority' => '0.5', 'changefreq' => 'weekly'],
         'desk_active' => ['priority' => '0.65','changefreq' => 'daily'],
         'news'        => ['priority' => '0.6', 'changefreq' => 'monthly'],

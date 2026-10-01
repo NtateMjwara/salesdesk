@@ -542,7 +542,10 @@ class CsvImporter implements InventoryImporterInterface
                 service_plan_expiry_date = ?, service_plan_expiry_km = ?, vat_inclusive = ?,
                 commission_type = ?, commission_value = ?,
                 " . ($updateImages ? "image_urls = ?, source_image_urls = ?," : "") . "
-                " . ($v['status'] !== null ? "status = ?," : "") . "
+                " . ($v['status'] !== null
+                    // 0017: an import never lifts a SalesDesk enforcement hold
+                    ? (function_exists('sdPhase3Ready') && sdPhase3Ready() ? "status = IF(hold_reason IS NULL, ?, status)," : "status = ?,")
+                    : "") . "
                 source_platform = ?,
                 source_external_id = COALESCE(?, source_external_id),
                 dealer_stock_no = COALESCE(?, dealer_stock_no),

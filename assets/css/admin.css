@@ -148,8 +148,52 @@ form.adm-head-action { margin: 0 0 0 auto; }
   letter-spacing: .3em; text-align: center;
 }
 
+/* ── Users list + user view (0019) ───────────────────────────── */
+.badge-role-exec { background: var(--pur-bg); color: var(--purple); border-color: var(--pur-b); }
+a.ua-stat-link { text-decoration: none; transition: border-color .15s; }
+a.ua-stat-link:hover { border-color: var(--p); }
+.ua-filter .ua-filter-q { flex: 1 1 260px; max-width: 320px; }
+
+.ua-bulkbar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 8px 12px; margin-bottom: .75rem;
+  border: 1px dashed var(--border); border-radius: 10px; background: var(--bg);
+}
+.ua-bulkbar.has-selection { border-style: solid; border-color: var(--p-b); background: var(--p-light); }
+
+.ua-table td { vertical-align: top; }
+.ua-col-check { width: 32px; }
+.ua-col-check input { margin: 3px 0 0; cursor: pointer; }
+.ua-col-actions { text-align: right; }
+.ua-empty { text-align: center; color: var(--faint); padding: 2rem; }
+.ua-date { font-size: 12px; color: var(--faint); white-space: nowrap; }
+.ua-yes { font-size: 12px; color: var(--green); white-space: nowrap; }
+.ua-no  { font-size: 12px; color: var(--faint); white-space: nowrap; }
+
+.ua-limit-form { display: flex; gap: 4px; align-items: center; margin: 0; }
+.ua-limit-input {
+  width: 64px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12px; font-family: var(--mono);
+}
+.adm-inline .ua-limit-input { flex: 0 0 auto; width: 90px; }
+
+.ua-pager { display: flex; gap: 12px; align-items: center; justify-content: center; margin: 1rem 0; }
+.ua-modal-alert { margin-bottom: 1rem; }
+.ua-title-red { color: var(--red); }
+.ua-actions-left { justify-content: flex-start; }
+
+.ua-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.ua-grid .adm-card { max-width: none; margin-bottom: 0; }
+.ua-defs { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+.ua-defs dt { color: var(--muted); }
+.ua-defs dd { margin: 0; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.ua-pre { white-space: pre-line; }
+.ua-details { max-width: 420px; overflow-wrap: anywhere; font-family: var(--mono); }
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 720px) {
+  .ua-filter .ua-filter-q { max-width: none; }
+  .ua-col-actions { text-align: left; }
   .adm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .adm-grid-2 { grid-template-columns: 1fr; }
   .adm-brands-row { grid-template-columns: 1fr; }

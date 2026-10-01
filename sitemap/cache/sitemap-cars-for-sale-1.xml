@@ -3,103 +3,109 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=new</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=demo</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=used</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Bakkie</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Hatchback</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Sedan</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=SUV</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Alfa%20Romeo</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Citroen</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=FORD</loc>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Hyundai</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Isuzu</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Opel</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Peugeot</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Renault</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Suzuki</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Volkswagen</loc>
-    <lastmod>2026-09-10T23:56:16+00:00</lastmod>
+    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -196,6 +202,18 @@
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-suzuki-baleno-1-5-gl-5mt-mc-21408064/</loc>
     <lastmod>2026-07-11T11:32:15+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-suzuki-swift-1-2i-gl-cvt-21408073/</loc>
+    <lastmod>2026-07-11T11:39:31+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-suzuki-fronx-1-5-gl-5mt-mc-21408057/</loc>
+    <lastmod>2026-07-11T11:45:27+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -580,6 +598,60 @@
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2024-volkswagen-polo-vivo-hatch-1-4-trendline-894127-1/</loc>
     <lastmod>2026-07-14T08:55:19+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-touareg-v6-tdi-r-line-grenadila-black-metalic-motus-vw-fourways-1446274/</loc>
+    <lastmod>2026-07-28T07:33:24+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2025-volkswagen-golf-r-lapis-blue-metallic-motus-vw-fourways-1446708/</loc>
+    <lastmod>2026-07-28T07:34:07+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-transporter-kombi-transporter-2-0tdi-kombi-swb-commerce-stone-grey-motus-vw-al/</loc>
+    <lastmod>2026-07-28T07:48:05+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2024-renault-kwid-1-0-climber-auto-blue-motus-vw-germiston-1446416/</loc>
+    <lastmod>2026-07-28T08:03:59+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-transporter-2-0tdi-kombi-swb-style-4motion-grey-motus-vw-vereeniging-1448840/</loc>
+    <lastmod>2026-07-28T08:08:44+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-transporter-2-0tdi-kombi-swb-style-4motion-light-grey-motus-vw-vereeniging-144/</loc>
+    <lastmod>2026-07-28T08:08:45+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2023-ford-ecosport-1-0t-trend-blue-motus-vw-welkom-1446161/</loc>
+    <lastmod>2026-07-28T08:13:58+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2025-volkswagen-golf-r-white-motus-vw-east-rand-mall-1445713/</loc>
+    <lastmod>2026-07-28T08:21:01+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-amarok-3-0tdi-v6-double-cab-aventura-4motion-silver-motus-vw-edenvale-1446709/</loc>
+    <lastmod>2026-07-28T08:37:17+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

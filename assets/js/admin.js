@@ -89,4 +89,79 @@
       e.target.form.submit();
     }
   });
+
+  /* ── Users page (0019) ──────────────────────────────────────
+     [data-modal-open="statusModal"][data-mode][data-user-id][data-name][data-dealer]
+        fills the suspend / reactivate modal (dealer → cascade warning)
+     [data-modal-open="rejectModal"][data-reject-action][data-dealer-id][data-org-id][data-name]
+        fills the CIPC reject modal
+     [data-check-all] / [data-check-row] / [data-bulk-count] / [data-bulk-submit]
+        bulk selection for #bulkForm
+  ──────────────────────────────────────────────────────────── */
+  function setText(root, sel, text) { var el = root.querySelector(sel); if (el) el.textContent = text; }
+  function setVal(root, sel, val)   { var el = root.querySelector(sel); if (el) el.value = val; }
+
+  document.addEventListener('click', function (e) {
+    var opener = e.target.closest('[data-modal-open]');
+    if (!opener) return;
+    var id    = opener.getAttribute('data-modal-open');
+    var modal = document.getElementById(id);
+    if (!modal) return;
+    var name  = opener.getAttribute('data-name') || 'this user';
+
+    if (id === 'statusModal') {
+      var suspend  = opener.getAttribute('data-mode') === 'suspend_user';
+      var isDealer = opener.getAttribute('data-dealer') === '1';
+      setVal(modal, '[data-status-action]', suspend ? 'suspend_user' : 'reactivate_user');
+      setVal(modal, '[data-status-user]', opener.getAttribute('data-user-id') || '');
+      setText(modal, '[data-status-title]', (suspend ? 'Suspend ' : 'Reactivate ') + (isDealer ? 'dealer' : 'user'));
+      setText(modal, '[data-status-sub]', 'You are about to ' + (suspend ? 'suspend ' : 'reactivate ') + name + '.');
+      setText(modal, '[data-status-dealer-text]', suspend
+        ? 'All live listings will be paused and pending commissions frozen. Broker attribution is never affected.'
+        : 'Paused listings will be restored and frozen commissions unfrozen.');
+      var note = modal.querySelector('[data-status-dealer-note]');
+      if (note) note.hidden = !isDealer;
+      var btn = modal.querySelector('[data-status-submit]');
+      if (btn) {
+        btn.textContent = suspend ? 'Suspend' : 'Reactivate';
+        btn.className   = 'btn ' + (suspend ? 'btn-danger' : 'btn-success');
+      }
+    }
+
+    if (id === 'rejectModal') {
+      setVal(modal, '[data-reject-action-input]', opener.getAttribute('data-reject-action') || '');
+      setVal(modal, '[data-reject-dealer-input]', opener.getAttribute('data-dealer-id') || '');
+      setVal(modal, '[data-reject-org-input]', opener.getAttribute('data-org-id') || '');
+      setText(modal, '[data-reject-sub]', 'Rejecting verification for: ' + name + '. Your reason is included in the email.');
+      setVal(modal, 'textarea', '');
+    }
+  });
+
+  var bulkForm = document.querySelector('[data-bulk-form]');
+  if (bulkForm) {
+    var rows     = function () { return document.querySelectorAll('[data-check-row]'); };
+    var checkAll = document.querySelector('[data-check-all]');
+    var refresh  = function () {
+      var all = rows(), n = 0;
+      all.forEach(function (c) { if (c.checked) n++; });
+      setText(bulkForm, '[data-bulk-count]', String(n));
+      var submit = bulkForm.querySelector('[data-bulk-submit]');
+      if (submit) submit.disabled = n === 0;
+      bulkForm.classList.toggle('has-selection', n > 0);
+      if (checkAll) {
+        checkAll.checked       = n > 0 && n === all.length;
+        checkAll.indeterminate = n > 0 && n < all.length;
+      }
+    };
+    if (checkAll) {
+      checkAll.addEventListener('change', function () {
+        rows().forEach(function (c) { c.checked = checkAll.checked; });
+        refresh();
+      });
+    }
+    document.addEventListener('change', function (e) {
+      if (e.target.matches('[data-check-row]')) refresh();
+    });
+    refresh();
+  }
 })();

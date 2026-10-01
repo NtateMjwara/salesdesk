@@ -19,6 +19,7 @@ declare(strict_types=1);
 require_once '../includes/security.php';
 require_once '../includes/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/desk-seo.php';
 require_once 'includes/sitemap-functions.php';
 
 applyCachePolicy('public');
@@ -32,6 +33,7 @@ $xml = smCached('sitemap-desks', SITEMAP_CACHE_TTL, function (): string {
     $sql = "
         SELECT
             sd.slug,
+            sd.display_name,
             {$lastmodExpr} AS lastmod,
             COUNT(DISTINCT bi.id) AS active_listings
         FROM salesdesks sd
@@ -48,6 +50,11 @@ $xml = smCached('sitemap-desks', SITEMAP_CACHE_TTL, function (): string {
     try {
         $stmt = $pdo->query($sql);
         while ($row = $stmt->fetch()) {
+            // Desks still on the onboarding default name are served
+            // noindex (broker/index.php SEO-2) — don't advertise them.
+            if (!sdDeskHasRealName($row['display_name'])) {
+                continue;
+            }
             $loc   = $base . '/' . rawurlencode($row['slug']) . '/';
             $class = ((int) $row['active_listings']) > 0 ? 'desk_active' : 'desk';
             $p     = smPolicy($class);

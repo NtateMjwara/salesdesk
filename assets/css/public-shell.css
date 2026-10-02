@@ -1,5 +1,5 @@
 /**
- * SalesDesk — Public Shell CSS  (v2)
+ * SalesDesk — Public Shell CSS  (v3)
  * assets/css/public-shell.css
  *
  * SINGLE OWNER for everything views/layout-public.php renders itself:
@@ -16,10 +16,13 @@
  *     scrolled-state shadow (.is-scrolled, set by public-nav.js).
  *   – Mobile drawer is now a right-hand sheet with accordion groups
  *     (<details>) and a pinned account footer.
- *   – Footer redesigned on the ink surface with a newsletter card.
+ *   – Footer redesigned on the ink surface.
+ *
+ * v3 (lean MVP, Oct 2026): footer newsletter card and Company column
+ *   removed; footer grid is now brand + Buy + Sell & earn.
  *
  * Load order: global.css → public-shell.css → public.css → page CSS
- * Behaviour: assets/js/public-nav.js (nav), footer-newsletter.js (footer).
+ * Behaviour: assets/js/public-nav.js (nav).
  *
  * Sections:
  *   1. Public body + skip link
@@ -946,29 +949,35 @@
 .sd-footer {
   margin-top: var(--section-y);
   color: var(--on-ink-2);
-  background: var(--ink);
+  background:
+    radial-gradient(900px 320px at 10% 0%, rgba(47, 124, 246, .10), transparent 70%),
+    var(--ink);
+  border-top: 1px solid var(--on-ink-3);
   font-size: 14px;
 }
 
+/* ── Top: brand + link groups ─────────────────────────────── */
 .sd-footer__top {
   display: grid;
-  grid-template-columns: minmax(260px, 1.3fr) repeat(3, minmax(140px, 1fr)) minmax(260px, 1.3fr);
-  gap: 40px;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 48px 64px;
   padding-block: 64px 48px;
 }
+
+.sd-footer__col--brand { max-width: 380px; }
 
 .sd-footer__brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .sd-footer__logo { width: 44px; height: auto; }
 
 .sd-footer__name {
   font-family: var(--font-d);
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -.03em;
   color: #fff;
@@ -976,41 +985,48 @@
 .sd-footer__name span { color: var(--p-bright); }
 
 .sd-footer__desc {
-  max-width: 320px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
   line-height: 1.7;
 }
 
 .sd-footer__socials {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .sd-footer__social {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   color: var(--on-ink);
+  background: var(--ink-2);
   border: 1px solid var(--on-ink-3);
   border-radius: var(--r-full);
-  transition: background var(--dur-1), border-color var(--dur-1);
+  transition: background var(--dur-1), border-color var(--dur-1), transform var(--dur-1);
 }
 
-.sd-footer__social:hover { background: var(--ink-3); border-color: transparent; }
+.sd-footer__social:hover {
+  background: var(--p);
+  border-color: var(--p);
+  color: #fff;
+  transform: translateY(-2px);
+}
 
 .sd-footer__col-title {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
   font-family: var(--font-d);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .02em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
   color: #fff;
 }
 
 .sd-footer__links {
   display: grid;
-  gap: 10px;
+  justify-items: start;
+  gap: 12px;
 }
 
 .sd-footer__link {
@@ -1018,84 +1034,15 @@
   transition: color var(--dur-1);
 }
 
-.sd-footer__link:hover { color: #fff; }
+.sd-footer__link:hover,
+.sd-footer__link:focus-visible { color: #fff; }
 
-.sd-footer__nl {
-  padding: 22px;
-  border-radius: var(--r-lg);
-  background: var(--ink-2);
-  border: 1px solid var(--on-ink-3);
-}
-
-.sd-footer__nl-label {
-  font-family: var(--font-d);
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.sd-footer__nl-sub {
-  margin: 4px 0 14px;
-  font-size: var(--fs-sm);
-}
-
-.sd-footer__nl-form {
-  display: flex;
-  gap: 6px;
-  padding: 5px;
-  background: var(--ink);
-  border: 1px solid var(--on-ink-3);
-  border-radius: var(--r-full);
-  transition: border-color var(--dur-1), box-shadow var(--dur-1);
-}
-
-.sd-footer__nl-form:focus-within {
-  border-color: var(--p-bright);
-  box-shadow: 0 0 0 4px rgba(47, 124, 246, .25);
-}
-
-.sd-footer__nl-input {
-  flex: 1;
-  min-width: 0;
-  padding: 0 12px;
-  font: 400 14px/1 var(--sans);
-  color: #fff;
-  background: transparent;
-  border: 0;
-  outline: none;
-}
-
-.sd-footer__nl-input::placeholder { color: rgba(232, 238, 248, .45); }
-
-.sd-footer__nl-btn {
-  height: 38px;
-  padding: 0 16px;
-  font: 600 13px/1 var(--sans);
-  color: var(--on-accent);
-  background: var(--accent);
-  border: 0;
-  border-radius: var(--r-full);
-  cursor: pointer;
-  transition: background var(--dur-1);
-}
-
-.sd-footer__nl-btn:hover { background: var(--accent-dark); }
-.sd-footer__nl-btn:disabled { opacity: .7; cursor: wait; }
-
-.sd-footer__nl-note {
-  margin-top: 10px;
-  font-size: var(--fs-xs);
-  color: rgba(232, 238, 248, .5);
-}
-
-.sd-footer__nl-note.is-success { color: #6ee7a0; }
-.sd-footer__nl-note.is-error   { color: #fca5a5; }
-
+/* ── Trust strip ──────────────────────────────────────────── */
 .sd-footer__trust {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 24px;
-  padding-block: 20px;
+  gap: 10px;
+  padding-block: 24px;
   border-top: 1px solid var(--on-ink-3);
 }
 
@@ -1103,18 +1050,23 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding: 7px 14px;
   font-size: var(--fs-sm);
   color: var(--on-ink);
+  background: var(--ink-2);
+  border: 1px solid var(--on-ink-3);
+  border-radius: var(--r-full);
 }
 
 .sd-footer__badge i { color: var(--accent-2); }
 
+/* ── Bottom bar ───────────────────────────────────────────── */
 .sd-footer__bottom {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 24px;
+  gap: 12px 24px;
   padding-block: 20px calc(20px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--on-ink-3);
   font-size: var(--fs-xs);
@@ -1124,28 +1076,54 @@
 .sd-footer__legal {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
+  gap: 6px 20px;
 }
 
-.sd-footer__legal a { color: rgba(232, 238, 248, .6); }
+.sd-footer__legal a { color: rgba(232, 238, 248, .6); transition: color var(--dur-1); }
 .sd-footer__legal a:hover { color: #fff; }
 
-@media (max-width: 1100px) {
-  .sd-footer__top { grid-template-columns: repeat(3, 1fr); }
-  .sd-footer__col--brand,
-  .sd-footer__col--nl { grid-column: span 3; }
-  .sd-footer__col--nl { max-width: 520px; }
+/* ── Tablet: brand on its own row, link groups side by side ─ */
+@media (max-width: 900px) {
+  .sd-footer__top { grid-template-columns: 1fr 1fr; gap: 40px 32px; }
+  .sd-footer__col--brand { grid-column: 1 / -1; max-width: 520px; }
 }
 
+/* ── Mobile: single centred column ────────────────────────── */
 @media (max-width: 640px) {
+  .sd-footer { text-align: center; }
+
   .sd-footer__top {
-    grid-template-columns: 1fr 1fr;
-    gap: 32px 20px;
-    padding-block: 48px 32px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 0;
+    padding-block: 48px 8px;
   }
-  .sd-footer__col--brand,
-  .sd-footer__col--nl { grid-column: span 2; }
-  .sd-footer__bottom { flex-direction: column; align-items: flex-start; }
+
+  .sd-footer__col {
+    width: 100%;
+    padding-block: 24px;
+    border-top: 1px solid var(--on-ink-3);
+  }
+
+  .sd-footer__col--brand {
+    max-width: 360px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .sd-footer__brand { justify-content: center; }
+  .sd-footer__socials { justify-content: center; }
+  .sd-footer__col-title { margin-bottom: 12px; }
+  .sd-footer__links { justify-items: center; gap: 4px; }
+
+  .sd-footer__trust { justify-content: center; }
+
+  .sd-footer__bottom {
+    flex-direction: column;
+    justify-content: center;
+    gap: 12px;
+  }
+  .sd-footer__legal { justify-content: center; }
 }
 
 
@@ -1158,7 +1136,7 @@
    unchanged while giving fingers something to hit. */
 @media (pointer: coarse) {
   .sd-footer__links { gap: 2px; }
-  .sd-footer__link { padding-block: 9px; }
+  .sd-footer__link { display: inline-block; padding-block: 9px; }
   .sd-footer__legal { gap: 2px 18px; }
   .sd-footer__legal a { display: inline-block; padding-block: 8px; }
   .pub-breadcrumb__list a,

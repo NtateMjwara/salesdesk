@@ -1,13 +1,19 @@
 <?php
 /**
- * SalesDesk — Public Layout Shell (v7)
+ * SalesDesk — Public Layout Shell (v8)
  * T1 owns this file.
  *
  * RULE: this file contains no <style> blocks, no inline <script> logic
  * and no style="" / onclick="" attributes. Shell styles live in
- * assets/css/public-shell.css, shell behaviour in assets/js/public-nav.js
- * and assets/js/footer-newsletter.js. The only inline <script> is JSON-LD
+ * assets/css/public-shell.css, shell behaviour in assets/js/public-nav.js.
+ * The only inline <script> is JSON-LD
  * data, which is not executable code.
+ *
+ * v8 changes (lean MVP, Oct 2026):
+ *   LEAN-1 "News & reviews" mega panel + mobile drawer group removed.
+ *   LEAN-2 Footer "Company" column (Our story, Our outreach, Careers,
+ *          News, Contact us, Help centre) removed.
+ *   LEAN-3 Footer newsletter signup + footer-newsletter.js removed.
  *
  * VARIABLES consumed (all optional):
  *   string $pageTitle, $siteName, $ogTitle, $ogDescription, $ogImage
@@ -442,63 +448,6 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
         </div>
       </div>
 
-      <!-- ── RESEARCH ────────────────────────────────────── -->
-      <div class="pub-nav__browse">
-        <button class="pub-nav__trigger" id="navNewsBtn" type="button"
-                aria-haspopup="true" aria-expanded="false" aria-controls="navNewsPanel">
-          News &amp; reviews
-          <span class="pub-chevron" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
-        </button>
-
-        <div class="pub-mega-panel" id="navNewsPanel">
-          <div class="pub-mega-cols">
-            <div class="pub-mega-col">
-              <div class="pub-mega-col-label">Latest</div>
-              <a href="/news/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-newspaper"></i></span>
-                <span class="pub-mega-item-text">Car news
-                  <span class="pub-mega-item-sub">SA &amp; international updates</span>
-                </span>
-              </a>
-              <a href="/news/launches/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-rocket"></i></span>
-                <span class="pub-mega-item-text">New launches
-                  <span class="pub-mega-item-sub">What's arriving in SA showrooms</span>
-                </span>
-              </a>
-              <a href="/news/industry/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-chart-line"></i></span>
-                <span class="pub-mega-item-text">Industry &amp; market
-                  <span class="pub-mega-item-sub">Sales figures, trends, analysis</span>
-                </span>
-              </a>
-            </div>
-            <div class="pub-mega-divider" aria-hidden="true"></div>
-            <div class="pub-mega-col">
-              <div class="pub-mega-col-label">Reviews &amp; guides</div>
-              <a href="/reviews/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-star-half-stroke"></i></span>
-                <span class="pub-mega-item-text">Car reviews
-                  <span class="pub-mega-item-sub">Expert road tests &amp; ratings</span>
-                </span>
-              </a>
-              <a href="/guides/buying/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-book-open"></i></span>
-                <span class="pub-mega-item-text">Buyer's guides
-                  <span class="pub-mega-item-sub">How to choose the right car</span>
-                </span>
-              </a>
-              <a href="/guides/ownership/" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-wrench"></i></span>
-                <span class="pub-mega-item-text">Ownership &amp; maintenance
-                  <span class="pub-mega-item-sub">Keep your car running well</span>
-                </span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- ── FINANCE & TOOLS ─────────────────────────────── -->
       <div class="pub-nav__browse">
         <button class="pub-nav__trigger" id="navToolsBtn" type="button"
@@ -698,7 +647,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
     <div class="pub-mobile-nav__head">
       <a href="/" class="pub-nav__brand" aria-label="SalesDesk home">
-        <img class="pub-nav__mark" src="/assets/img/icon-mark.png" alt="" width="44" height="15">
+        <img class="pub-nav__mark" src="/assets/img/logo-mark.png" alt="" width="44" height="15">
         <span class="pub-nav__name">Sales<span>Desk</span></span>
       </a>
       <button class="pub-nav__icon-btn" type="button" data-nav-close aria-label="Close menu">
@@ -742,15 +691,6 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <a href="/tools/valuation/"          class="pub-mobile-nav__item"><i class="fa-solid fa-magnifying-glass-dollar"></i> Car valuation</a>
           <a href="/tools/compare/"            class="pub-mobile-nav__item"><i class="fa-solid fa-scale-balanced"></i> Compare cars</a>
           <a href="/tools/insurance/"          class="pub-mobile-nav__item"><i class="fa-solid fa-shield-halved"></i> Insurance quotes</a>
-        </div>
-      </details>
-
-      <details class="pub-mobile-nav__group">
-        <summary>News &amp; reviews</summary>
-        <div class="pub-mobile-nav__links">
-          <a href="/news/"          class="pub-mobile-nav__item"><i class="fa-solid fa-newspaper"></i> Car news</a>
-          <a href="/reviews/"       class="pub-mobile-nav__item"><i class="fa-solid fa-star-half-stroke"></i> Car reviews</a>
-          <a href="/guides/buying/" class="pub-mobile-nav__item"><i class="fa-solid fa-book-open"></i> Buyer's guides</a>
         </div>
       </details>
 
@@ -812,7 +752,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 </main>
 
 <!-- ══════════════════════════════════════════════════════
-     FOOTER   (public-shell.css §13 · footer-newsletter.js)
+     FOOTER   (public-shell.css §13)
      ══════════════════════════════════════════════════════ -->
 <footer class="sd-footer">
   <div class="sd-container">
@@ -860,33 +800,6 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
         </div>
       </div>
 
-      <div class="sd-footer__col">
-        <div class="sd-footer__col-title">Company</div>
-        <div class="sd-footer__links">
-          <a href="/about/"   class="sd-footer__link">Our story</a>
-          <a href="/outreach" class="sd-footer__link">Our outreach</a>
-          <a href="/careers"  class="sd-footer__link">Careers</a>
-          <a href="/news/"    class="sd-footer__link">News</a>
-          <a href="/contact"  class="sd-footer__link">Contact us</a>
-          <a href="/help"     class="sd-footer__link">Help centre</a>
-        </div>
-      </div>
-
-      <div class="sd-footer__col sd-footer__col--nl">
-        <div class="sd-footer__nl">
-          <p class="sd-footer__nl-label">Deals in your inbox</p>
-          <p class="sd-footer__nl-sub">New listings, price drops and car news. Weekly, never spammy.</p>
-          <form class="sd-footer__nl-form" id="footerNlForm" novalidate>
-            <input type="email" class="sd-footer__nl-input" id="footerNlEmail"
-                   name="email" required autocomplete="email"
-                   placeholder="you@example.com"
-                   aria-label="Email address for newsletter">
-            <button class="sd-footer__nl-btn" type="submit" id="footerNlBtn">Subscribe</button>
-          </form>
-          <p class="sd-footer__nl-note" id="footerNlNote" aria-live="polite">Unsubscribe any time. POPIA compliant.</p>
-        </div>
-      </div>
-
     </div><!-- /sd-footer__top -->
 
     <div class="sd-footer__trust">
@@ -896,7 +809,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
     </div>
 
     <div class="sd-footer__bottom">
-      <span>&copy; <?= date('Y') ?> SalesDesk (Pty) Ltd &middot; South Africa &middot;</span>
+      <span>&copy; <?= date('Y') ?> SalesDesk (Pty) Ltd &middot; South Africa</span>
       <nav class="sd-footer__legal" aria-label="Legal">
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
@@ -955,14 +868,12 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
        2. search-typeahead.js   shared typeahead (nav, sheet, browse)
        3. public.js             cards, wishlist, share, gallery, enquiry, finance
        4. public-nav.js         mega panels, drawer, search sheet
-       5. footer-newsletter.js  needs global.js's interceptor
-       6. $extraJs              page scripts
+       5. $extraJs              page scripts
      ══════════════════════════════════════════════════════ -->
 <script src="/assets/js/global.js?v=<?= $assetVersion ?>" defer></script>
 <script src="/assets/js/search-typeahead.js?v=<?= $assetVersion ?>" defer></script>
 <script src="/assets/js/public.js?v=<?= $assetVersion ?>" defer></script>
 <script src="/assets/js/public-nav.js?v=<?= $assetVersion ?>" defer></script>
-<script src="/assets/js/footer-newsletter.js?v=<?= $assetVersion ?>" defer></script>
 <?php foreach ((array) $extraJs as $jsPath):
     if (!is_string($jsPath) || !str_starts_with($jsPath, '/assets/js/')) continue;
     if ($jsPath === '/assets/js/search-typeahead.js') continue;   // already loaded above ?>

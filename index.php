@@ -6,7 +6,7 @@
  * Wired into layout-public.php (nav, footer, visitor tracking).
  * Live car counts pulled from DB; sample vehicle cards use real
  * broker_inventory + cars query (limited to 8, newest first, 4x2 grid).
- * Province counts pulled live. Newsletter wired in next session.
+ * Province counts pulled live.
  *
  * CHANGES IN THIS PASS:
  *   - Hero search replaced with HeroSearch v3 widget
@@ -19,8 +19,12 @@
  *     See db/0008_saved_searches.sql for the new table.
  *   - Featured vehicle grid bumped from 3 → 8 cars (4 cols x 2 rows
  *     on desktop; CSS handles mobile layout — see home.css).
- *   - Car News & Reviews section now pulled live from blog_posts
- *     (was a hardcoded 3-item array — see NEWS-1 below).
+ *   - LEAN-1 (Oct 2026): Car News & Reviews section removed — the
+ *     public site now focuses solely on cars and operations.
+ *   - LEAN-2 (Oct 2026): "Why SalesDesk" section removed.
+ *   - DESK-ORG-1 (Oct 2026): "Top SalesDesks" broker cards replaced by
+ *     the top 3 desk organisations, rendered with the shared sdOrgCard()
+ *     partial and desks.css (same cards as /desks/).
  *
  * PERF FIX (this pass):
  *   home.css was being <link>'d from the *middle of the page body*
@@ -188,37 +192,17 @@ try {
     $featuredCars = [];
 }
 
-// ── Live: top SalesDesks (most leads this month) ───────────────
+// ── Live: top desk organisations (DESK-ORG-1) ──────────────────
+// Same source and merit ordering as the /desks/ directory (live cars,
+// then desks), so the homepage teaser and the directory always agree.
+require_once __DIR__ . '/includes/desk-directory.php';
+require_once __DIR__ . '/views/partials/desk-card.php';
 try {
-    $topDesksStmt = $pdo->prepare("
-        SELECT
-            sd.id, sd.slug, sd.display_name, sd.logo_url,
-            p.first_name, p.last_name, p.avatar_url,
-            a.city, a.province,
-            (SELECT COUNT(*) FROM broker_inventory bi2
-             WHERE bi2.salesdesk_id = sd.id
-               AND EXISTS (SELECT 1 FROM cars c2
-                           WHERE c2.id = bi2.car_id AND c2.status = 'active')
-            ) AS active_listings,
-            (SELECT COUNT(*) FROM leads l
-             WHERE l.salesdesk_id = sd.id
-               AND l.created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
-            ) AS leads_this_month,
-            (SELECT COUNT(*) FROM leads l2
-             WHERE l2.salesdesk_id = sd.id AND l2.status = 'closed'
-            ) AS deals_closed
-        FROM salesdesks sd
-        JOIN users u ON u.id = sd.user_id
-        LEFT JOIN profiles p ON p.user_id = u.id
-        LEFT JOIN addresses a ON a.id = p.address_id
-        WHERE sd.is_active = 1
-        ORDER BY leads_this_month DESC, active_listings DESC
-        LIMIT 3
-    ");
-    $topDesksStmt->execute();
-    $topDesks = $topDesksStmt->fetchAll();
+    $topOrgs     = array_slice(sdOrgDirectory(), 0, 3);
+    $orgPreviews = $topOrgs ? sdOrgPreviews(array_map(static fn($o) => (int) $o['id'], $topOrgs)) : [];
 } catch (Throwable) {
-    $topDesks = [];
+    $topOrgs     = [];
+    $orgPreviews = [];
 }
 
 // ── Live: Recently Viewed (last 8 distinct cars for this visitor) ──
@@ -340,29 +324,6 @@ try {
     $savedSearches = [];
 }
 
-// ── Live: Latest car news & reviews (was a hardcoded array) ────
-// NEWS-1: pulls the 3 most recently published blog posts, same
-// source table /news/ uses (blog_posts + blog_categories), so the
-// homepage teaser and the real article always agree.
-try {
-    $homeNewsStmt = $pdo->prepare("
-        SELECT
-            p.slug, p.title, p.excerpt, p.content,
-            p.featured_image_url, p.published_at,
-            c.name AS category_name
-        FROM blog_posts p
-        LEFT JOIN blog_categories c ON c.id = p.category_id
-        WHERE p.status = 'published'
-          AND p.published_at <= NOW()
-        ORDER BY p.published_at DESC
-        LIMIT 3
-    ");
-    $homeNewsStmt->execute();
-    $latestNews = $homeNewsStmt->fetchAll();
-} catch (Throwable) {
-    $latestNews = [];
-}
-
 // ── Province display data ──────────────────────────────────────
 $provinces = [
     'Gauteng'       => 'Johannesburg · Pretoria',
@@ -397,24 +358,6 @@ $budgetTiles = [
     ['R800k +',       800000,  null,   'Luxury & performance'],
 ];
 
-// ── Desk avatar initials ───────────────────────────────────────
-function deskInitials(array $desk): string {
-    $first = $desk['first_name'] ?? '';
-    $last  = $desk['last_name']  ?? '';
-    $init  = strtoupper(substr($first, 0, 1) . substr($last, 0, 1));
-    return $init ?: strtoupper(substr($desk['display_name'], 0, 2));
-}
-
-// ── News helpers (NEWS-1) — mirror news/index.php ───────────────
-function homeNewsReadTime(string $content): string {
-    $words = str_word_count(strip_tags($content));
-    return max(1, (int) ceil($words / 220)) . ' min read';
-}
-function homeNewsThumb(array $post): string {
-    return $post['featured_image_url']
-        ?: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=1200&auto=format&fit=crop';
-}
-
 require_once __DIR__ . '/views/partials/vehicle-card.php';
 require_once __DIR__ . '/views/partials/body-type-icon.php';
 
@@ -440,6 +383,7 @@ $includeHowItWorksCss = false;
 
 $assetVersion = $assetVersion ?? date('Ymd');
 $extraCss     = '<link rel="stylesheet" href="/assets/css/hero-search.css?v=' . $assetVersion . '">' . "\n"
+              . '<link rel="stylesheet" href="/assets/css/desks.css?v=' . $assetVersion . '">' . "\n"
               . '<link rel="stylesheet" href="/assets/css/home.css?v=' . $assetVersion . '">' . "\n";
 $extraJs      = ['/assets/js/home.js'];
 
@@ -464,8 +408,8 @@ ob_start();
       </h1>
 
       <p class="home-hero__sub">
-        Every car from verified dealerships in one search — with an independent
-        broker on your side who only gets paid when you drive away happy.
+        Salesdesk is a premium commerce community where people can discover, 
+        meet, and shop the best car brands across South Africa.
       </p>
 
       <div class="home-hero__popular">
@@ -482,8 +426,8 @@ ob_start();
           <span><strong><?= $verifiedDealers > 0 ? number_format($verifiedDealers) . ' verified' : 'Verified' ?></strong> dealerships</span></li>
         <li><i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
           <span><strong>POPIA</strong> compliant enquiries</span></li>
-        <li><i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i>
-          <span><strong>No fees</strong> for buyers</span></li>
+        <!--<li><i class="fa-solid fa-hand-holding-dollar" aria-hidden="true"></i>
+          <span><strong>No fees</strong> for buyers</span></li>-->
       </ul>
     </div>
 
@@ -716,42 +660,6 @@ ob_start();
 </section>
 
 <!-- ════════════════════════════════════════════════
-     HOW IT WORKS / TRUST
-     ════════════════════════════════════════════════ -->
-<section class="pub-section" aria-labelledby="homeHowTitle">
-  <div class="sd-container">
-    <div class="home-how">
-      <div class="home-how__intro">
-        <span class="pub-eyebrow">Why SalesDesk</span>
-        <h2 class="pub-section__title home-how__title" id="homeHowTitle">A car marketplace where someone is actually on your side</h2>
-        <p class="home-how__sub">
-          Dealers list their stock. Independent SalesDesk brokers share it and help you
-          buy — and they’re only paid commission when a deal closes. No cost to you.
-        </p>
-        <a class="pub-btn pub-btn-on-ink" href="/how-it-works/brokers">How it works <i class="fa-solid fa-arrow-right"></i></a>
-      </div>
-      <ol class="home-how__steps">
-        <li class="home-how__step">
-          <span class="home-how__num">1</span>
-          <span class="home-how__step-title">Search every verified dealer</span>
-          <span class="home-how__step-text">One search across dealerships nationwide — real stock, real prices.</span>
-        </li>
-        <li class="home-how__step">
-          <span class="home-how__num">2</span>
-          <span class="home-how__step-title">Enquire in 30 seconds</span>
-          <span class="home-how__step-text">Your details only go to the dealer and broker for that car. POPIA protected.</span>
-        </li>
-        <li class="home-how__step">
-          <span class="home-how__num">3</span>
-          <span class="home-how__step-title">Get help closing the deal</span>
-          <span class="home-how__step-text">Test drives, finance and paperwork — with a broker whose success depends on yours.</span>
-        </li>
-      </ol>
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════════════════════════════════════
      PROVINCES
      ════════════════════════════════════════════════ -->
 <section class="pub-section" aria-labelledby="homeProvTitle">
@@ -777,80 +685,22 @@ ob_start();
   </div>
 </section>
 
-<?php if (!empty($topDesks)): ?>
+<?php if (!empty($topOrgs)): ?>
 <!-- ════════════════════════════════════════════════
-     TOP SALESDESKS
+     DESK ORGANISATIONS (DESK-ORG-1 — shared sdOrgCard + desks.css)
      ════════════════════════════════════════════════ -->
-<section class="pub-section" aria-labelledby="homeDesksTitle">
+<section class="pub-section" aria-labelledby="homeOrgsTitle">
   <div class="sd-container">
     <div class="pub-section__head">
       <div>
-        <span class="pub-eyebrow">Brokers</span>
-        <h2 class="pub-section__title" id="homeDesksTitle">Top SalesDesks this month</h2>
+        <span class="pub-eyebrow">Desk organisations</span>
+        <h2 class="pub-section__title" id="homeOrgsTitle">Shop by brand network</h2>
       </div>
-      <a href="/desks/" class="pub-link pub-section__link">Find a SalesDesk <i class="fa-solid fa-arrow-right"></i></a>
+      <a href="/desks/" class="pub-link pub-section__link">All organisations <i class="fa-solid fa-arrow-right"></i></a>
     </div>
-    <div class="home-desks">
-      <?php foreach ($topDesks as $i => $desk):
-        $loc = implode(', ', array_filter([$desk['city'], $desk['province']])); ?>
-      <a class="home-desk pub-reveal" href="/<?= htmlspecialchars($desk['slug']) ?>/">
-        <span class="home-desk__top">
-          <span class="home-desk__av home-desk__av--<?= $i % 5 ?>">
-            <?php if ($desk['avatar_url']): ?>
-            <img src="<?= htmlspecialchars($desk['avatar_url']) ?>" alt="" loading="lazy" width="52" height="52">
-            <?php else: ?>
-            <?= htmlspecialchars(deskInitials($desk)) ?>
-            <?php endif; ?>
-          </span>
-          <span class="home-desk__id">
-            <span class="home-desk__name"><?= htmlspecialchars($desk['display_name']) ?></span>
-            <span class="home-desk__loc"><?= $loc ? htmlspecialchars($loc) : 'Independent broker' ?></span>
-          </span>
-          <?php if ($i === 0): ?><span class="pub-badge pub-badge-accent home-desk__rank"><i class="fa-solid fa-trophy"></i> #1</span><?php endif; ?>
-        </span>
-        <span class="home-desk__stats">
-          <span><strong><?= (int) $desk['active_listings'] ?></strong> listings</span>
-          <span><strong><?= (int) $desk['leads_this_month'] ?></strong> enquiries</span>
-          <span><strong><?= (int) $desk['deals_closed'] ?></strong> deals</span>
-        </span>
-      </a>
-      <?php endforeach; ?>
-    </div>
-  </div>
-</section>
-<?php endif; ?>
-
-<?php if (!empty($latestNews)): ?>
-<!-- ════════════════════════════════════════════════
-     NEWS (NEWS-1: live from blog_posts)
-     ════════════════════════════════════════════════ -->
-<section class="pub-section" aria-labelledby="homeNewsTitle">
-  <div class="sd-container">
-    <div class="pub-section__head">
-      <div>
-        <span class="pub-eyebrow">Stay informed</span>
-        <h2 class="pub-section__title" id="homeNewsTitle">Latest car news &amp; reviews</h2>
-      </div>
-      <a href="/news/" class="pub-link pub-section__link">All news <i class="fa-solid fa-arrow-right"></i></a>
-    </div>
-    <div class="home-news">
-      <?php foreach ($latestNews as $article):
-        $newsUrl = '/news/' . rawurlencode($article['slug']) . '/'; ?>
-      <article class="home-news__card pub-reveal">
-        <div class="home-news__img">
-          <img src="<?= htmlspecialchars(homeNewsThumb($article)) ?>" alt="" loading="lazy" width="640" height="400">
-        </div>
-        <div class="home-news__body">
-          <span class="home-news__meta">
-            <span class="home-news__cat"><?= htmlspecialchars($article['category_name'] ?? 'Car news') ?></span>
-            · <?= homeNewsReadTime($article['content'] ?? '') ?>
-          </span>
-          <h3 class="home-news__title"><a href="<?= $newsUrl ?>"><?= htmlspecialchars($article['title']) ?></a></h3>
-          <?php if ($article['excerpt']): ?>
-          <p class="home-news__excerpt"><?= htmlspecialchars($article['excerpt']) ?></p>
-          <?php endif; ?>
-        </div>
-      </article>
+    <div class="dk-grid">
+      <?php foreach ($topOrgs as $org): ?>
+      <?= sdOrgCard($org, $orgPreviews[(int) $org['id']] ?? [], ['heading' => 'h3']) ?>
       <?php endforeach; ?>
     </div>
   </div>

@@ -69,7 +69,10 @@ require_once '../../includes/importers/CsvImporter.php';
 
 applyCachePolicy('auth');
 require_once __DIR__ . '/../../includes/dealer_context.php';
-$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
+require_once __DIR__ . '/../../includes/principal_controls.php';
+// 0015: principal, or admin in a dealer workspace. inventory_refresh: a
+// superadmin may also import here on a principal-owned dealership.
+$ws = requireDealerWorkspace(['inventory_refresh' => true]);
 
 const MAX_IMPORT_ROWS  = 300;                // keeps worst-case sync() time bounded — see docblock
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024;    // 5MB
@@ -199,6 +202,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                             'default_commission_type'  => $defaultCommissionType,
                             'default_commission_value' => $defaultCommissionValue,
                         ]);
+
+                        // Staff imports show in the principal's activity feed
+                        // (the workspace stamp ties this to the dealership), and
+                        // a superadmin stock refresh also notifies the principal.
+                        // Best effort: the import itself already succeeded, so a
+                        // logging hiccup must not be reported as a file error.
+                        try {
+                            writeAuditLog('vehicle_import.csv_completed', 'dealer', $dealerId, null, [
+                                'imported' => (int) ($result['imported'] ?? 0),
+                                'updated'  => (int) ($result['updated'] ?? 0),
+                            ], $userId);
+                            sdNotifyStockRefresh($ws, 'a CSV file', $result);
+                        } catch (Throwable $logErr) {
+                            error_log('[SalesDesk import] audit/notify: ' . $logErr->getMessage());
+                        }
                     } catch (Throwable $e) {
                         // sync() re-throws when the source can't be read at
                         // all (empty file, no header row, etc.) — everything

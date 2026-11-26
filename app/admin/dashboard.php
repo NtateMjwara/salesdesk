@@ -7,7 +7,6 @@
  *   - Platform-wide user / dealer / listing / lead counts
  *   - CIPC verifications awaiting review        → users.php?tab=verifications
  *   - Commissions awaiting approval + failed EFTs → payouts.php
- *   - Newsletter + blog content health           → newsletter.php / blog.php
  *   - Latest audit trail entries                 → audit.php
  *   - Most recent leads across the platform
  *
@@ -82,26 +81,6 @@ $commTotals = $pdo->query("
 $failedPayouts = (int) $pdo->query(
     "SELECT COUNT(*) FROM payouts WHERE status = 'failed'"
 )->fetchColumn();
-
-// ── Newsletter (optional table — degrade gracefully) ─────────
-$newsletterStats = ['active' => 0, 'total' => 0];
-try {
-    $ns = $pdo->query("
-        SELECT SUM(status = 'active') AS active, COUNT(*) AS total
-        FROM newsletter_subscribers
-    ")->fetch();
-    if ($ns) $newsletterStats = $ns;
-} catch (Throwable) {}
-
-// ── Blog (optional table — degrade gracefully) ────────────────
-$blogStats = ['published' => 0, 'draft' => 0];
-try {
-    $bs = $pdo->query("
-        SELECT SUM(status = 'published') AS published, SUM(status = 'draft') AS draft
-        FROM blog_posts
-    ")->fetch();
-    if ($bs) $blogStats = $bs;
-} catch (Throwable) {}
 
 // ── Recent audit trail (last 8) ────────────────────────────────
 $recentAudit = $pdo->query("
@@ -204,7 +183,7 @@ ob_start();
 </div>
 
 <!-- ── Quick-access panels ── -->
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:2rem;">
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:2rem;">
 
   <!-- Verifications -->
   <div class="card card-body">
@@ -262,32 +241,6 @@ ob_start();
       </tr>
     </table>
     <a href="/app/admin/payouts.php" class="btn btn-ghost btn-sm" style="width:100%;">Open payout dashboard →</a>
-  </div>
-
-  <!-- Content -->
-  <div class="card card-body">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:600;color:var(--text);">Content</div>
-      <span class="badge badge-new"><?= (int)$blogStats['published'] ?> live posts</span>
-    </div>
-    <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:14px;">
-      <tr>
-        <td style="color:var(--faint);padding:3px 0;">Blog drafts</td>
-        <td style="text-align:right;font-family:var(--mono);"><?= (int)$blogStats['draft'] ?></td>
-      </tr>
-      <tr>
-        <td style="color:var(--faint);padding:3px 0;">Active subscribers</td>
-        <td style="text-align:right;font-family:var(--mono);"><?= number_format((int)$newsletterStats['active']) ?></td>
-      </tr>
-      <tr>
-        <td style="color:var(--faint);padding:3px 0;">Total subscribers</td>
-        <td style="text-align:right;font-family:var(--mono);"><?= number_format((int)$newsletterStats['total']) ?></td>
-      </tr>
-    </table>
-    <div style="display:flex;gap:6px;">
-      <a href="/app/admin/blog.php" class="btn btn-ghost btn-sm" style="flex:1;">Blog →</a>
-      <a href="/app/admin/newsletter.php" class="btn btn-ghost btn-sm" style="flex:1;">Newsletter →</a>
-    </div>
   </div>
 
 </div>

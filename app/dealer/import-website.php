@@ -93,7 +93,10 @@ const WEBSITE_IMPORT_TIME_BUDGET_SECONDS = 35;
 
 applyCachePolicy('auth');
 require_once __DIR__ . '/../../includes/dealer_context.php';
-$ws = requireDealerWorkspace();   // 0015: principal, or admin in a dealer workspace
+require_once __DIR__ . '/../../includes/principal_controls.php';
+// 0015: principal, or admin in a dealer workspace. inventory_refresh: a
+// superadmin may also import here on a principal-owned dealership.
+$ws = requireDealerWorkspace(['inventory_refresh' => true]);
 
 $pdo    = Database::getInstance();
 $userId = (int) $_SESSION['user_id'];
@@ -159,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'impor
                 ['source_url' => $websiteUrl],
                 $userId
             );
+            sdNotifyStockRefresh($ws, 'their website', $result);
         } catch (InvalidArgumentException|RuntimeException $e) {
             // Both are thrown for reasons the dealer can act on directly —
             // bad URL, robots.txt disallow, SSRF-guard refusal, unreadable
@@ -334,8 +338,13 @@ ob_start();
                     padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);">
         <input type="checkbox" name="confirm_ownership" value="1" required style="margin-top:2px;">
         <span style="font-size:12px;color:var(--text2);line-height:1.6;">
+          <?php if ($ws['mode'] === 'refresh'): ?>
+          I confirm this is <?= htmlspecialchars($dealerRow['company_name']) ?>'s own website and SalesDesk
+          may refresh its listings from it.
+          <?php else: ?>
           I confirm this is my own dealership's website and I have the right to import its
           listings into SalesDesk.
+          <?php endif; ?>
         </span>
       </label>
 

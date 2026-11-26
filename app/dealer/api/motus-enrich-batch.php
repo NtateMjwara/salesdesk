@@ -31,7 +31,7 @@ require_once '../../../includes/importers/MotusApiImporter.php';
 require_once '../../../includes/dealer_context.php';
 
 applyCachePolicy('api');
-$ws = requireDealerWorkspace(['api' => true]);   // 0015: principal or operating admin (viewers get JSON 403)
+$ws = requireDealerWorkspace(['api' => true, 'inventory_refresh' => true]);   // 0015: principal or operating admin (viewers get JSON 403); superadmins may refresh stock
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse(['error' => 'POST required.'], 405);

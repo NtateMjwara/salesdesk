@@ -3,14 +3,25 @@
  * SalesDesk — Admin: Users & CIPC Verifications
  * Route: /app/admin/users[?tab=users|verifications]
  *
- * Users tab
- *   Everyone:    search (email, name, phone, company, #id), filter by role /
- *                status / email verified / onboarding, sort, paginate, open a
- *                user (/app/admin/users-view?id=), suspend / reactivate (dealer
- *                principals cascade: listings paused, commissions frozen),
- *                broker car limit.
- *   Superadmin:  quick Activate / Verify email per row, bulk Activate /
- *                Activate + verify / Verify email, CSV export (step-up).
+ * Users tab (revised Oct 2026)
+ *   Views:       Current (default — everyone except suspended) · Pending ·
+ *                Suspended. Suspended accounts never show in the everyday
+ *                list; they live in their own view.
+ *   Narrowing:   search (email, name, phone, company, #id), role chips,
+ *                quick filters (email unverified / stuck in signup / joined
+ *                this week), sort, paginate.
+ *   Row:         open a user (/app/admin/users-view?id=), suspend /
+ *                reactivate (dealer principals cascade: listings paused,
+ *                commissions frozen); superadmin: quick Activate / Verify.
+ *   Bulk:        tick rows → bulk bar. Every action that makes sense for
+ *                many users (UA_BULK_ACTIONS in includes/user_admin.php):
+ *                admins get Suspend, Reactivate, Set car limit; superadmins
+ *                also get Activate, Activate + verify, Finish onboarding,
+ *                Mark email verified / unverified, Resend verification
+ *                code, Send password reset code, Clear lockout, Export.
+ *                A confirmation shows how many will change and why the
+ *                rest will be skipped.
+ *   Export:      superadmin, step-up (whole filtered list, or the selection).
  * Verifications tab: approve / reject dealer and desk-org CIPC documents.
  *
  * Guards
@@ -47,14 +58,19 @@ $self         = '/app/admin/users';
 $back         = $self . (($q = uaFilterQuery($filters, ['page' => $page > 1 ? $page : ''])) ? '?' . $q : '');
 
 // ── CSV export (superadmin, step-up: it's personal information) ──
+//    ?export=csv            → the filtered list
+//    ?export=csv&ids=4-9-12 → exactly the selected users (from the bulk bar)
 if (($_GET['export'] ?? '') === 'csv') {
     if (!$isSuperadmin) {
         $_SESSION['flash_error'] = 'Only a superadmin can export users.';
         redirect($self);
     }
-    sdRequireStepUp($self . '?' . uaFilterQuery($filters, ['export' => 'csv']),
-        'Exporting users needs a quick confirmation. Nothing was downloaded yet.');
-    uaExportCsv($adminId, $filters);
+    $exportIds = uaCleanIds(explode('-', is_string($_GET['ids'] ?? null) ? $_GET['ids'] : ''));
+    $again     = $exportIds
+        ? $self . '?export=csv&ids=' . implode('-', $exportIds)
+        : $self . '?' . uaFilterQuery($filters, ['export' => 'csv']);
+    sdRequireStepUp($again, 'Exporting users needs a quick confirmation. Nothing was downloaded yet.');
+    uaExportCsv($adminId, $filters, $exportIds);
 }
 
 // ── POST handler ──────────────────────────────────────────────
@@ -66,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $targetDealer = (int) ($_POST['dealer_id'] ?? 0);
     $targetOrg    = (int) ($_POST['org_id']    ?? 0);
 
-    // Superadmin-only actions.
-    $superOnly = ['activate', 'activate_verify', 'verify_email', 'bulk'];
+    // Superadmin-only single-row actions (bulk checks per action in uaBulk()).
+    $superOnly = ['activate', 'activate_verify', 'verify_email'];
     if (in_array($action, $superOnly, true) && !$isSuperadmin) {
         $_SESSION['flash_error'] = 'Only a superadmin can do that.';
         redirect($returnTo);
@@ -87,6 +103,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect(str_contains($action, 'cipc') ? $self . '?tab=verifications' : $returnTo);
     }
 
+    // ── Bulk: export goes through the step-up'd GET download ──
+    $bulkAction = is_string($_POST['bulk_action'] ?? null) ? $_POST['bulk_action'] : '';
+    $bulkIds    = (array) ($_POST['ids'] ?? []);
+    if ($action === 'bulk' && $bulkAction === 'export_csv') {
+        $ids = uaCleanIds($bulkIds);
+        if (!$isSuperadmin || !$ids) {
+            $_SESSION['flash_error'] = $isSuperadmin ? 'Tick at least one user first.' : 'Only a superadmin can export users.';
+            redirect($returnTo);
+        }
+        redirect($self . '?export=csv&ids=' . implode('-', $ids));
+    }
+
     // ── User actions ───────────────────────────────────────────
     $userResult = match ($action) {
         'suspend_user'    => uaSetStatus($targetUser, 'suspended', $adminId),
@@ -95,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'activate'        => uaActivate($targetUser, $adminId),
         'activate_verify' => uaActivate($targetUser, $adminId, true),
         'verify_email'    => uaSetEmailVerified($targetUser, true, $adminId),
-        'bulk'            => uaBulk((string) ($_POST['bulk_action'] ?? ''), (array) ($_POST['ids'] ?? []), $adminId),
+        'bulk'            => uaBulk($bulkAction, $bulkIds, $adminId, ['car_limit' => (int) ($_POST['car_limit'] ?? 0)]),
         default           => null,
     };
     if ($userResult !== null) {
@@ -173,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── GET: load data ────────────────────────────────────────────
-$stats      = uaStats($adminId);
+$counts     = uaViewCounts($adminId, $filters);
 $total      = uaCountUsers($adminId, $filters);
 $pages      = max(1, (int) ceil($total / UA_PAGE_SIZE));
 $page       = min($page, $pages);
@@ -181,163 +209,199 @@ $users      = uaListUsers($adminId, $filters, UA_PAGE_SIZE, ($page - 1) * UA_PAG
 $pending    = getPendingVerifications($adminId);
 $cipcCount  = count($pending['dealers']) + count($pending['orgs']);
 $defaultCarLimit = getPlatformConfigInt('broker_car_limit_default', 10);
-$hasFilters = $filters['q'] !== '' || $filters['role'] !== '' || $filters['status'] !== ''
-           || $filters['verified'] !== '' || $filters['onboarding'] !== '';
+$hasFilters = uaHasFilters($filters);
+$bulkMenu   = uaBulkMenu($isSuperadmin);
+$view       = $filters['view'];
+$viewNoun   = ['current' => 'current users', 'pending' => 'pending users', 'suspended' => 'suspended users'][$view];
+$firstRow   = $total ? ($page - 1) * UA_PAGE_SIZE + 1 : 0;
+$lastRow    = min($total, $page * UA_PAGE_SIZE);
 
-/** Link to the list with one filter changed (stat-strip shortcuts). */
-$quick = fn(array $set) => $self . '?' . uaFilterQuery(array_merge(uaFiltersFromRequest([]), $set));
+/** Link to the list with some filters changed (page always resets). */
+$link = fn(array $set) => $self . (($qs = uaFilterQuery(array_merge($filters, $set))) ? '?' . $qs : '');
+/** Toggle a quick filter on / off. */
+$chip = fn(string $key, string $val) => $link([$key => $filters[$key] === $val ? '' : $val]);
 
 // ── Render ────────────────────────────────────────────────────
 ob_start();
 ?>
 <div class="section-head">
   <h1 class="section-title">Users &amp; Verifications</h1>
-  <span class="section-count"><?= number_format($stats['total'] ?? 0) ?> users<?= $isSuperadmin ? '' : ' in your dealerships &amp; orgs' ?></span>
-  <?php if ($cipcCount > 0): ?>
-  <span class="section-count alert-count"><?= $cipcCount ?> pending CIPC</span>
-  <?php endif; ?>
+  <span class="section-count"><?= number_format($counts['current'] ?? 0) ?> current users<?= $isSuperadmin ? '' : ' in your dealerships &amp; orgs' ?></span>
   <?php if ($isSuperadmin && $tab === 'users'): ?>
-  <a class="btn btn-ghost btn-sm adm-head-action" href="<?= $self . '?' . htmlspecialchars(uaFilterQuery($filters, ['export' => 'csv'])) ?>">
+  <a class="btn btn-ghost btn-sm adm-head-action" href="<?= $self . '?' . htmlspecialchars(uaFilterQuery($filters, ['export' => 'csv'])) ?>"
+     title="Download the users in this view and filter as CSV">
     <i class="fa-solid fa-file-arrow-down"></i> Export CSV
   </a>
   <?php endif; ?>
 </div>
 
 <nav class="adm-tabs" aria-label="Users sections">
-  <a href="<?= $self ?>" class="adm-tab<?= $tab === 'users' ? ' is-active' : '' ?>" <?= $tab === 'users' ? 'aria-current="page"' : '' ?>>Users</a>
+  <a href="<?= $self ?>" class="adm-tab<?= $tab === 'users' ? ' is-active' : '' ?>" <?= $tab === 'users' ? 'aria-current="page"' : '' ?>>
+    <i class="fa-solid fa-users"></i> Users
+  </a>
   <a href="<?= $self ?>?tab=verifications" class="adm-tab<?= $tab === 'verifications' ? ' is-active' : '' ?>" <?= $tab === 'verifications' ? 'aria-current="page"' : '' ?>>
-    CIPC Verifications<?php if ($cipcCount > 0): ?> <span class="adm-tab-count"><?= $cipcCount ?></span><?php endif; ?>
+    <i class="fa-solid fa-file-shield"></i> CIPC Verifications<?php if ($cipcCount > 0): ?> <span class="adm-tab-count"><?= $cipcCount ?></span><?php endif; ?>
   </a>
 </nav>
 
 <?php if ($tab === 'users'): ?>
 
-<div class="adm-stats">
-  <a class="adm-stat ua-stat-link" href="<?= $quick(['status' => 'pending']) ?>"><span class="adm-stat-n"><?= $stats['pending'] ?? 0 ?></span><span class="adm-stat-l">Pending</span></a>
-  <a class="adm-stat ua-stat-link" href="<?= $quick(['verified' => 'no']) ?>"><span class="adm-stat-n"><?= $stats['unverified'] ?? 0 ?></span><span class="adm-stat-l">Email unverified</span></a>
-  <a class="adm-stat ua-stat-link" href="<?= $quick(['status' => 'suspended']) ?>"><span class="adm-stat-n"><?= $stats['suspended'] ?? 0 ?></span><span class="adm-stat-l">Suspended</span></a>
-  <div class="adm-stat"><span class="adm-stat-n"><?= $stats['new_week'] ?? 0 ?></span><span class="adm-stat-l">New this week</span></div>
+<!-- ── Toolbar: views + search ── -->
+<div class="ua-toolbar">
+  <nav class="ua-views" aria-label="Account status">
+    <?php foreach (UA_VIEWS as $key => $label):
+      $n = (int) ($counts[$key] ?? 0); ?>
+    <a href="<?= htmlspecialchars($link(['view' => $key])) ?>"
+       class="ua-view ua-view-<?= $key ?><?= $view === $key ? ' is-active' : '' ?>"
+       <?= $view === $key ? 'aria-current="page"' : '' ?>>
+      <?= $label ?> <span class="ua-view-n"><?= number_format($n) ?></span>
+    </a>
+    <?php endforeach; ?>
+  </nav>
+
+  <form method="GET" action="<?= $self ?>" class="ua-search" role="search">
+    <?php foreach (['view', 'role', 'verified', 'onboarding', 'joined'] as $k):
+      if ($filters[$k] === '' || ($k === 'view' && $filters[$k] === 'current')) continue; ?>
+    <input type="hidden" name="<?= $k ?>" value="<?= htmlspecialchars($filters[$k]) ?>">
+    <?php endforeach; ?>
+    <div class="ua-search-box">
+      <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+      <input class="finput" type="search" name="q" value="<?= htmlspecialchars($filters['q']) ?>"
+             placeholder="Email, name, phone, company or #ID" aria-label="Search users">
+    </div>
+    <select class="finput adm-select-sm" name="sort" aria-label="Sort" data-autosubmit>
+      <option value="newest"     <?= $filters['sort'] === 'newest'     ? 'selected' : '' ?>>Newest first</option>
+      <option value="oldest"     <?= $filters['sort'] === 'oldest'     ? 'selected' : '' ?>>Oldest first</option>
+      <option value="last_login" <?= $filters['sort'] === 'last_login' ? 'selected' : '' ?>>Last sign-in</option>
+      <option value="email"      <?= $filters['sort'] === 'email'      ? 'selected' : '' ?>>Email A–Z</option>
+    </select>
+    <button class="btn btn-primary btn-sm" type="submit">Search</button>
+  </form>
 </div>
 
-<!-- ── Filters ── -->
-<form method="GET" action="<?= $self ?>" class="adm-filter ua-filter">
-  <input class="finput ua-filter-q" name="q" value="<?= htmlspecialchars($filters['q']) ?>"
-         placeholder="Email, name, phone, company or #ID" aria-label="Search users">
-  <select class="finput adm-select-sm" name="role" aria-label="Role">
-    <option value="">All roles</option>
+<!-- ── Quick filters ── -->
+<div class="ua-chips" aria-label="Filters">
+  <div class="ua-chip-group" role="group" aria-label="Role">
+    <a href="<?= htmlspecialchars($link(['role' => ''])) ?>" class="ua-chip<?= $filters['role'] === '' ? ' is-on' : '' ?>">All roles</a>
     <?php foreach (UA_ROLES as $r): ?>
-    <option value="<?= $r ?>" <?= $filters['role'] === $r ? 'selected' : '' ?>><?= uaRoleLabel($r) ?></option>
+    <a href="<?= htmlspecialchars($link(['role' => $r])) ?>" class="ua-chip<?= $filters['role'] === $r ? ' is-on' : '' ?>"><?= uaRoleLabelPlural($r) ?></a>
     <?php endforeach; ?>
-  </select>
-  <select class="finput adm-select-sm" name="status" aria-label="Status">
-    <option value="">All statuses</option>
-    <?php foreach (UA_STATUSES as $s): ?>
-    <option value="<?= $s ?>" <?= $filters['status'] === $s ? 'selected' : '' ?>><?= ucfirst($s) ?></option>
-    <?php endforeach; ?>
-  </select>
-  <select class="finput adm-select-sm" name="verified" aria-label="Email verified">
-    <option value="">Email: any</option>
-    <option value="yes" <?= $filters['verified'] === 'yes' ? 'selected' : '' ?>>Verified</option>
-    <option value="no"  <?= $filters['verified'] === 'no'  ? 'selected' : '' ?>>Unverified</option>
-  </select>
-  <select class="finput adm-select-sm" name="onboarding" aria-label="Onboarding">
-    <option value="">Onboarding: any</option>
-    <option value="complete"   <?= $filters['onboarding'] === 'complete'   ? 'selected' : '' ?>>Complete</option>
-    <option value="incomplete" <?= $filters['onboarding'] === 'incomplete' ? 'selected' : '' ?>>Stuck in signup</option>
-  </select>
-  <select class="finput adm-select-sm" name="sort" aria-label="Sort">
-    <option value="newest"     <?= $filters['sort'] === 'newest'     ? 'selected' : '' ?>>Newest</option>
-    <option value="oldest"     <?= $filters['sort'] === 'oldest'     ? 'selected' : '' ?>>Oldest</option>
-    <option value="last_login" <?= $filters['sort'] === 'last_login' ? 'selected' : '' ?>>Last sign-in</option>
-    <option value="email"      <?= $filters['sort'] === 'email'      ? 'selected' : '' ?>>Email A–Z</option>
-  </select>
-  <button class="btn btn-ghost btn-sm" type="submit">Filter</button>
-  <?php if ($hasFilters): ?><a href="<?= $self ?>" class="btn btn-ghost btn-sm">Clear</a><?php endif; ?>
-</form>
+  </div>
+  <span class="ua-chip-sep" aria-hidden="true"></span>
+  <div class="ua-chip-group" role="group" aria-label="Quick filters">
+    <a href="<?= htmlspecialchars($chip('verified', 'no')) ?>" class="ua-chip ua-chip-flag<?= $filters['verified'] === 'no' ? ' is-on' : '' ?>">
+      Email unverified <span class="ua-chip-n"><?= (int) ($counts['unverified'] ?? 0) ?></span>
+    </a>
+    <a href="<?= htmlspecialchars($chip('onboarding', 'incomplete')) ?>" class="ua-chip ua-chip-flag<?= $filters['onboarding'] === 'incomplete' ? ' is-on' : '' ?>">
+      Stuck in signup <span class="ua-chip-n"><?= (int) ($counts['incomplete'] ?? 0) ?></span>
+    </a>
+    <a href="<?= htmlspecialchars($chip('joined', 'week')) ?>" class="ua-chip<?= $filters['joined'] === 'week' ? ' is-on' : '' ?>">
+      Joined this week <span class="ua-chip-n"><?= (int) ($counts['new_week'] ?? 0) ?></span>
+    </a>
+    <?php if ($filters['verified'] === 'yes'): ?>
+    <a href="<?= htmlspecialchars($link(['verified' => ''])) ?>" class="ua-chip is-on">Email verified ×</a>
+    <?php endif; ?>
+    <?php if ($filters['onboarding'] === 'complete'): ?>
+    <a href="<?= htmlspecialchars($link(['onboarding' => ''])) ?>" class="ua-chip is-on">Onboarded ×</a>
+    <?php endif; ?>
+  </div>
+</div>
 
-<?php if ($isSuperadmin): ?>
-<!-- ── Bulk actions (row checkboxes join this form via form="bulkForm") ── -->
-<form method="POST" action="<?= $self ?>" id="bulkForm" class="ua-bulkbar" data-bulk-form
-      data-confirm="Apply this to the selected users?">
-  <?= csrf_hidden_field() ?>
-  <input type="hidden" name="action" value="bulk">
-  <input type="hidden" name="return_to" value="<?= htmlspecialchars($back) ?>">
-  <span class="adm-muted"><strong data-bulk-count>0</strong> selected</span>
-  <select class="finput adm-select-sm" name="bulk_action" required aria-label="Bulk action">
-    <option value="">Choose action…</option>
-    <option value="activate_verify">Activate + verify email</option>
-    <option value="activate">Activate</option>
-    <option value="verify_email">Verify email</option>
-  </select>
-  <button class="btn btn-primary btn-sm" type="submit" data-bulk-submit disabled>Apply</button>
-</form>
+<!-- ── Result line ── -->
+<div class="ua-resultline">
+  <span class="adm-muted">
+    <?php if ($total): ?>
+    Showing <strong><?= number_format($firstRow) ?>–<?= number_format($lastRow) ?></strong> of <strong><?= number_format($total) ?></strong> <?= $viewNoun ?>
+    <?php else: ?>
+    No <?= $viewNoun ?> to show
+    <?php endif; ?>
+    <?php if ($filters['q'] !== ''): ?> matching “<?= htmlspecialchars($filters['q']) ?>”<?php endif; ?>
+  </span>
+  <?php if ($hasFilters): ?>
+  <a class="ua-clear" href="<?= htmlspecialchars($self . ($view !== 'current' ? '?view=' . $view : '')) ?>"><i class="fa-solid fa-xmark"></i> Clear filters</a>
+  <?php endif; ?>
+</div>
+
+<?php if ($view === 'suspended' && $total): ?>
+<div class="ua-viewnote">
+  <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+  Suspended users can’t sign in. Suspended dealers’ listings stay paused and their pending commissions stay frozen until they’re reactivated.
+</div>
 <?php endif; ?>
 
 <!-- ── Users table ── -->
-<div class="roster-wrap">
-  <table class="roster ua-table">
+<div class="roster-wrap ua-table-wrap">
+  <table class="roster ua-table<?= $view === 'suspended' ? ' ua-table-suspended' : '' ?>">
     <thead>
       <tr>
-        <?php if ($isSuperadmin): ?>
-        <th class="ua-col-check"><input type="checkbox" data-check-all aria-label="Select all on this page"></th>
-        <?php endif; ?>
+        <th class="ua-col-check"><input type="checkbox" data-check-all aria-label="Select all on this page"<?= $users ? '' : ' disabled' ?>></th>
         <th>User</th>
         <th>Role</th>
         <th>Status</th>
-        <th>Email</th>
-        <th>Joined</th>
-        <th>Last sign-in</th>
-        <th>Car limit</th>
-        <th class="ua-col-actions">Actions</th>
+        <th>Activity</th>
+        <th class="ua-col-num">Car limit</th>
+        <th class="ua-col-actions"><span class="sr-only">Actions</span></th>
       </tr>
     </thead>
     <tbody>
     <?php if (!$users): ?>
-      <tr><td colspan="<?= $isSuperadmin ? 9 : 8 ?>" class="ua-empty">No users found.</td></tr>
+      <tr class="ua-empty-row"><td colspan="7">
+        <div class="ua-empty">
+          <span class="empty-icon"><i class="fa-solid fa-user-slash"></i></span>
+          <p>No <?= $viewNoun ?><?= $hasFilters ? ' match these filters' : '' ?>.</p>
+          <?php if ($view === 'current' && ($counts['suspended'] ?? 0) > 0 && $filters['q'] !== ''): ?>
+          <p class="adm-muted"><?= (int) $counts['suspended'] ?> suspended account<?= $counts['suspended'] === 1 ? '' : 's' ?> match<?= $counts['suspended'] === 1 ? 'es' : '' ?> your search.</p>
+          <a class="btn btn-ghost btn-sm" href="<?= htmlspecialchars($link(['view' => 'suspended'])) ?>">Show suspended</a>
+          <?php elseif ($hasFilters): ?>
+          <a class="btn btn-ghost btn-sm" href="<?= htmlspecialchars($self . ($view !== 'current' ? '?view=' . $view : '')) ?>">Clear filters</a>
+          <?php endif; ?>
+        </div>
+      </td></tr>
     <?php endif; ?>
     <?php foreach ($users as $u):
       $uid         = (int) $u['id'];
       $displayName = uaDisplayName($u);
-      $link        = '/app/admin/users-view?id=' . $uid;
+      $userLink    = '/app/admin/users-view?id=' . $uid;
       $context     = $u['exec_dealer'] ? 'Sales exec at ' . $u['exec_dealer']
                    : ($u['org_name'] ? 'Agent · ' . $u['org_name'] . ($u['org_status'] !== 'verified' ? ' (' . $u['org_status'] . ')' : '') : '');
+      $nameLine    = implode(' · ', array_filter([$displayName, $context]));
+      $isDealer    = $u['role'] === 'dealer' ? '1' : '0';
     ?>
-    <tr>
-      <?php if ($isSuperadmin): ?>
-      <td class="ua-col-check"><input type="checkbox" name="ids[]" value="<?= $uid ?>" form="bulkForm" data-check-row
-             aria-label="Select <?= htmlspecialchars($u['email']) ?>"></td>
-      <?php endif; ?>
-      <td>
-        <a class="adm-strong" href="<?= $link ?>"><?= htmlspecialchars($u['email']) ?></a>
-        <?php if ($displayName !== ''): ?><div class="adm-sub"><?= htmlspecialchars($displayName) ?></div><?php endif; ?>
-        <?php if ($context !== ''): ?><div class="adm-sub"><?= htmlspecialchars($context) ?></div><?php endif; ?>
+    <tr class="ua-row ua-row-<?= htmlspecialchars($u['status']) ?>" data-row>
+      <td class="ua-col-check">
+        <input type="checkbox" name="ids[]" value="<?= $uid ?>" form="bulkForm" data-check-row
+               data-bulk-ok="<?= uaBulkEligibleKeys($u, $isSuperadmin) ?>" data-dealer="<?= $isDealer ?>"
+               aria-label="Select <?= htmlspecialchars($u['email']) ?>">
       </td>
-      <td><span class="badge <?= uaRoleBadgeClass($u['role']) ?>"><?= uaRoleLabel($u['role']) ?></span></td>
-      <td>
+      <td class="ua-col-user">
+        <div class="ua-user">
+          <span class="ua-avatar ua-avatar-<?= htmlspecialchars($u['role']) ?>" aria-hidden="true"><?= htmlspecialchars(uaInitials($u)) ?></span>
+          <div class="ua-user-text">
+            <a class="adm-strong ua-email" href="<?= $userLink ?>" title="<?= htmlspecialchars($u['email']) ?>"><?= htmlspecialchars($u['email']) ?></a>
+            <?php if ($nameLine !== ''): ?><div class="adm-sub"><?= htmlspecialchars($nameLine) ?></div><?php endif; ?>
+          </div>
+        </div>
+      </td>
+      <td data-label="Role"><span class="badge <?= uaRoleBadgeClass($u['role']) ?>"><?= uaRoleLabel($u['role']) ?></span></td>
+      <td data-label="Status">
         <?= adminStatusBadge($u['status']) ?>
-        <?php if (!$u['onboarding_completed']): ?><div class="adm-sub">Signup unfinished</div><?php endif; ?>
-      </td>
-      <td class="<?= $u['email_verified'] ? 'ua-yes' : 'ua-no' ?>">
-        <?= $u['email_verified'] ? '<i class="fa-solid fa-check"></i> Verified' : '— Unverified' ?>
-      </td>
-      <td class="ua-date"><?= date('d M Y', strtotime($u['created_at'])) ?></td>
-      <td class="ua-date"><?= $u['last_login'] ? date('d M Y', strtotime($u['last_login'])) : 'Never' ?></td>
-      <td>
-        <?php if ($u['role'] === 'broker'): ?>
-        <form method="POST" class="ua-limit-form">
-          <?= csrf_hidden_field() ?>
-          <input type="hidden" name="action" value="set_car_limit">
-          <input type="hidden" name="user_id" value="<?= $uid ?>">
-          <input type="hidden" name="return_to" value="<?= htmlspecialchars($back) ?>">
-          <input class="ua-limit-input" type="number" name="car_limit" min="1" max="200"
-                 value="<?= (int) ($u['car_limit'] ?? $defaultCarLimit) ?>" aria-label="Car limit">
-          <button class="btn btn-ghost btn-sm" type="submit">Set</button>
-        </form>
-        <?php else: ?>
-        <span class="adm-sub">—</span>
+        <?php if (!$u['email_verified'] || !$u['onboarding_completed']): ?>
+        <div class="ua-flags">
+          <?php if (!$u['email_verified']): ?><span class="ua-flag"><i class="fa-regular fa-envelope"></i> Email unverified</span><?php endif; ?>
+          <?php if (!$u['onboarding_completed']): ?><span class="ua-flag"><i class="fa-solid fa-hourglass-half"></i> Signup unfinished</span><?php endif; ?>
+        </div>
         <?php endif; ?>
       </td>
-      <td>
+      <td class="ua-activity" data-label="Activity">
+        <div><span class="ua-activity-k">Joined</span> <?= date('d M Y', strtotime($u['created_at'])) ?></div>
+        <div><span class="ua-activity-k">Last in</span> <?= $u['last_login'] ? date('d M Y', strtotime($u['last_login'])) : 'Never' ?></div>
+      </td>
+      <td class="ua-col-num" data-label="Car limit">
+        <?php if ($u['role'] === 'broker'): ?>
+        <span class="adm-mono"><?= (int) ($u['car_limit'] ?? $defaultCarLimit) ?></span>
+        <?php else: ?><span class="adm-sub">—</span><?php endif; ?>
+      </td>
+      <td class="ua-col-actions">
         <div class="adm-actions">
           <?php if ($isSuperadmin && $u['status'] === 'pending'): ?>
           <form method="POST">
@@ -361,14 +425,14 @@ ob_start();
           <button class="btn btn-info btn-sm" type="button" data-modal-open="statusModal"
                   data-mode="reactivate_user" data-user-id="<?= $uid ?>"
                   data-name="<?= htmlspecialchars($displayName ?: $u['email']) ?>"
-                  data-dealer="<?= $u['role'] === 'dealer' ? '1' : '0' ?>">Reactivate</button>
-          <?php elseif ($u['status'] === 'active'): ?>
-          <button class="btn btn-warn btn-sm" type="button" data-modal-open="statusModal"
+                  data-dealer="<?= $isDealer ?>">Reactivate</button>
+          <?php else: ?>
+          <button class="btn btn-ghost btn-sm ua-btn-suspend" type="button" data-modal-open="statusModal"
                   data-mode="suspend_user" data-user-id="<?= $uid ?>"
                   data-name="<?= htmlspecialchars($displayName ?: $u['email']) ?>"
-                  data-dealer="<?= $u['role'] === 'dealer' ? '1' : '0' ?>">Suspend</button>
+                  data-dealer="<?= $isDealer ?>">Suspend</button>
           <?php endif; ?>
-          <a class="btn btn-ghost btn-sm" href="<?= $link ?>"><?= $isSuperadmin ? 'Manage' : 'View' ?></a>
+          <a class="btn btn-ghost btn-sm" href="<?= $userLink ?>"><?= $isSuperadmin ? 'Manage' : 'View' ?></a>
         </div>
       </td>
     </tr>
@@ -380,16 +444,63 @@ ob_start();
 <?php if ($pages > 1): ?>
 <nav class="ua-pager" aria-label="Pages">
   <?php if ($page > 1): ?>
-  <a class="btn btn-ghost btn-sm" href="<?= $self . '?' . htmlspecialchars(uaFilterQuery($filters, ['page' => $page - 1])) ?>">← Previous</a>
+  <a class="btn btn-ghost btn-sm" href="<?= htmlspecialchars($link(['page' => $page - 1])) ?>"><i class="fa-solid fa-chevron-left"></i> Previous</a>
   <?php endif; ?>
-  <span class="adm-muted">Page <?= $page ?> of <?= $pages ?> · <?= number_format($total) ?> users</span>
+  <span class="adm-muted">Page <?= $page ?> of <?= $pages ?></span>
   <?php if ($page < $pages): ?>
-  <a class="btn btn-ghost btn-sm" href="<?= $self . '?' . htmlspecialchars(uaFilterQuery($filters, ['page' => $page + 1])) ?>">Next →</a>
+  <a class="btn btn-ghost btn-sm" href="<?= htmlspecialchars($link(['page' => $page + 1])) ?>">Next <i class="fa-solid fa-chevron-right"></i></a>
   <?php endif; ?>
 </nav>
-<?php elseif ($hasFilters): ?>
-<p class="adm-muted ua-pager"><?= number_format($total) ?> matching user<?= $total === 1 ? '' : 's' ?></p>
 <?php endif; ?>
+
+<!-- ── Bulk bar: appears (sticky) once rows are ticked.
+     Row checkboxes join this form via form="bulkForm". ── -->
+<form method="POST" action="<?= $self ?>" id="bulkForm" class="ua-bulkbar" data-bulk-form hidden
+      data-email-max="<?= UA_BULK_EMAIL_MAX ?>">
+  <?= csrf_hidden_field() ?>
+  <input type="hidden" name="action" value="bulk">
+  <input type="hidden" name="return_to" value="<?= htmlspecialchars($back) ?>">
+  <div class="ua-bulk-count">
+    <strong data-bulk-count>0</strong> selected
+    <button type="button" class="ua-bulk-clear" data-bulk-clear>Clear</button>
+  </div>
+  <div class="ua-bulk-controls">
+    <select class="finput adm-select-sm" name="bulk_action" required aria-label="Bulk action" data-bulk-action>
+      <option value="">Choose an action…</option>
+      <?php foreach ($bulkMenu as $group => $items): ?>
+      <optgroup label="<?= htmlspecialchars($group) ?>">
+        <?php foreach ($items as $key => $label): $def = UA_BULK_ACTIONS[$key]; ?>
+        <option value="<?= $key ?>" data-done="<?= htmlspecialchars($def['done']) ?>"
+                data-email="<?= $def['email'] ? '1' : '0' ?>"><?= htmlspecialchars($label) ?></option>
+        <?php endforeach; ?>
+      </optgroup>
+      <?php endforeach; ?>
+    </select>
+    <label class="ua-bulk-limit" data-bulk-limit hidden>
+      <span class="sr-only">Car limit</span>
+      <input class="finput" type="number" name="car_limit" min="1" max="200" value="<?= (int) $defaultCarLimit ?>"
+             aria-label="New car limit"> <span class="adm-muted">cars</span>
+    </label>
+    <span class="adm-muted ua-bulk-hint" data-bulk-hint></span>
+    <button class="btn btn-primary btn-sm" type="submit" data-bulk-submit disabled>Apply</button>
+  </div>
+</form>
+
+<!-- ── Bulk confirmation (filled by admin.js) ── -->
+<div class="modal-bg" id="bulkModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bulkModalTitle">
+    <div class="modal-title" id="bulkModalTitle" data-bulk-title>Apply to selected users?</div>
+    <ul class="ua-bulk-summary" data-bulk-summary></ul>
+    <div class="alert alert-warn ua-modal-alert" data-bulk-warn hidden>
+      <span class="alert-icon">⚠</span>
+      <div data-bulk-warn-text></div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-modal-close>Cancel</button>
+      <button type="button" class="btn btn-primary" data-bulk-confirm>Confirm</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Suspend / reactivate modal (one for all rows) ── -->
 <div class="modal-bg" id="statusModal">

@@ -236,8 +236,56 @@ function sdActionLabel(string $action): string
         'enforcement.listing_held'     => 'Pulled a listing (platform hold)',
         'enforcement.listing_released' => 'Released a listing hold',
         'dealer.handed_over'           => 'Handed the dealership over to you',
+        'vehicle_import.ownership_confirmed' => 'Refreshed your stock from your listings',
+        'vehicle_import.csv_completed'       => 'Imported stock from a CSV file',
         default                        => ucfirst(str_replace(['.', '_'], [' — ', ' '], $action)),
     };
+}
+
+/**
+ * Tell the principal a superadmin refreshed their stock (workspace mode
+ * 'refresh' — see requireDealerWorkspace()'s inventory_refresh option).
+ * No-op for anyone else, so import pages can call it unconditionally.
+ */
+function sdNotifyStockRefresh(array $ws, string $sourceLabel, array $result): void
+{
+    if (($ws['mode'] ?? '') !== 'refresh') {
+        return;
+    }
+    try {
+        $principalId = sdDealerPrincipalId((int) $ws['dealer_id']);
+    } catch (Throwable $e) {
+        error_log('[SalesDesk sdNotifyStockRefresh] ' . $e->getMessage());
+        return;                                 // never fail the import over a notification
+    }
+    if (!$principalId) {
+        return;
+    }
+
+    $parts = [];
+    foreach (['imported' => 'new', 'updated' => 'updated', 'marked_sold' => 'marked sold'] as $key => $label) {
+        $n = (int) ($result[$key] ?? 0);
+        if ($n > 0) {
+            $parts[] = "{$n} {$label}";
+        }
+    }
+    $summary = $parts ? implode(', ', $parts) : 'no changes';
+
+    sdNotify(
+        $principalId,
+        'stock_refreshed',
+        'SalesDesk refreshed your stock',
+        "A SalesDesk superadmin refreshed {$ws['company_name']}'s listings from {$sourceLabel}: {$summary}. "
+            . 'Listings on a platform hold were not reactivated.',
+        [
+            'dealer_id'   => (int) $ws['dealer_id'],
+            'source'      => $sourceLabel,
+            'imported'    => (int) ($result['imported'] ?? 0),
+            'updated'     => (int) ($result['updated'] ?? 0),
+            'marked_sold' => (int) ($result['marked_sold'] ?? 0),
+            'by_admin_id' => (int) $ws['actor_id'],
+        ]
+    );
 }
 
 

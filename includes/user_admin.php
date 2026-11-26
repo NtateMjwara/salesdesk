@@ -1,20 +1,27 @@
 <?php
 /**
- * SalesDesk — User management helpers  (0019)
+ * SalesDesk — User management helpers  (0019, list + bulk revised Oct 2026)
  *
  * Used by:
- *   app/admin/users.php       — list, filter, bulk actions, CSV export
+ *   app/admin/users.php       — list, views, filters, bulk actions, CSV export
  *   app/admin/users-view.php  — one user: overview, edit, account, activity
  *
  * WHO CAN DO WHAT
  *   Admin       — only users connected to their dealerships / orgs
  *                 (adminCanActOnUser): view, suspend / reactivate,
- *                 broker car limit. Same as before 0019.
+ *                 broker car limit — one at a time or in bulk.
  *   Superadmin  — every non-admin user, plus everything in this file:
  *                 activate, verify / un-verify email, edit profile and
  *                 address, change email (step-up), password reset code,
  *                 resend verification code, clear login lockout, finish
- *                 onboarding, bulk activate / verify, CSV export (step-up).
+ *                 onboarding, CSV export (step-up). Every one of these
+ *                 that makes sense for many users is also a bulk action
+ *                 (UA_BULK_ACTIONS).
+ *
+ * LIST VIEWS
+ *   The list opens on "Current" (everyone except suspended accounts).
+ *   Pending and Suspended are their own views, so suspended accounts
+ *   are never mixed into the everyday list.
  *
  * Admin accounts are never touched here — see app/admin/admins-view.
  * Every state change is written to audit_logs. No migration needed:
@@ -30,15 +37,45 @@ require_once __DIR__ . '/admin_scope.php';   // also loads superadmin.php
 
 const UA_ROLES      = ['broker', 'dealer', 'sales_exec'];
 const UA_STATUSES   = ['pending', 'active', 'suspended'];
+
+/** List views (tabs). 'current' = everything except suspended. */
+const UA_VIEWS      = [
+    'current'   => 'Current',
+    'pending'   => 'Pending',
+    'suspended' => 'Suspended',
+];
 const UA_SORTS      = [
     'newest'     => 'u.created_at DESC',
     'oldest'     => 'u.created_at ASC',
     'last_login' => 'u.last_login IS NULL, u.last_login DESC',
     'email'      => 'u.email ASC',
 ];
-const UA_PAGE_SIZE  = 50;
-const UA_BULK_MAX   = 100;
-const UA_EXPORT_MAX = 5000;
+const UA_PAGE_SIZE   = 50;
+const UA_BULK_MAX    = 100;
+const UA_BULK_EMAIL_MAX = 25;     // actions that send one email per user (SMTP is synchronous)
+const UA_EXPORT_MAX  = 5000;
+
+/**
+ * Bulk actions. The page renders the menu from this list and uaBulk()
+ * only accepts what's here, so the two can't drift apart.
+ *   super  — superadmin only
+ *   email  — sends one email per user (capped at UA_BULK_EMAIL_MAX)
+ *   done   — past tense for the result message
+ */
+const UA_BULK_ACTIONS = [
+    'activate_verify'     => ['group' => 'Account',        'label' => 'Activate + verify email',   'done' => 'Activated',                  'super' => true,  'email' => false],
+    'activate'            => ['group' => 'Account',        'label' => 'Activate',                  'done' => 'Activated',                  'super' => true,  'email' => false],
+    'suspend'             => ['group' => 'Account',        'label' => 'Suspend',                   'done' => 'Suspended',                  'super' => false, 'email' => false],
+    'reactivate'          => ['group' => 'Account',        'label' => 'Reactivate',                'done' => 'Reactivated',                'super' => false, 'email' => false],
+    'complete_onboarding' => ['group' => 'Account',        'label' => 'Finish onboarding',         'done' => 'Finished onboarding for',    'super' => true,  'email' => false],
+    'verify_email'        => ['group' => 'Email & sign-in','label' => 'Mark email verified',       'done' => 'Verified the email of',      'super' => true,  'email' => false],
+    'unverify_email'      => ['group' => 'Email & sign-in','label' => 'Mark email unverified',     'done' => 'Un-verified the email of',   'super' => true,  'email' => false],
+    'resend_verification' => ['group' => 'Email & sign-in','label' => 'Resend verification code',  'done' => 'Sent a verification code to','super' => true,  'email' => true],
+    'send_reset'          => ['group' => 'Email & sign-in','label' => 'Send password reset code',  'done' => 'Sent a password reset code to','super' => true, 'email' => true],
+    'clear_lockout'       => ['group' => 'Email & sign-in','label' => 'Clear sign-in lockout',     'done' => 'Cleared the lockout for',    'super' => true,  'email' => false],
+    'set_car_limit'       => ['group' => 'Brokers',        'label' => 'Set car limit…',            'done' => 'Set the car limit for',      'super' => false, 'email' => false],
+    'export_csv'          => ['group' => 'Export',         'label' => 'Export to CSV',             'done' => 'Exported',                   'super' => true,  'email' => false],
+];
 
 
 // ============================================================
@@ -51,53 +88,91 @@ function uaFiltersFromRequest(array $in): array
     $s = static fn(string $k): string => is_string($in[$k] ?? null) ? $in[$k] : '';
     return [
         'q'          => mb_substr(trim($s('q')), 0, 120),
+        'view'       => array_key_exists($s('view'), UA_VIEWS) ? $s('view') : 'current',
         'role'       => in_array($s('role'), UA_ROLES, true) ? $s('role') : '',
-        'status'     => in_array($s('status'), UA_STATUSES, true) ? $s('status') : '',
         'verified'   => in_array($s('verified'), ['yes', 'no'], true) ? $s('verified') : '',
         'onboarding' => in_array($s('onboarding'), ['complete', 'incomplete'], true) ? $s('onboarding') : '',
+        'joined'     => $s('joined') === 'week' ? 'week' : '',
         'sort'       => array_key_exists($s('sort'), UA_SORTS) ? $s('sort') : 'newest',
     ];
 }
 
-/** Query-string for the current filters (used by pagination / export links). */
+/** Query-string for the current filters (links, pagination, return_to). Defaults are left out. */
 function uaFilterQuery(array $f, array $extra = []): string
 {
     $q = array_filter(array_merge($f, $extra), fn($v) => $v !== '' && $v !== null);
     if (($q['sort'] ?? '') === 'newest') {
         unset($q['sort']);
     }
+    if (($q['view'] ?? '') === 'current') {
+        unset($q['view']);
+    }
     // RFC 3986 (%20, not +) so the result passes sdSafeAdminPath() as a return_to.
     return http_build_query($q, '', '&', PHP_QUERY_RFC3986);
 }
 
-/** @return array{0:string,1:array} WHERE clause + params for the list. */
-function uaWhere(int $adminId, array $f): array
+/** Are any narrowing filters on (beyond the view tab and sort)? */
+function uaHasFilters(array $f): bool
+{
+    return $f['q'] !== '' || $f['role'] !== '' || $f['verified'] !== ''
+        || $f['onboarding'] !== '' || $f['joined'] !== '';
+}
+
+/** SQL condition for a view ('' / unknown = no status restriction). */
+function uaViewSql(string $view): string
+{
+    return match ($view) {
+        'current'   => "u.status <> 'suspended'",
+        'pending'   => "u.status = 'pending'",
+        'suspended' => "u.status = 'suspended'",
+        default     => '1 = 1',
+    };
+}
+
+/**
+ * WHERE clause + params.
+ *   $withView  — apply the view tab
+ *   $withChips — apply the quick filters (verified / onboarding / joined)
+ *   $ids       — restrict to these user ids (export of a selection)
+ *
+ * @return array{0:string,1:array}
+ */
+function uaWhere(int $adminId, array $f, bool $withView = true, bool $withChips = true, array $ids = []): array
 {
     [$scope, $params] = adminUserScopeSql($adminId, 'u');
     $where = [$scope];
 
-    if ($f['role'] !== '') {
+    if ($withView) {
+        $where[] = uaViewSql($f['view'] ?? '');
+    }
+    if ($ids) {
+        $where[] = 'u.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')';
+        array_push($params, ...$ids);
+    }
+    if (($f['role'] ?? '') !== '') {
         $where[]  = 'u.role = ?';
         $params[] = $f['role'];
     }
-    if ($f['status'] !== '') {
-        $where[]  = 'u.status = ?';
-        $params[] = $f['status'];
+    if ($withChips) {
+        if (($f['verified'] ?? '') !== '') {
+            $where[]  = 'u.email_verified = ?';
+            $params[] = $f['verified'] === 'yes' ? 1 : 0;
+        }
+        if (($f['onboarding'] ?? '') === 'complete') {
+            $where[] = 'p.onboarding_completed = 1';
+        } elseif (($f['onboarding'] ?? '') === 'incomplete') {
+            $where[] = '(p.onboarding_completed IS NULL OR p.onboarding_completed = 0)';
+        }
+        if (($f['joined'] ?? '') === 'week') {
+            $where[] = 'u.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+        }
     }
-    if ($f['verified'] !== '') {
-        $where[]  = 'u.email_verified = ?';
-        $params[] = $f['verified'] === 'yes' ? 1 : 0;
-    }
-    if ($f['onboarding'] === 'complete') {
-        $where[] = 'p.onboarding_completed = 1';
-    } elseif ($f['onboarding'] === 'incomplete') {
-        $where[] = '(p.onboarding_completed IS NULL OR p.onboarding_completed = 0)';
-    }
-    if ($f['q'] !== '') {
-        $like = '%' . addcslashes($f['q'], '%_\\') . '%';
-        if (ctype_digit($f['q'])) {
+    $q = $f['q'] ?? '';
+    if ($q !== '') {
+        $like = '%' . addcslashes($q, '%_\\') . '%';
+        if (ctype_digit(ltrim($q, '#'))) {
             $where[]  = '(u.id = ? OR u.email LIKE ? OR p.phone LIKE ?)';
-            array_push($params, (int) $f['q'], $like, $like);
+            array_push($params, (int) ltrim($q, '#'), $like, $like);
         } else {
             $where[] = "(u.email LIKE ? OR p.phone LIKE ? OR d.company_name LIKE ?
                       OR CONCAT_WS(' ', p.first_name, p.last_name) LIKE ?)";
@@ -120,15 +195,15 @@ const UA_LIST_FROM = "
 function uaCountUsers(int $adminId, array $f): int
 {
     [$where, $params] = uaWhere($adminId, $f);
-    $stmt = Database::getInstance()->prepare("SELECT COUNT(*) " . UA_LIST_FROM . " WHERE {$where}");
+    $stmt = Database::getInstance()->prepare("SELECT COUNT(DISTINCT u.id) " . UA_LIST_FROM . " WHERE {$where}");
     $stmt->execute($params);
     return (int) $stmt->fetchColumn();
 }
 
-function uaListUsers(int $adminId, array $f, int $limit = UA_PAGE_SIZE, int $offset = 0): array
+function uaListUsers(int $adminId, array $f, int $limit = UA_PAGE_SIZE, int $offset = 0, array $ids = []): array
 {
-    [$where, $params] = uaWhere($adminId, $f);
-    $order = UA_SORTS[$f['sort']] ?? UA_SORTS['newest'];
+    [$where, $params] = uaWhere($adminId, $f, !$ids, !$ids, $ids);
+    $order = UA_SORTS[$f['sort'] ?? 'newest'] ?? UA_SORTS['newest'];
     $stmt  = Database::getInstance()->prepare("
         SELECT u.id, u.email, u.role, u.status, u.email_verified, u.last_login, u.created_at,
                (u.password_hash <> '') AS has_password,
@@ -145,18 +220,28 @@ function uaListUsers(int $adminId, array $f, int $limit = UA_PAGE_SIZE, int $off
     return $stmt->fetchAll();
 }
 
-/** Headline counts for the stat strip (scoped like the list). */
-function uaStats(int $adminId): array
+/**
+ * Counts for the view tabs and quick-filter chips, in one query.
+ * Tabs honour the search box and role (so "3 suspended match" shows even
+ * while you're on Current); chips are counted inside the current view.
+ */
+function uaViewCounts(int $adminId, array $f): array
 {
-    [$scope, $params] = adminUserScopeSql($adminId, 'u');
-    $stmt = Database::getInstance()->prepare("
-        SELECT COUNT(*) AS total,
-               COALESCE(SUM(u.status = 'pending'), 0)   AS pending,
-               COALESCE(SUM(u.status = 'suspended'), 0) AS suspended,
-               COALESCE(SUM(u.email_verified = 0), 0)   AS unverified,
-               COALESCE(SUM(u.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)), 0) AS new_week
-        FROM users u
-        WHERE {$scope}
+    [$where, $params] = uaWhere($adminId, $f, false, false);
+    $inView = uaViewSql($f['view']);
+    $stmt   = Database::getInstance()->prepare("
+        SELECT COALESCE(SUM(x.status <> 'suspended'), 0)                         AS current,
+               COALESCE(SUM(x.status = 'pending'), 0)                            AS pending,
+               COALESCE(SUM(x.status = 'suspended'), 0)                          AS suspended,
+               COALESCE(SUM(x.in_view AND x.email_verified = 0), 0)              AS unverified,
+               COALESCE(SUM(x.in_view AND COALESCE(x.onboarding_completed, 0) = 0), 0) AS incomplete,
+               COALESCE(SUM(x.in_view AND x.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)), 0) AS new_week
+        FROM (
+            SELECT DISTINCT u.id, u.status, u.email_verified, u.created_at, p.onboarding_completed,
+                   ({$inView}) AS in_view
+            " . UA_LIST_FROM . "
+            WHERE {$where}
+        ) x
     ");
     $stmt->execute($params);
     return array_map('intval', $stmt->fetch() ?: []);
@@ -171,11 +256,29 @@ function uaDisplayName(array $u): string
     return trim(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? ''));
 }
 
+/** One or two letters for the row avatar. */
+function uaInitials(array $u): string
+{
+    $name = uaDisplayName($u);
+    $src  = $name !== '' ? $name : (string) $u['email'];
+    $bits = preg_split('/[\s@._-]+/u', $src, -1, PREG_SPLIT_NO_EMPTY) ?: ['?'];
+    $out  = mb_substr($bits[0], 0, 1) . (isset($bits[1]) && $name !== '' ? mb_substr($bits[1], 0, 1) : '');
+    return mb_strtoupper($out);
+}
+
 function uaRoleLabel(string $role): string
 {
     return match ($role) {
         'sales_exec' => 'Sales exec',
         default      => ucfirst($role),
+    };
+}
+
+function uaRoleLabelPlural(string $role): string
+{
+    return match ($role) {
+        'sales_exec' => 'Sales execs',
+        default      => ucfirst($role) . 's',
     };
 }
 
@@ -585,39 +688,189 @@ function uaCompleteOnboarding(int $userId, int $actorId): array
 
 
 // ============================================================
-// BULK + EXPORT  (superadmin)
+// BULK + EXPORT
 // ============================================================
 
-/** @return array{0:bool,1:string} */
-function uaBulk(string $action, array $ids, int $actorId): array
+/** The bulk actions this admin may use, grouped for the menu: [group => [key => label]]. */
+function uaBulkMenu(bool $isSuperadmin): array
 {
-    $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0))), 0, UA_BULK_MAX);
-    if (!$ids) {
-        return [false, 'Tick at least one user first.'];
-    }
-    $done = 0;
-    $skipped = 0;
-    foreach ($ids as $id) {
-        if (!adminCanActOnUser($actorId, $id)) {
-            $skipped++;
+    $menu = [];
+    foreach (UA_BULK_ACTIONS as $key => $a) {
+        if ($a['super'] && !$isSuperadmin) {
             continue;
         }
-        [$ok] = match ($action) {
-            'activate'        => uaActivate($id, $actorId),
-            'activate_verify' => uaActivate($id, $actorId, true),
-            'verify_email'    => uaSetEmailVerified($id, true, $actorId),
-            default           => [false],
-        };
-        $ok ? $done++ : $skipped++;
+        $menu[$a['group']][$key] = $a['label'];
     }
-    return [$done > 0, "{$done} user(s) updated" . ($skipped ? ", {$skipped} skipped (suspended or out of scope)." : '.')];
+    return $menu;
 }
 
-/** Stream the filtered list as CSV. Caller has already checked step-up. */
-function uaExportCsv(int $adminId, array $f): never
+/**
+ * Why $action doesn't apply to this user, or null when it does.
+ * Works on a list row or a uaGetUser() record (same column names), so
+ * the page can mark each row's eligible actions and uaBulk() can skip
+ * the rest with a clear reason.
+ */
+function uaBulkSkipReason(string $action, array $u): ?string
 {
-    $rows = uaListUsers($adminId, $f, UA_EXPORT_MAX, 0);
-    writeAuditLog('users.exported', 'user', $adminId, null, ['rows' => count($rows), 'filters' => $f], $adminId);
+    $status    = (string) $u['status'];
+    $verified  = (int) $u['email_verified'] === 1;
+    $onboarded = (int) ($u['onboarding_completed'] ?? 0) === 1;
+
+    return match ($action) {
+        'activate'            => $status === 'suspended' ? 'suspended' : ($status === 'active' ? 'already active' : null),
+        'activate_verify'     => $status === 'suspended' ? 'suspended' : ($status === 'active' && $verified ? 'already active and verified' : null),
+        'suspend'             => $status === 'suspended' ? 'already suspended' : null,
+        'reactivate'          => $status !== 'suspended' ? 'not suspended' : null,
+        'complete_onboarding' => $onboarded ? 'already onboarded' : ($status === 'suspended' ? 'suspended' : null),
+        'verify_email'        => $verified ? 'already verified' : null,
+        'unverify_email'      => !$verified ? 'already unverified' : null,
+        'resend_verification' => $verified ? 'already verified' : ($status === 'suspended' ? 'suspended' : null),
+        'send_reset'          => $status !== 'active' ? 'not active' : null,
+        'set_car_limit'       => $u['role'] !== 'broker' ? 'not a broker' : null,
+        'clear_lockout', 'export_csv' => null,
+        default               => 'not available',
+    };
+}
+
+/** Space-separated keys of the bulk actions that apply to this row (for data-bulk-ok). */
+function uaBulkEligibleKeys(array $u, bool $isSuperadmin): string
+{
+    $keys = [];
+    foreach (UA_BULK_ACTIONS as $key => $a) {
+        if ((!$a['super'] || $isSuperadmin) && uaBulkSkipReason($key, $u) === null) {
+            $keys[] = $key;
+        }
+    }
+    return implode(' ', $keys);
+}
+
+/** Clean, de-duplicated, positive ids (max $max). */
+function uaCleanIds(array $ids, int $max = UA_BULK_MAX): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
+    return array_slice($ids, 0, $max);
+}
+
+/**
+ * Run one action on many users. Each user is scope-checked and runs
+ * through the same single-user function (so cascades, guards and audit
+ * entries are identical to doing it one by one). Users the action
+ * doesn't apply to are skipped and counted by reason.
+ *
+ * export_csv is handled by the page (it needs step-up + a download).
+ *
+ * @return array{0:bool,1:string}
+ */
+function uaBulk(string $action, array $ids, int $actorId, array $opts = []): array
+{
+    $def = UA_BULK_ACTIONS[$action] ?? null;
+    if ($def === null || $action === 'export_csv') {
+        return [false, 'Choose an action first.'];
+    }
+    if ($def['super'] && !isSuperadmin($actorId)) {
+        return [false, 'Only a superadmin can do that.'];
+    }
+
+    $requested = count(uaCleanIds($ids, PHP_INT_MAX));
+    $cap       = $def['email'] ? UA_BULK_EMAIL_MAX : UA_BULK_MAX;
+    if ($requested === 0) {
+        return [false, 'Tick at least one user first.'];
+    }
+    if ($requested > $cap) {
+        return [false, $def['email']
+            ? "That action emails each user, so it runs on at most {$cap} at a time. Nothing was sent."
+            : "Select at most {$cap} users at a time. Nothing was changed."];
+    }
+    $ids = uaCleanIds($ids, $cap);
+
+    $limit = (int) ($opts['car_limit'] ?? 0);
+    if ($action === 'set_car_limit' && ($limit < 1 || $limit > 200)) {
+        return [false, 'Car limit must be between 1 and 200. Nothing was changed.'];
+    }
+
+    $changed  = 0;
+    $skipped  = [];      // reason => count
+    $failures = [];      // first few messages
+    foreach ($ids as $id) {
+        if (!adminCanActOnUser($actorId, $id)) {
+            $skipped['outside your dealerships and orgs'] = ($skipped['outside your dealerships and orgs'] ?? 0) + 1;
+            continue;
+        }
+        $u = uaGetUser($id);
+        if (!$u) {
+            $skipped['not found'] = ($skipped['not found'] ?? 0) + 1;
+            continue;
+        }
+        $why = uaBulkSkipReason($action, $u);
+        if ($why !== null) {
+            $skipped[$why] = ($skipped[$why] ?? 0) + 1;
+            continue;
+        }
+
+        try {
+            [$ok, $msg] = match ($action) {
+                'activate'            => uaActivate($id, $actorId),
+                'activate_verify'     => uaActivate($id, $actorId, true),
+                'suspend'             => uaSetStatus($id, 'suspended', $actorId),
+                'reactivate'          => uaSetStatus($id, 'active', $actorId),
+                'complete_onboarding' => uaCompleteOnboarding($id, $actorId),
+                'verify_email'        => uaSetEmailVerified($id, true, $actorId),
+                'unverify_email'      => uaSetEmailVerified($id, false, $actorId),
+                'resend_verification' => uaResendVerification($id, $actorId),
+                'send_reset'          => uaSendPasswordReset($id, $actorId),
+                'clear_lockout'       => uaClearLockout($id, $actorId),
+                'set_car_limit'       => uaSetCarLimit($id, $limit, $actorId),
+            };
+        } catch (Throwable $e) {
+            // One bad account must not stop the rest of the batch.
+            error_log('[SalesDesk uaBulk] ' . $action . ' #' . $id . ': ' . $e->getMessage());
+            [$ok, $msg] = [false, 'something went wrong (logged)'];
+        }
+        if ($ok) {
+            $changed++;
+        } else {
+            $failures[] = $u['email'] . ': ' . rtrim($msg, '.');
+        }
+    }
+
+    writeAuditLog('users.bulk_action', 'user', $actorId, null, [
+        'action'    => $action,
+        'requested' => count($ids),
+        'changed'   => $changed,
+        'skipped'   => $skipped,
+        'failed'    => count($failures),
+    ] + ($action === 'set_car_limit' ? ['car_limit' => $limit] : []), $actorId);
+
+    $parts = [];
+    $parts[] = $changed > 0
+        ? $def['done'] . ' ' . $changed . ' user' . ($changed === 1 ? '' : 's')
+          . ($action === 'set_car_limit' ? " (now {$limit} cars)" : '') . '.'
+        : 'Nothing was changed.';
+    if ($skipped) {
+        $bits = [];
+        foreach ($skipped as $reason => $n) {
+            $bits[] = "{$n} {$reason}";
+        }
+        $parts[] = 'Skipped ' . array_sum($skipped) . ': ' . implode(', ', $bits) . '.';
+    }
+    if ($failures) {
+        $parts[] = count($failures) . ' failed — ' . implode('; ', array_slice($failures, 0, 3))
+                 . (count($failures) > 3 ? '; …' : '') . '.';
+    }
+    return [$changed > 0, implode(' ', $parts)];
+}
+
+/**
+ * Stream users as CSV. Caller has already checked step-up.
+ * With $ids, exports exactly those users (any view); otherwise the
+ * filtered list.
+ */
+function uaExportCsv(int $adminId, array $f, array $ids = []): never
+{
+    $ids  = uaCleanIds($ids);
+    $rows = uaListUsers($adminId, $f, UA_EXPORT_MAX, 0, $ids);
+    writeAuditLog('users.exported', 'user', $adminId, null,
+        ['rows' => count($rows)] + ($ids ? ['selected_ids' => $ids] : ['filters' => $f]), $adminId);
 
     header('Content-Type: text/csv; charset=utf-8');
     header('Content-Disposition: attachment; filename="salesdesk-users-' . date('Y-m-d') . '.csv"');

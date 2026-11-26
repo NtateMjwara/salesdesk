@@ -186,36 +186,6 @@ function renderVehicleSchema(array $car, array $dealer, string $canonicalUrl): s
 }
 
 /**
- * Article schema for a single blog post (news/article.php).
- * $post expects: title, excerpt, content, featured_image_url,
- * published_at, author_first, author_last, category_name (all already
- * selected by news/index.php's and index.php's blog_posts queries).
- */
-function renderArticleSchema(array $post, string $canonicalUrl, string $baseUrl): string
-{
-    $authorName = trim(($post['author_first'] ?? '') . ' ' . ($post['author_last'] ?? '')) ?: 'SalesDesk';
-    $image = $post['featured_image_url']
-        ?: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=1200&auto=format&fit=crop';
-
-    return sdJsonLd([
-        '@context'      => 'https://schema.org',
-        '@type'         => 'Article',
-        'headline'      => $post['title'] ?? '',
-        'description'   => $post['excerpt'] ?? '',
-        'image'         => [$image],
-        'datePublished' => date('c', strtotime((string) ($post['published_at'] ?? 'now'))),
-        'dateModified'  => date('c', strtotime((string) ($post['updated_at'] ?? $post['published_at'] ?? 'now'))),
-        'author'        => ['@type' => 'Person', 'name' => $authorName],
-        'publisher'     => [
-            '@type' => 'Organization',
-            'name'  => 'SalesDesk',
-            'logo'  => ['@type' => 'ImageObject', 'url' => $baseUrl . '/assets/img/logo.png'],
-        ],
-        'mainEntityOfPage' => ['@type' => 'WebPage', '@id' => $canonicalUrl],
-    ]);
-}
-
-/**
  * LocalBusiness schema for a broker storefront (/{slug}/). Optional/
  * bonus — only worth adding once broker pages actively target local
  * search ("car broker in Sandton" etc).

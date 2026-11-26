@@ -111,8 +111,7 @@ function hasConsent(string $category): bool
 
 /**
  * Hashes an IP for the audit-log table — never store IPs in the
- * clear. Same pattern this codebase already uses for outreach ID
- * numbers ("encrypted before storage").
+ * clear.
  */
 function hashIpForAudit(string $ip): string
 {

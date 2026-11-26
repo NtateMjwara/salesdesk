@@ -28,7 +28,7 @@ define('DB_CHARSET', 'utf8mb4');
 // SITE
 // ============================================================
 define('SITE_URL',  'https://salesdesk.co.za');   // No trailing slash  <-- CHANGE
-define('APP_NAME',  'SalesDesk');
+define('APP_NAME',  'Salesdesk');
 define('CURRENCY',  'ZAR');
 
 // ============================================================
@@ -66,12 +66,15 @@ define('LOG_PATH',       BASE_PATH . '/../logs');    // outside public root
 // PLATFORM DEFAULTS (override via platform_config table at runtime)
 // ============================================================
 define('DEFAULT_PLATFORM_FEE_PERCENT',    10);
-define('DEFAULT_BROKER_CAR_LIMIT',        10);
+define('DEFAULT_BROKER_CAR_LIMIT',        150);
 define('DEFAULT_LEAD_DEDUP_WINDOW_DAYS',  30);
 define('DEFAULT_POPIA_RETENTION_DAYS',   365);
 define('MAX_CAR_IMAGES',                  10);
 define('MAX_IMAGE_SIZE_BYTES',     2097152);   // 2MB per image
 define('MAX_PDF_SIZE_BYTES',       5242880);   // 5MB for CIPC docs
+
+
+define('USE_OUTREACH_ID_ENCRYPTION', true);
 
 // ============================================================
 // API RATE LIMITING
@@ -97,11 +100,12 @@ define('REDIS_PORT', 6379);
 $baseUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/';
 // or for an absolute URL:
 $baseUrl = 'https://salesdesk.co.za/';
+
 // ============================================================
 // ERROR REPORTING
 // ============================================================
 define('APP_DEBUG', false);    // <-- set true in local dev only, never in production
 
-ini_set('display_errors', APP_DEBUG ? 1 : 0);
+ini_set('display_errors', APP_DEBUG ? 1 : 1);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);

@@ -227,6 +227,26 @@ function checkApiRateLimit(
 // ============================================================
 
 /**
+ * Does commissions.dealer_notes exist? suspendDealer() / reinstateDealer()
+ * keep their "[dealer_suspended: …]" freeze marker there. On databases
+ * without the column they skip the marker instead of crashing mid-way.
+ */
+function sdCommissionNotesReady(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $ready = (bool) Database::getInstance()->query("
+            SELECT COUNT(*) FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'commissions' AND COLUMN_NAME = 'dealer_notes'
+        ")->fetchColumn();
+        if (!$ready) {
+            error_log('[SalesDesk] commissions.dealer_notes is missing: dealer suspensions pause listings but don\'t mark pending commissions.');
+        }
+    }
+    return $ready;
+}
+
+/**
  * Who should hear about things happening at a dealership
  * (exec join requests, new leads, nudges).  (0012)
  *
@@ -291,20 +311,26 @@ function suspendDealer(int $dealerId, int $adminId): array
     $pauseStmt->execute([$dealerId]);
     $carsPaused = $pauseStmt->rowCount();
 
-    $freezeStmt = $pdo->prepare("
-        UPDATE commissions
-        SET dealer_notes = CONCAT(
-                IFNULL(dealer_notes, ''),
-                IF(dealer_notes IS NOT NULL AND dealer_notes != '', '\n', ''),
-                '[dealer_suspended: account suspended by admin on ',
-                DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i'),
-                ']'
-            ),
-            updated_at = NOW()
-        WHERE dealer_id = ? AND status = 'pending'
-    ");
-    $freezeStmt->execute([$dealerId]);
-    $commissionsFrozen = $freezeStmt->rowCount();
+    // Freeze marker lives in commissions.dealer_notes. Some databases don't
+    // have that column; skip the marker there instead of failing half-way
+    // (the user is already suspended and the cars already paused by now).
+    $commissionsFrozen = 0;
+    if (sdCommissionNotesReady()) {
+        $freezeStmt = $pdo->prepare("
+            UPDATE commissions
+            SET dealer_notes = CONCAT(
+                    IFNULL(dealer_notes, ''),
+                    IF(dealer_notes IS NOT NULL AND dealer_notes != '', '\n', ''),
+                    '[dealer_suspended: account suspended by admin on ',
+                    DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i'),
+                    ']'
+                ),
+                updated_at = NOW()
+            WHERE dealer_id = ? AND status = 'pending'
+        ");
+        $freezeStmt->execute([$dealerId]);
+        $commissionsFrozen = $freezeStmt->rowCount();
+    }
 
     $logStmt = $pdo->prepare("
         INSERT INTO audit_logs
@@ -371,24 +397,27 @@ function reinstateDealer(int $dealerId, int $adminId): array
     $reinstateStmt->execute([$dealerId]);
     $carsReinstated = $reinstateStmt->rowCount();
 
-    $unfreezeStmt = $pdo->prepare("
-        UPDATE commissions
-        SET dealer_notes = NULLIF(
-              TRIM(
-                REGEXP_REPLACE(
-                  IFNULL(dealer_notes, ''),
-                  '\\n?\\[dealer_suspended:[^\\]]*\\]',
+    $commissionsUnfrozen = 0;
+    if (sdCommissionNotesReady()) {
+        $unfreezeStmt = $pdo->prepare("
+            UPDATE commissions
+            SET dealer_notes = NULLIF(
+                  TRIM(
+                    REGEXP_REPLACE(
+                      IFNULL(dealer_notes, ''),
+                      '\\n?\\[dealer_suspended:[^\\]]*\\]',
+                      ''
+                    )
+                  ),
                   ''
-                )
-              ),
-              ''
-            ),
-            updated_at = NOW()
-        WHERE dealer_id = ? AND status = 'pending'
-          AND dealer_notes LIKE '%[dealer_suspended:%'
-    ");
-    $unfreezeStmt->execute([$dealerId]);
-    $commissionsUnfrozen = $unfreezeStmt->rowCount();
+                ),
+                updated_at = NOW()
+            WHERE dealer_id = ? AND status = 'pending'
+              AND dealer_notes LIKE '%[dealer_suspended:%'
+        ");
+        $unfreezeStmt->execute([$dealerId]);
+        $commissionsUnfrozen = $unfreezeStmt->rowCount();
+    }
 
     writeAuditLog(
         'dealer.reinstated',

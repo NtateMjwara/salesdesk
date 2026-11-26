@@ -147,6 +147,14 @@ function sdInStaffWorkspace(): bool
  *   $opts['allow_inactive'] true → don't bounce when the dealership is offline
  *   $opts['principal_only'] true → page changes are principal-only even for
  *                           delegates (company / verification / address settings)
+ *   $opts['inventory_refresh'] true → this page imports / refreshes stock. A
+ *                           SUPERADMIN on a principal-owned dealership (normally
+ *                           view-only) may write here, as mode 'refresh' —
+ *                           dealers don't always keep their stock current.
+ *                           Only the import pages and the Motus enrich API
+ *                           pass this; every other page stays view-only.
+ *                           The principal is notified and sees the import in
+ *                           their SalesDesk activity feed (audit stamp).
  *
  * Returns the context; also stored in $GLOBALS['sdWorkspace'] for the
  * layout (banner, nav) and the audit log.
@@ -175,6 +183,19 @@ function requireDealerWorkspace(array $opts = []): array
         sdWorkspaceDeny($isApi, 403,
             $dealerId ? 'You no longer have access to that dealership.' : 'Choose a dealership to open first.',
             '/app/admin/dealerships');
+    }
+
+    // ── Superadmin stock refresh on a principal-owned dealership ──
+    // Set BEFORE $GLOBALS so the banner, body class and audit stamp all
+    // say 'refresh' rather than 'viewer' on these pages.
+    if (!empty($opts['inventory_refresh'])
+        && $role === 'admin'
+        && $ctx['mode'] === 'viewer'
+        && $ctx['has_principal']
+        && isSuperadmin($userId)) {
+        $ctx['mode']      = 'refresh';
+        $ctx['can_write'] = true;
+        $ctx['reason']    = '';
     }
 
     $GLOBALS['sdWorkspace'] = $ctx;
@@ -284,6 +305,7 @@ function sdWorkspaceAccessBadge(string $mode): string
     return match ($mode) {
         'operator'  => '<span class="badge badge-ws-operate"><i class="fa-solid fa-screwdriver-wrench"></i> Operate</span>',
         'delegate'  => '<span class="badge badge-ws-operate"><i class="fa-solid fa-handshake"></i> Delegated</span>',
+        'refresh'   => '<span class="badge badge-ws-operate"><i class="fa-solid fa-rotate"></i> Stock refresh</span>',
         'principal' => '<span class="badge badge-verified">Principal</span>',
         default     => '<span class="badge badge-ws-view"><i class="fa-regular fa-eye"></i> View</span>',
     };

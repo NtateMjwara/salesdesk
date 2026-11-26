@@ -67,7 +67,14 @@ header('Referrer-Policy: strict-origin-when-cross-origin');
 // script-src: allow self + Google Fonts (for @import in CSS) + CDN + inline
 //   (inline is required for the small page-specific JS snippets in auth pages).
 // style-src:  allow self + Google Fonts + CDN + inline (same reason).
-// img-src:    allow self + data URIs + Unsplash (car images in dev).
+// img-src:    allow self + data URIs + blob: + ANY https image host.
+//   Previously only 'self', data: and images.unsplash.com, so the
+//   browser silently blocked every image hosted elsewhere: imported car
+//   photos stored as source-CDN URLs (cdn.cmscloud.co.za,
+//   s3-eu-west-1.amazonaws.com …) and logos admins set as external
+//   URLs (adminCleanUrl() only accepts http(s) URLs). Dealer CDNs vary
+//   and change, so a host allow-list would keep breaking; images can't
+//   run code, so allowing any https source is low-risk.
 // font-src:   allow self + Google Fonts + CDN + data URIs.
 //
 // Review before production — tighten script-src 'unsafe-inline' once
@@ -78,7 +85,7 @@ header(
     "script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; " .
     "style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'; " .
     "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com data:; " .
-    "img-src 'self' data: https://images.unsplash.com; " .
+    "img-src 'self' data: blob: https:; " .
     "connect-src 'self'; " .
     "frame-ancestors 'none';"
 );

@@ -7,9 +7,8 @@
  * that already has a functions cookie-consent.php require) whenever
  * the visitor accepts all, rejects all, or saves custom preferences.
  *
- * Follows the same CSRF pattern already used by
- * api/outreach/register.php and api/outreach/partner-enquiry.php —
- * session-stored token, checked against the POSTed value.
+ * Standard CSRF pattern — session-stored token, checked against the
+ * POSTed value.
  *
  * Sets the consent cookie server-side (in addition to the client-side
  * set the JS does immediately, for instant script-blocking) so it's

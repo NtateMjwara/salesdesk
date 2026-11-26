@@ -7,9 +7,9 @@
  * Most public pages in this codebase call applyCachePolicy('public'),
  * which is intended to let a reverse proxy/CDN cache the rendered HTML.
  * If the cookie-consent banner's CSRF token were embedded directly in
- * that HTML (the way outreach/index.php embeds one, since that page is
- * NOT cached), the token from whichever visitor's request happened to
- * populate the cache would be served to every subsequent visitor —
+ * that HTML (as an uncached form page safely can), the token from
+ * whichever visitor's request happened to populate the cache would be
+ * served to every subsequent visitor —
  * breaking CSRF protection and potentially letting one visitor's
  * consent-save request be replayed under another's session.
  *

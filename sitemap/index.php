@@ -12,7 +12,6 @@
  *   /sitemap-static.xml            — homepage, marketing/how-it-works, legal
  *   /sitemap-desks.xml             — broker storefronts  (/{slug}/)
  *   /sitemap-orgs.xml              — desk organisation hubs (/desks/{org-slug}/)
- *   /sitemap-news.xml              — blog articles       (/news/{slug}/)
  * Dynamic, chunked sub-sitemap:
  *   /sitemap-cars-for-sale-N.xml   — /cars-for-sale/ browse root, curated
  *                                    facet landing pages, and car detail
@@ -46,11 +45,10 @@ $xml = smCached('sitemap-index', SITEMAP_CACHE_TTL, function (): string {
 
     $out = smIndexOpen();
 
-    // ── Static + desks + news are single files ──────────────────
+    // ── Static + desks + orgs are single files ──────────────────
     $out .= smEmitSitemapEntry("{$base}/sitemap-static.xml", $now);
     $out .= smEmitSitemapEntry("{$base}/sitemap-desks.xml", $now);
     $out .= smEmitSitemapEntry("{$base}/sitemap-orgs.xml", $now);
-    $out .= smEmitSitemapEntry("{$base}/sitemap-news.xml", $now);
 
     // ── /cars-for-sale/ is chunked — work out how many chunk files exist ──
     try {

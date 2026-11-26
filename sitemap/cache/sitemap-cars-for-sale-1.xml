@@ -3,109 +3,181 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=new</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=demo</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?condition=used</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Bakkie</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Hatchback</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=Sedan</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?body_type%5B%5D=SUV</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Alfa%20Romeo</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=AUDI</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=BMW</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=CHERY</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Citroen</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=FORD</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=GWM</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=HAVAL</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Hyundai</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Isuzu</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=JEEP</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=KIA</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=LAND%20ROVER</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=MERCEDES-BENZ</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=MG</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Opel</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Peugeot</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Renault</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Suzuki</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=TATA</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/?make=TOYOTA</loc>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/?make=Volkswagen</loc>
-    <lastmod>2026-09-29T12:19:14+00:00</lastmod>
+    <lastmod>2026-11-25T08:53:48+00:00</lastmod>
     <changefreq>hourly</changefreq>
     <priority>0.9</priority>
   </url>
@@ -280,6 +352,24 @@
   <url>
     <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2025-volkswagen-polo-polo-pa-polo-pa-1-0-tsi-70kw-20120966/</loc>
     <lastmod>2026-07-11T18:05:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-citroen-c3-c3-max-1-25-5-mt-my-25-1-20673046/</loc>
+    <lastmod>2026-07-11T18:22:04+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2025-citroen-c3-c3-max-1-2t-6at-my25-19845339/</loc>
+    <lastmod>2026-07-11T18:32:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-citroen-c3-aircross-c3-aircross-plus-1-2-5mt-my25-20676797/</loc>
+    <lastmod>2026-07-11T18:34:59+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -470,109 +560,97 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2014-isuzu-kb-kb-300-d-teq-lx-a-t-p-u-d-c-21441264/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2014-isuzu-kb-kb-300-d-teq-lx-a-t-p-u-d-c-21441264/</loc>
     <lastmod>2026-07-13T09:29:42+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-250c-s-cab-base-gen-6-21422152/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-250c-s-cab-base-gen-6-21422152/</loc>
     <lastmod>2026-07-13T09:36:15+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2025-isuzu-d-max-d-max-250c-fleetside-s-c-p-u-21281025/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2025-isuzu-d-max-d-max-250c-fleetside-s-c-p-u-21281025/</loc>
     <lastmod>2026-07-13T09:36:37+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2021-isuzu-d-max-d-max-250-ho-hi-ride-d-c-p-u-21384829/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2021-isuzu-d-max-d-max-250-ho-hi-ride-d-c-p-u-21384829/</loc>
     <lastmod>2026-07-13T09:42:07+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-250c-s-cab-base-gen-6-21423506/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-250c-s-cab-base-gen-6-21423506/</loc>
     <lastmod>2026-07-13T09:42:25+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-s-cab-fleetside-gen-6-21291376/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-s-cab-fleetside-gen-6-21291376/</loc>
     <lastmod>2026-07-13T09:44:42+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2020-isuzu-d-max-d-max-250-ho-x-rider-a-t-d-c-p-u-21415791/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2020-isuzu-d-max-d-max-250-ho-x-rider-a-t-d-c-p-u-21415791/</loc>
     <lastmod>2026-07-13T09:47:11+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2021-isuzu-d-max-d-max-300-lx-e-cab-p-u-21441250/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2021-isuzu-d-max-d-max-300-lx-e-cab-p-u-21441250/</loc>
     <lastmod>2026-07-13T10:07:11+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2020-isuzu-d-max-d-max-250-ho-x-rider-d-c-p-u-21253476/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2020-isuzu-d-max-d-max-250-ho-x-rider-d-c-p-u-21253476/</loc>
     <lastmod>2026-07-13T10:18:13+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-d-max-250-ho-s-cab-safety-gen-6-21225261/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-d-max-250-ho-s-cab-safety-gen-6-21225261/</loc>
     <lastmod>2026-07-13T10:29:38+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-1-9-ddi-s-cab-hr-21384843/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-1-9-ddi-s-cab-hr-21384843/</loc>
     <lastmod>2026-07-13T10:29:22+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2024-isuzu-d-max-d-max-1-9-ddi-hr-ls-d-c-p-u-21032470/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2024-isuzu-d-max-d-max-1-9-ddi-hr-ls-d-c-p-u-21032470/</loc>
     <lastmod>2026-07-13T18:09:50+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2024-isuzu-d-max-d-max-1-9-ddi-hr-x-rider-d-c-p-u-17790815/</loc>
-    <lastmod>2026-07-13T18:23:29+00:00</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2024-isuzu-d-max-d-max-1-9-ddi-l-4x4-d-c-p-u-21042682/</loc>
-    <lastmod>2026-07-13T18:30:24+00:00</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2023-isuzu-mu-x-mu-x-3-0d-ls-a-t-21163267/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2023-isuzu-mu-x-mu-x-3-0d-ls-a-t-21163267/</loc>
     <lastmod>2026-07-13T18:31:14+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2024-isuzu-d-max-d-max-1-9-ddi-hr-ls-a-t-d-c-p-u-21288211/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2024-isuzu-d-max-d-max-1-9-ddi-hr-ls-a-t-d-c-p-u-21288211/</loc>
     <lastmod>2026-07-13T18:32:45+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-1-9-ddi-d-cab-hr-l-a-t-21100260/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-1-9-ddi-d-cab-hr-l-a-t-21100260/</loc>
     <lastmod>2026-07-13T18:39:53+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/isuzu-desk/2026-isuzu-d-max-d-max-1-9-ddi-hr-l-a-t-d-c-p-u-21422192/</loc>
+    <loc>https://salesdesk.co.za/cars-for-sale/lekelela-s-salesdesk-johannesburg/2026-isuzu-d-max-d-max-1-9-ddi-hr-l-a-t-d-c-p-u-21422192/</loc>
     <lastmod>2026-07-13T18:40:07+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -602,26 +680,74 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-touareg-v6-tdi-r-line-grenadila-black-metalic-motus-vw-fourways-1446274/</loc>
-    <lastmod>2026-07-28T07:33:24+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2020-volkswagen-t-cross-1-0tsi-70kw-comfortline-pure-white-motus-vw-fourways-1446055/</loc>
+    <lastmod>2026-10-16T16:28:01+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2025-volkswagen-golf-r-lapis-blue-metallic-motus-vw-fourways-1446708/</loc>
-    <lastmod>2026-07-28T07:34:07+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-ford-everest-2-0-biturbo-sport-grey-motus-vw-fourways-1446818/</loc>
+    <lastmod>2026-10-16T16:28:01+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-transporter-kombi-transporter-2-0tdi-kombi-swb-commerce-stone-grey-motus-vw-al/</loc>
-    <lastmod>2026-07-28T07:48:05+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2023-toyota-urban-cruiser-1-5-xs-grey-motus-vw-fourways-1445920/</loc>
+    <lastmod>2026-10-16T16:28:01+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2024-renault-kwid-1-0-climber-auto-blue-motus-vw-germiston-1446416/</loc>
-    <lastmod>2026-07-28T08:03:59+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-toyota-starlet-1-5-xs-auto-white-motus-vw-alberton-1450126/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-reflex-silver-motus-vw-alberton-1450152/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-ascot-gray-motus-vw-alberton-1450150/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-pure-white-motus-vw-alberton-1450144/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-smoky-grey-metallic-motus-vw-alberton-1450151/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-volkswagen-polo-vivo-hatch-1-4-life-pure-white-motus-vw-alberton-1450140/</loc>
+    <lastmod>2026-10-11T18:13:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-vereeniging-1446453/</loc>
+    <lastmod>2026-07-28T08:08:00+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-0tsi-gt-reflex-silver-metallic-black-motus-vw-vereeniging-14/</loc>
+    <lastmod>2026-07-28T08:08:05+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/elton/2026-volkswagen-golf-8-golf-8-gti-moonstone-gray-motus-vw-vereeniging-1445901/</loc>
+    <lastmod>2026-07-28T08:08:26+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -638,20 +764,968 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2019-audi-a3-sportback-35tfsi-s-line-blue-motus-vw-vereeniging-1446201/</loc>
+    <lastmod>2026-07-28T08:08:46+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/karabo/2022-bmw-x3-xdrive20d-blue-motus-vw-vereeniging-1445987/</loc>
+    <lastmod>2026-07-28T08:08:52+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-renault-kiger-1-0-zen-silver-motus-vw-vereeniging-1445826/</loc>
+    <lastmod>2026-07-28T08:08:55+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-audi-q2-35tfsi-launch-edition-glacier-white-motus-vw-vereeniging-1446684/</loc>
+    <lastmod>2026-07-28T08:09:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-toyota-starlet-1-5-xs-auto-grey-motus-vw-vereeniging-1446242/</loc>
+    <lastmod>2026-07-28T08:09:27+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-vereeniging-1446241/</loc>
+    <lastmod>2026-07-28T08:09:29+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-life-smoky-grey-metallic-motus-vw-vereeniging-1446780/</loc>
+    <lastmod>2026-07-28T08:09:30+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-renault-kwid-1-0-life-red-motus-vw-vereeniging-1446525/</loc>
+    <lastmod>2026-07-28T08:09:33+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2022-haval-h6-2-0gdit-premium-white-motus-vw-welkom-1446857/</loc>
+    <lastmod>2026-07-28T08:13:57+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
     <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2023-ford-ecosport-1-0t-trend-blue-motus-vw-welkom-1446161/</loc>
     <lastmod>2026-07-28T08:13:58+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2025-volkswagen-golf-r-white-motus-vw-east-rand-mall-1445713/</loc>
-    <lastmod>2026-07-28T08:21:01+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2024-volkswagen-polo-vivo-hatch-1-4-trendline-silver-reflex-motus-vw-welkom-1446758/</loc>
+    <lastmod>2026-07-28T08:14:03+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-amarok-3-0tdi-v6-double-cab-aventura-4motion-silver-motus-vw-edenvale-1446709/</loc>
-    <lastmod>2026-07-28T08:37:17+00:00</lastmod>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2024-volkswagen-polo-vivo-hatch-1-4-comfortline-white-motus-vw-welkom-1446018/</loc>
+    <lastmod>2026-07-28T08:14:05+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-life-blue-motus-vw-welkom-1445797/</loc>
+    <lastmod>2026-07-28T08:14:13+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-1-4-xpress-panel-van-pure-white-motus-vw-kempton-park-1446384/</loc>
+    <lastmod>2026-07-28T08:16:18+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-life-smoky-grey-metallic-motus-vw-kempton-park-1445982/</loc>
+    <lastmod>2026-07-28T08:16:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/carplug-sa/2023-renault-clio-1-0-turbo-intens-white-motus-vw-kempton-park-1446851/</loc>
+    <lastmod>2026-07-28T08:16:55+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2023-renault-kiger-1-0-turbo-intens-auto-silver-motus-vw-kempton-park-1446401/</loc>
+    <lastmod>2026-07-28T08:16:59+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-haval-jolion-1-5-hev-luxury-silver-motus-vw-kempton-park-1445859/</loc>
+    <lastmod>2026-07-28T08:17:03+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-toyota-starlet-1-5-xs-auto-white-motus-vw-kempton-park-1446483/</loc>
+    <lastmod>2026-07-28T08:17:09+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-toyota-starlet-1-5-xs-auto-white-motus-vw-kempton-park-1446484/</loc>
+    <lastmod>2026-07-28T08:17:11+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-kempton-park-1446569/</loc>
+    <lastmod>2026-07-28T08:17:28+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reef-blue-metallic-motus-vw-kempton-park-1446271/</loc>
+    <lastmod>2026-07-28T08:17:33+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-pure-white-motus-vw-kempton-park-1446677/</loc>
+    <lastmod>2026-07-28T08:17:36+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-smoky-grey-metallic-motus-vw-kempton-park-1446678/</loc>
+    <lastmod>2026-07-28T08:17:36+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-reflex-silver-motus-vw-kempton-park-1446681/</loc>
+    <lastmod>2026-07-28T08:17:38+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-life-pure-white-motus-vw-kempton-park-1450263/</loc>
+    <lastmod>2026-07-28T08:17:46+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-life-wild-cherry-motus-vw-kempton-park-1446462/</loc>
+    <lastmod>2026-07-28T08:17:47+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-kempton-park-1446182/</loc>
+    <lastmod>2026-07-28T08:17:48+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-volkswagen-golf-8-golf-8-gti-moonstone-gray-motus-vw-midrand-1446001/</loc>
+    <lastmod>2026-07-28T08:29:35+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2016-jeep-renegade-1-6l-multijet-limited-red-motus-vw-midrand-1446223/</loc>
+    <lastmod>2026-07-28T08:30:09+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/karabo/2019-bmw-2-series-220i-coupe-sport-line-shadow-edition-white-motus-vw-midrand-1445923/</loc>
+    <lastmod>2026-07-28T08:30:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2019-ford-ecosport-1-0t-trend-white-motus-vw-midrand-1445943/</loc>
+    <lastmod>2026-07-28T08:30:11+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2019-volkswagen-polo-hatch-1-0tsi-comfortline-r-line-auto-pure-white-motus-vw-midrand-1446850/</loc>
+    <lastmod>2026-07-28T08:30:13+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2019-volkswagen-polo-vivo-hatch-1-4-trendline-grey-motus-vw-midrand-1446505/</loc>
+    <lastmod>2026-07-28T08:30:16+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2020-volkswagen-polo-vivo-hatch-1-4-comfortline-reflex-silver-metallic-motus-vw-midrand-144989/</loc>
+    <lastmod>2026-07-28T08:30:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2021-ford-figo-hatch-1-5-trend-grey-motus-vw-midrand-1445937/</loc>
+    <lastmod>2026-07-28T08:30:24+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2021-volkswagen-t-cross-1-0tsi-70kw-comfortline-grey-motus-vw-midrand-1446801/</loc>
+    <lastmod>2026-07-28T08:30:28+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/karabo/2022-bmw-4-series-m440i-xdrive-gran-coupe-black-motus-vw-midrand-1446142/</loc>
+    <lastmod>2026-07-28T08:30:31+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-renault-clio-1-0-turbo-intens-white-motus-vw-midrand-1445715/</loc>
+    <lastmod>2026-07-28T08:30:36+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-volkswagen-polo-vivo-hatch-1-4-trendline-silver-motus-vw-midrand-1445883/</loc>
+    <lastmod>2026-07-28T08:30:39+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-volkswagen-polo-vivo-hatch-1-4-comfortline-reflex-silver-motus-vw-midrand-1445714/</loc>
+    <lastmod>2026-07-28T08:30:42+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-audi-q2-35tfsi-launch-edition-silver-motus-vw-midrand-1446654/</loc>
+    <lastmod>2026-07-28T08:30:49+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-ford-ranger-2-0-biturbo-double-cab-wildtrak-4x4-white-motus-vw-midrand-1449184/</loc>
+    <lastmod>2026-07-28T08:30:51+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2024-hyundai-grand-creta-2-0-executive-auto-blue-motus-vw-midrand-1448032/</loc>
+    <lastmod>2026-07-28T08:30:52+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2024-kia-picanto-1-0-street-manual-white-motus-vw-midrand-1446809/</loc>
+    <lastmod>2026-07-28T08:30:54+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-toyota-hilux-2-8gd-6-double-cab-legend-auto-green-motus-vw-midrand-1445994/</loc>
+    <lastmod>2026-07-28T08:30:57+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2025-suzuki-swift-1-2-gl-auto-grey-motus-vw-midrand-1445800/</loc>
+    <lastmod>2026-07-28T08:31:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-toyota-starlet-1-5-xs-auto-white-motus-vw-midrand-1446293/</loc>
+    <lastmod>2026-07-28T08:31:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-midrand-1446763/</loc>
+    <lastmod>2026-07-28T08:31:18+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-wild-cherry-motus-vw-midrand-1446755/</loc>
+    <lastmod>2026-07-28T08:31:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-midrand-1446746/</loc>
+    <lastmod>2026-07-28T08:31:21+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-midrand-1446711/</loc>
+    <lastmod>2026-07-28T08:31:22+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-midrand-1446694/</loc>
+    <lastmod>2026-07-28T08:31:24+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-mg-mg3-1-5-comfort-manual-blue-motus-vw-midrand-1446119/</loc>
+    <lastmod>2026-07-28T08:31:32+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-tata-tiago-1-2-xm-white-motus-vw-midrand-1446188/</loc>
+    <lastmod>2026-07-28T08:31:33+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-wild-cherry-red-metallic-motus-vw-midrand-1445922/</loc>
+    <lastmod>2026-07-28T08:31:38+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-life-wild-cherry-motus-vw-midrand-1446506/</loc>
+    <lastmod>2026-07-28T08:31:41+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-life-smoky-grey-metallic-motus-vw-midrand-1446409/</loc>
+    <lastmod>2026-07-28T08:31:45+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-audi-q2-35tfsi-launch-edition-silver-motus-vw-edenvale-1446655/</loc>
+    <lastmod>2026-10-16T16:22:31+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-4-life-wild-cherry-motus-vw-edenvale-1446756/</loc>
+    <lastmod>2026-10-16T16:22:31+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-wild-cherry-motus-vw-alberton-1527346/</loc>
+    <lastmod>2026-10-11T18:13:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2010-volkswagen-polo-1-6-comfortline-white-motus-vw-alberton-1539004/</loc>
+    <lastmod>2026-10-11T18:13:46+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2015-mercedes-benz-gla-gla220d-4matic-style-white-motus-vw-alberton-1472194/</loc>
+    <lastmod>2026-10-11T18:13:47+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2018-ford-ranger-2-2tdci-double-cab-4x4-xl-white-motus-vw-alberton-1473481/</loc>
+    <lastmod>2026-10-11T18:13:49+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2020-volkswagen-polo-vivo-hatch-1-4-comfortline-pure-white-motus-vw-alberton-1530132/</loc>
+    <lastmod>2026-10-11T18:13:51+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2021-hyundai-venue-1-2-motion-silver-motus-vw-alberton-1495199/</loc>
+    <lastmod>2026-10-11T18:13:53+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-chery-tiggo-4-pro-1-5t-elite-manual-blue-motus-vw-alberton-1485806/</loc>
+    <lastmod>2026-10-11T18:13:54+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-haval-jolion-1-5t-city-hamilton-white-motus-vw-alberton-1536182/</loc>
+    <lastmod>2026-10-11T18:13:56+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-audi-q2-35tfsi-advanced-florett-silver-motus-vw-alberton-1470431/</loc>
+    <lastmod>2026-10-11T18:14:07+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2024-hyundai-i20-1-0t-fluid-auto-red-motus-vw-alberton-1493055/</loc>
+    <lastmod>2026-10-11T18:14:09+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-suzuki-swift-1-2-gl-auto-white-motus-vw-alberton-1536178/</loc>
+    <lastmod>2026-10-11T18:14:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reef-blue-metallic-motus-vw-alberton-1482608/</loc>
+    <lastmod>2026-10-11T18:14:27+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-alberton-1524656/</loc>
+    <lastmod>2026-10-11T18:14:28+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-alberton-1524655/</loc>
+    <lastmod>2026-10-11T18:14:29+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-volkswagen-polo-vivo-1-4-xpress-panel-van-pure-white-motus-vw-alberton-1492737/</loc>
+    <lastmod>2026-10-11T18:14:30+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-alberton-1492736/</loc>
+    <lastmod>2026-10-11T18:14:33+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-volkswagen-transporter-2-0tdi-kombi-swb-style-4motion-stone-grey-motus-vw-alberton-151052/</loc>
+    <lastmod>2026-10-11T18:14:54+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-ford-ecosport-1-0t-titanium-auto-blue-motus-vw-bloemfontein-1477368/</loc>
+    <lastmod>2026-10-16T16:05:21+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2023-volkswagen-polo-vivo-hatch-1-4-comfortline-reflex-silver-motus-vw-bloemfontein-1501668/</loc>
+    <lastmod>2026-10-16T16:05:28+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2025-chery-tiggo-4-pro-1-5t-lit-auto-grey-motus-vw-bloemfontein-1539580/</loc>
+    <lastmod>2026-10-16T16:05:29+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-amarok-2-3t-double-cab-panamericana-4motion-clear-white-motus-vw-bloemfontein/</loc>
+    <lastmod>2026-10-16T16:05:37+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-1-4-xpress-panel-van-pure-white-motus-vw-bloemfontein-1510964/</loc>
+    <lastmod>2026-10-16T16:05:53+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1493362/</loc>
+    <lastmod>2026-10-16T16:05:55+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1493352/</loc>
+    <lastmod>2026-10-16T16:05:57+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1534083/</loc>
+    <lastmod>2026-10-16T16:06:02+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1493371/</loc>
+    <lastmod>2026-10-16T16:06:03+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1478612/</loc>
+    <lastmod>2026-10-16T16:06:06+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-metallic-motus-vw-bloemfontein-1478609/</loc>
+    <lastmod>2026-10-16T16:06:07+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1535197/</loc>
+    <lastmod>2026-10-16T16:06:09+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1502259/</loc>
+    <lastmod>2026-10-16T16:06:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1493364/</loc>
+    <lastmod>2026-10-16T16:06:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1493347/</loc>
+    <lastmod>2026-10-16T16:06:13+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-volkswagen-polo-vivo-hatch-1-4-pure-white-motus-vw-bloemfontein-1493348/</loc>
+    <lastmod>2026-10-16T16:06:14+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1493344/</loc>
+    <lastmod>2026-10-16T16:06:16+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-bloemfontein-1493334/</loc>
+    <lastmod>2026-10-16T16:06:17+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2021-hyundai-i20-1-4-motion-auto-white-motus-vw-east-rand-mall-1495627/</loc>
+    <lastmod>2026-10-16T16:11:32+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2022-renault-kiger-1-0-turbo-zen-blue-motus-vw-east-rand-mall-1535581/</loc>
+    <lastmod>2026-10-16T16:11:38+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2022-volkswagen-t-roc-1-4tsi-design-pure-white-motus-vw-east-rand-mall-1506986/</loc>
+    <lastmod>2026-10-16T16:11:43+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2023-bmw-4-series-420i-gran-coupe-m-sport-white-motus-vw-east-rand-mall-1547231/</loc>
+    <lastmod>2026-10-16T16:11:45+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-ford-ranger-2-0-biturbo-double-cab-wildtrak-silver-motus-vw-east-rand-mall-1546257/</loc>
+    <lastmod>2026-10-16T16:11:47+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-land-rover-discovery-sport-d200-r-dynamic-hse-grey-motus-vw-east-rand-mall-1463624/</loc>
+    <lastmod>2026-10-16T16:11:49+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-hyundai-grand-i10-1-0-premium-hatch-white-motus-vw-east-rand-mall-1545369/</loc>
+    <lastmod>2026-10-16T16:11:59+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-hyundai-grand-i10-1-2-premium-hatch-silver-motus-vw-east-rand-mall-1546255/</loc>
+    <lastmod>2026-10-16T16:12:01+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2025-suzuki-swift-1-2-gl-manual-silver-motus-vw-east-rand-mall-1545370/</loc>
+    <lastmod>2026-10-16T16:12:06+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2025-toyota-corolla-cross-1-8-xr-white-motus-vw-east-rand-mall-1534808/</loc>
+    <lastmod>2026-10-16T16:12:06+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2025-volkswagen-polo-vivo-hatch-1-6-life-white-motus-vw-east-rand-mall-1502254/</loc>
+    <lastmod>2026-10-16T16:12:14+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-volkswagen-polo-vivo-hatch-1-4-trendline-limestone-gray-metallic-motus-vw-edenvale-154549/</loc>
+    <lastmod>2026-10-16T16:22:42+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2024-toyota-corolla-quest-1-8-plus-auto-white-motus-vw-edenvale-1545510/</loc>
+    <lastmod>2026-10-16T16:23:00+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2025-renault-kwid-1-0-zen-white-motus-vw-edenvale-1508546/</loc>
+    <lastmod>2026-10-16T16:23:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-toyota-rumion-1-5-s-white-motus-vw-edenvale-1498220/</loc>
+    <lastmod>2026-10-16T16:23:18+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/carplug-sa/2026-volkswagen-amarok-3-0tdi-v6-double-cab-aventura-4motion-silver-motus-vw-edenvale-1464435/</loc>
+    <lastmod>2026-10-16T16:23:27+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-caravelle-2-0bitdi-highline-4motion-indium-grey-metallic-motus-vw-edenvale-150/</loc>
+    <lastmod>2026-10-16T16:23:30+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-fourways-1512001/</loc>
+    <lastmod>2026-10-16T16:28:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reflex-silver-motus-vw-fourways-1506908/</loc>
+    <lastmod>2026-10-16T16:28:13+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-reef-blue-metallic-motus-vw-fourways-1510737/</loc>
+    <lastmod>2026-10-16T16:28:14+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-amarok-3-0tdi-v6-double-cab-aventura-4motion-midnight-black-metallic-motus-vw/</loc>
+    <lastmod>2026-10-16T16:28:22+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/andy-ntsika-mntwanomhle/2026-volkswagen-amarok-3-0tdi-v6-double-cab-aventura-4motion-midnight-black-metallic-motus-v-2/</loc>
+    <lastmod>2026-10-16T16:28:25+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/carplug-sa/2026-volkswagen-caravelle-2-0bitdi-highline-4motion-mono-silver-metallic-motus-vw-fourways-147/</loc>
+    <lastmod>2026-10-16T16:28:27+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/elton/2026-volkswagen-golf-8-golf-8-gti-dolphin-grey-metallic-motus-vw-fourways-1503714/</loc>
+    <lastmod>2026-10-16T16:28:31+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-volkswagen-touareg-v6-tdi-r-line-grey-motus-vw-fourways-1493048/</loc>
+    <lastmod>2026-10-16T16:28:53+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2015-kia-rio-sedan-1-4-tec-white-motus-vw-fourways-1546566/</loc>
+    <lastmod>2026-10-16T16:28:57+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2018-land-rover-range-rover-evoque-hse-dynamic-si4-213kw-white-motus-vw-fourways-1466973/</loc>
+    <lastmod>2026-10-16T16:29:00+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2019-kia-rio-hatch-1-2-ls-red-motus-vw-fourways-1495626/</loc>
+    <lastmod>2026-10-16T16:29:00+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2019-toyota-etios-hatch-1-5-xs-silver-motus-vw-fourways-1506889/</loc>
+    <lastmod>2026-10-16T16:29:01+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2021-bmw-3-series-320i-mzansi-edition-grey-motus-vw-fourways-1495130/</loc>
+    <lastmod>2026-10-16T16:29:06+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2021-volkswagen-polo-sedan-1-4-comfortline-silver-motus-vw-fourways-1534335/</loc>
+    <lastmod>2026-10-16T16:29:10+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2022-audi-rs3-sportback-quattro-kemora-grey-motus-vw-fourways-1547972/</loc>
+    <lastmod>2026-10-16T16:29:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2022-land-rover-discovery-sport-d200-r-dynamic-se-silver-motus-vw-fourways-1534380/</loc>
+    <lastmod>2026-10-16T16:29:14+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2022-mercedes-benz-glc-glc300-4matic-amg-line-blue-motus-vw-fourways-1478743/</loc>
+    <lastmod>2026-10-16T16:29:15+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2022-volkswagen-polo-hatch-1-0tsi-life-manual-silver-motus-vw-fourways-1497050/</loc>
+    <lastmod>2026-10-16T16:29:19+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2022-volkswagen-polo-hatch-1-0tsi-life-auto-pure-white-motus-vw-fourways-1539337/</loc>
+    <lastmod>2026-10-16T16:29:20+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2022-volkswagen-polo-vivo-hatch-1-4-comfortline-pure-white-motus-vw-fourways-1510667/</loc>
+    <lastmod>2026-10-16T16:29:22+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2022-volkswagen-t-cross-1-0tsi-85kw-highline-black-motus-vw-fourways-1536995/</loc>
+    <lastmod>2026-10-16T16:29:23+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-ford-ranger-2-0-biturbo-double-cab-wildtrak-white-motus-vw-fourways-1506860/</loc>
+    <lastmod>2026-10-16T16:29:28+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2023-toyota-starlet-1-5-xs-manual-grey-motus-vw-fourways-1537363/</loc>
+    <lastmod>2026-10-16T16:29:33+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2024-suzuki-celerio-1-0-gl-manual-silver-motus-vw-fourways-1481577/</loc>
+    <lastmod>2026-10-16T16:29:37+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2025-suzuki-swift-1-2-gl-auto-white-motus-vw-fourways-1534798/</loc>
+    <lastmod>2026-10-16T16:29:47+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/elton/2025-volkswagen-tiguan-2-0tsi-r-line-4motion-black-motus-vw-fourways-1474363/</loc>
+    <lastmod>2026-10-16T16:29:52+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-renault-kwid-1-0-life-silver-motus-vw-fourways-1545852/</loc>
+    <lastmod>2026-10-16T16:29:58+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-amarok-2-0bitdi-double-cab-panamericana-4motion-clear-white-motus-vw-fourways/</loc>
+    <lastmod>2026-10-16T16:30:01+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-volkswagen-caravelle-1-5tsi-ehybrid-style-4motion-candy-white-motus-vw-fourways-1511921/</loc>
+    <lastmod>2026-10-16T16:30:02+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2026-volkswagen-polo-vivo-hatch-1-4-smoky-grey-metallic-motus-vw-fourways-1510802/</loc>
+    <lastmod>2026-10-16T16:30:07+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-hatch-1-4-ascot-gray-motus-vw-fourways-1534040/</loc>
+    <lastmod>2026-10-16T16:30:12+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2026-mg-mg3-1-5-comfort-manual-white-motus-vw-germiston-1538600/</loc>
+    <lastmod>2026-10-16T16:33:22+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-1-4-xpress-panel-van-pure-white-motus-vw-germiston-1538583/</loc>
+    <lastmod>2026-10-16T16:33:34+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/carplug-sa/2026-kia-sonet-1-5-ls-manual-pewter-olive-motus-vw-germiston-1546411/</loc>
+    <lastmod>2026-10-16T16:34:09+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-volkswagen-caravelle-1-5tsi-ehybrid-style-4motion-indium-grey-metallic-motus-vw-germiston/</loc>
+    <lastmod>2026-10-16T16:34:25+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-polo-vivo-1-4-xpress-panel-van-pure-white-motus-vw-germiston-1503154/</loc>
+    <lastmod>2026-10-16T16:34:43+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2019-ford-figo-hatch-1-5-trend-silver-motus-vw-germiston-1478616/</loc>
+    <lastmod>2026-10-16T16:35:22+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-volkswagen-polo-vivo-hatch-1-4-comfortline-white-motus-vw-germiston-1538539/</loc>
+    <lastmod>2026-10-16T16:35:30+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2022-volkswagen-polo-vivo-hatch-1-4-comfortline-white-motus-vw-germiston-1538540/</loc>
+    <lastmod>2026-10-16T16:35:32+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-bmw-x3-xdrive20d-m-sport-blue-motus-vw-germiston-1478568/</loc>
+    <lastmod>2026-10-16T16:35:38+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2023-toyota-corolla-cross-1-8-xs-white-motus-vw-germiston-1538548/</loc>
+    <lastmod>2026-10-16T16:35:40+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2023-volkswagen-polo-vivo-hatch-1-4-trendline-pure-white-motus-vw-germiston-1538622/</loc>
+    <lastmod>2026-10-16T16:35:43+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2024-gwm-p-series-2-0td-single-cab-dlx-white-motus-vw-germiston-1538570/</loc>
+    <lastmod>2026-10-16T16:35:47+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/pediah/2024-hyundai-i20-1-2-premium-white-motus-vw-germiston-1538580/</loc>
+    <lastmod>2026-10-16T16:35:48+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2024-renault-kwid-1-0-climber-auto-blue-motus-vw-germiston-1538587/</loc>
+    <lastmod>2026-10-16T16:35:50+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/lenox-auto-brokers/2025-hyundai-grand-i10-1-0-premium-hatch-grey-motus-vw-germiston-1538610/</loc>
+    <lastmod>2026-10-16T16:35:54+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/car-desk-dealership-cdd/2026-haval-jolion-1-5t-city-plus-hb-blue-motus-vw-germiston-1538574/</loc>
+    <lastmod>2026-10-16T16:36:07+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-amarok-3-0tdi-v6-double-cab-style-4motion-clear-white-motus-vw-germiston-15386/</loc>
+    <lastmod>2026-10-16T16:36:18+00:00</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/cars-for-sale/dimpiza-auto-sales/2026-volkswagen-transporter-2-0tdi-crew-bus-lwb-8-seater-auto-stone-grey-motus-vw-germiston-15/</loc>
+    <lastmod>2026-10-16T16:36:52+00:00</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

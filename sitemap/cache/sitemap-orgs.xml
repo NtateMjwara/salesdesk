@@ -2,8 +2,20 @@
 <?xml-stylesheet type="text/xsl" href="/sitemap/sitemap.xsl"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://salesdesk.co.za/desks/volkswagen-south-africa/</loc>
+    <lastmod>2026-10-01T09:40:11+00:00</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://salesdesk.co.za/desks/bmw-south-africa/</loc>
+    <lastmod>2026-10-01T10:02:16+00:00</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://salesdesk.co.za/desks/independent/</loc>
-    <lastmod>2026-09-29T01:03:44+00:00</lastmod>
+    <lastmod>2026-11-25T11:34:26+00:00</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.7</priority>
   </url>

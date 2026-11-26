@@ -36,8 +36,6 @@ $xml = smCached('sitemap-static', SITEMAP_CACHE_TTL, function (): string {
         '/'                              => 'home',
 
         '/desks/'                        => 'directory',
-        '/news/'                         => 'directory',
-        '/outreach/'                     => 'info',
         '/how-it-works/brokers.php'      => 'info',
         '/how-it-works/dealers.php'      => 'info',
         '/how-it-works/sales-exec.php'   => 'info',

@@ -101,8 +101,12 @@ Known columns: `id, uuid, car_id, dealer_id, broker_id, salesdesk_id, organizati
 buyer_email, buyer_intent (within_30d | one_to_3mo | browsing…), buyer_message, status (new | contacted | test_drive |
 negotiation | closed | lost), dealer_notes (one text field), consent_given, consent_at, attribution_locked,
 attributed_at, status_updated_at, network_bonus_type, network_bonus_value, created_at, updated_at`.
-`api/leads/submit.php` also writes `attribution_type`, **but no migration in the repo creates it**. Check the live
-database.
+`attribution_type` (broker | platform) is written by `api/leads/submit.php` and created by 0027 when missing. 0027 also
+makes `broker_id` / `salesdesk_id` nullable (platform leads) and `buyer_name` / `buyer_phone` nullable (POPIA scrub).
+
+CRM (0027, `includes/crm.php`, guard `sdCrmReady()`): `leads.assigned_user_id`, `assigned_at`, `assigned_by_user_id`,
+`first_contact_at`, `last_activity_at`, plus `lead_activities` (timeline), `lead_tasks` and `lead_alerts`. See
+`crm/spec.md`.
 
 Lead screens: `app/dealer/leads.php` (full pipeline, close → commission modal, confirm/dispute),
 `app/exec/leads.php` (exec moves pre-close stages only), `app/broker/leads.php` (read-only pipeline for the broker's
@@ -110,8 +114,10 @@ desk). Every status change writes `lead.status_changed` to the audit log.
 
 ## Migrations
 
-- `db/` holds numbered SQL files. `README.md` lists 0002–0005 for a fresh install. The in-app runner covers
-  **0012–0026**. Confirm what sits between them before building a fresh local database.
+- `db/` holds numbered SQL files. The in-app runner covers **0012–0027**. A fresh local database builds cleanly
+  (checked 28 Nov 2026 on MariaDB 10.11): pipe 0002–0009 into the database in order (there is no 0010 or 0011;
+  both 0009 files), add a user #13 (0012+ audit as that user), then run 0012–0027 through the runner.
+  `db/seed.sql` is stale: it fails partway on the organisations insert, because it predates 0013.
 - All are idempotent. The runner stops at the first failure, because later migrations depend on earlier ones.
 - PHP backfills run straight after their SQL via `SD_MIGRATION_POST` (e.g. 0020 → `sdBackfillBusinessOrgs`).
 - Some admin pages call `adminRequireSchema()` and show a "run database updates" screen when the schema is behind.

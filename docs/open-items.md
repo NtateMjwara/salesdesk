@@ -29,13 +29,15 @@ Gathered from every decision doc. Tick items off here, and in the source doc, wh
 
 ## Database hygiene
 
-- [ ] Check the live database has `leads.attribution_type`. It's written by `api/leads/submit.php`, but no migration
-      creates it (the test database lacked it). Add a migration if it's missing. **Do this before the CRM work.**
+- [x] `leads.attribution_type`: 0027 creates it when it's missing, and also makes `broker_id` / `salesdesk_id` and
+      `buyer_name` / `buyer_phone` nullable, so platform leads and the POPIA scrub work on a repo-built database.
+- [ ] `commissions.broker_id` is `NOT NULL` in the repo schema, but platform leads have no broker. Check how a
+      platform-lead close behaves on the live database.
 - [ ] `commissions.dealer_notes` isn't in the repo schema (`suspendDealer()` now skips it). Decide: add it by migration
       or remove the references.
 - [ ] Drop the unused `organizations.brands` and `organizations.agent_car_limit`.
-- [ ] Build a reproducible local database: confirm the full migration chain in `db/` (README lists 0002–0005, the
-      runner covers 0012–0026) and a dev seed that matches the current model.
+- [ ] Build a reproducible local database: the migration chain is confirmed (see `architecture.md` → Migrations).
+      Still needed: a dev seed that matches the current model (`db/seed.sql` fails partway).
 
 ## Cleanup
 

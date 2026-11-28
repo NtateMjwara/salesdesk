@@ -1,7 +1,16 @@
 # CRM in the portal — spec (v1)
 
-**Status: draft for Sfiso's sign-off (28 Nov 2026).** Built from `docs/crm/brief.md` and the decisions below.
-No code until this is agreed. Branch `claude/crm`, migration `db/0027_crm.sql`, module `includes/crm.php`.
+**Status: approved by Sfiso (28 Nov 2026). In build.** Built from `docs/crm/brief.md` and the decisions below.
+Branch `claude/crm`, migration `db/0027_crm.sql`, module `includes/crm.php`.
+
+**Build progress**
+- [x] Migration 0027 + `sdCrmReady()` + `sdCrmBackfill()` (tested locally on a repo-built and a live-shaped database)
+- [ ] Timeline, tasks and assignment on the dealer and exec leads pages (shared partial, `crm.css` / `crm.js`)
+- [ ] Lead submission: auto-assign and notify
+- [ ] `cron/crm-alerts.php`, digest, nudge-check hand-over
+- [ ] Broker status-only view and email
+- [ ] POPIA scrub + Erase buyer data
+- [ ] My day on dashboards
 
 ## 1. Decisions (settled 28 Nov 2026)
 
@@ -138,18 +147,25 @@ timeline is a trustworthy record of what happened.
 
 ## 5. Data model — `db/0027_crm.sql` (idempotent)
 
+**`leads`: schema brought in line with the code** (each step only runs if needed, so a live database that was
+changed by hand is left as it is)
+- `attribution_type` ENUM('broker','platform') DEFAULT 'broker', added if missing (the prerequisite from
+  `open-items.md`). Leads with no broker are set to 'platform'.
+- `broker_id`, `salesdesk_id` made nullable (platform leads have neither).
+- `buyer_name`, `buyer_phone` made nullable (the POPIA scrub sets them to NULL).
+
 **`leads` additions**
-- `assigned_user_id` INT UNSIGNED NULL, FK → users (ON DELETE SET NULL), index
-- `assigned_at` DATETIME NULL, `assigned_by_user_id` INT UNSIGNED NULL
+- `assigned_user_id` INT UNSIGNED NULL, FK → users (ON DELETE SET NULL), index (`assigned_user_id`, `status`)
+- `assigned_at` DATETIME NULL, `assigned_by_user_id` INT UNSIGNED NULL (NULL = automatic)
 - `first_contact_at` DATETIME NULL
 - `last_activity_at` DATETIME NULL, index (`dealer_id`, `status`, `last_activity_at`)
-- `attribution_type`: add it if it's missing (the prerequisite from `open-items.md`). The values come from what
-  `api/leads/submit.php` writes, checked against the live database first.
 
 **`lead_activities`**
 `id, lead_id (FK, cascade), dealer_id, type ENUM(note, call, whatsapp, email, test_drive, status_change,
-assignment, task, system), outcome VARCHAR(30) NULL, body TEXT NULL, meta JSON NULL, actor_user_id NULL,
-actor_mode VARCHAR(20) NULL (workspace mode), created_at`. Index (`lead_id`, `created_at`), (`dealer_id`, `created_at`).
+assignment, task, system), outcome VARCHAR(30) NULL (call outcome, or what a system entry records, e.g.
+`notes_carried_over`, `auto`, `unassigned`), body TEXT NULL, meta JSON NULL, actor_user_id NULL, actor_mode
+VARCHAR(20) NULL (workspace mode), source_ref VARCHAR(40) NULL UNIQUE (set only by imports, e.g. `audit:123`,
+`notes:45`, so the backfill is safe to re-run), created_at`. Index (`lead_id`, `created_at`), (`dealer_id`, `created_at`).
 
 **`lead_tasks`**
 `id, lead_id (FK, cascade), dealer_id, title VARCHAR(150), type ENUM(call, whatsapp, email, test_drive, other),
@@ -161,14 +177,21 @@ reminded_at NULL, created_at, updated_at`. Index (`assignee_user_id`, `done_at`,
 UNIQUE (`lead_id`, `alert_type`, `anchor_at`). `anchor_at` is the `last_activity_at` (or `created_at`) the alert was
 measured from.
 
-**`platform_config` keys** (seeded): `crm_untouched_business_hours` = 2, `crm_stale_days` = 5,
-`crm_business_hours` = `mon-fri 08:00-17:00; sat 08:00-13:00`, `crm_holidays` (list of SA public holiday dates).
+**`platform_config` keys** (seeded, editable): `crm_untouched_business_hours` = 2, `crm_untouched_escalate_hours`
+= 4, `crm_stale_days` = 5, `crm_business_hours` = `mon-fri 08:00-17:00; sat 08:00-13:00`, `crm_extra_holidays`
+(one-off dates; the regular South African public holidays, including Easter and Sunday-to-Monday moves, are worked out
+in code) and `crm_live_since` (when 0027 ran). Leads that went quiet before `crm_live_since` show their badges and count
+in the digest, but don't each send an alert on the first day.
 
 **PHP post-step `sdCrmBackfill()`** (in `SD_MIGRATION_POST`):
-1. Carry `dealer_notes` over into `lead_activities`.
-2. Write `status_change` entries from the `lead.status_changed` audit history, so old leads have a timeline.
-3. Set `first_contact_at` from the first audited move out of `new`, and set `last_activity_at`.
-4. Apply the default assignment rule to open leads.
+1. Write `status_change` entries from the `lead.status_changed` audit history, including the notes typed with each
+   change and the workspace mode, so old leads have a timeline.
+2. Carry each `dealer_notes` over as a `system` / `notes_carried_over` entry, unless that exact text already came in
+   with the history.
+3. Apply the default assignment rule to every lead (open and closed, so an exec keeps seeing what they see today).
+   Leads that were ever assigned or unassigned by hand are skipped.
+4. Set `first_contact_at` from the first audited stage change (or `status_updated_at` when there's no history), and set
+   `last_activity_at`. The lead's own `updated_at` isn't changed.
 
 Each step is safe to re-run.
 

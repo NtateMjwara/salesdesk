@@ -93,7 +93,8 @@ c/                    legacy /c/ redirect shims only
 
 **Database**
 - New migration = `db/00NN_name.sql`, idempotent (safe to re-run). Register it in `SD_MIGRATIONS` in
-  `includes/migrations.php`, and in `SD_MIGRATION_POST` if it needs a PHP backfill step. Latest is **0026**.
+  `includes/migrations.php`, and in `SD_MIGRATION_POST` if it needs a PHP backfill step. Latest is **0027** (CRM, on
+  branch `claude/crm`).
 - Never drop tables holding real data without Sfiso's say-so. The October 2026 lean-up removed features but kept their tables.
 - Never run anything against production. Use a local copy.
 
@@ -128,7 +129,7 @@ Built and shipped through migration 0026: dealer workspace (0015–0018), plans 
 networks (0020–0021), PayFast billing for brokers and Business Pro (0022, 0026), downgrade grace (0023), all four VIP
 perks (0024–0025), Enterprise invoicing (0026), and the dynamic /pricing page.
 
-Next up: a more robust **CRM in the portal**. The decisions are settled and the v1 spec is in `docs/crm/spec.md`
-(awaiting Sfiso's sign-off, branch `claude/crm`).
+In build: the **CRM in the portal** (spec approved, `docs/crm/spec.md`, branch `claude/crm`). Its build progress list
+is at the top of the spec.
 Before going live, see `docs/open-items.md`. The PayFast sandbox round trips and a credentials rotation are still
 outstanding.

@@ -1,6 +1,6 @@
 <?php
 /**
- * SalesDesk — In-app migration runner  (0012–0026)
+ * SalesDesk — In-app migration runner  (0012–0027)
  *
  * WHY: pasting a migration into a web SQL tool (app/admin/database.php,
  * or phpMyAdmin on some hosts) sends the SQL in the request body. Hosting
@@ -32,6 +32,7 @@ const SD_MIGRATIONS = [
     '0024_vip_network.sql'                  => 'VIP perks 1: network-only stock and the network bonus (Pro / Enterprise businesses)',
     '0025_network_dashboard.sql'            => 'VIP perks 2: network announcements, business dashboard, network badge',
     '0026_business_billing.sql'             => 'Business billing: Business Pro pays online (PayFast), Enterprise is invoiced monthly (EFT)',
+    '0027_crm.sql'                          => 'CRM: lead timeline, follow-up tasks, assignment to sales execs, untouched/stale alerts',
 ];
 
 /**
@@ -41,6 +42,7 @@ const SD_MIGRATIONS = [
  */
 const SD_MIGRATION_POST = [
     '0020_business_orgs.sql' => ['business.php', 'sdBackfillBusinessOrgs'],
+    '0027_crm.sql'           => ['crm.php', 'sdCrmBackfill'],
 ];
 
 /**

@@ -34,6 +34,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/business.php';   // 0020: handover moves org ownership too
 
 const SD_DELEGATION_DAYS = [7, 30];
 
@@ -366,6 +367,7 @@ function sdConfirmDeal(int $commissionId, int $dealerId, int $principalId): arra
                 ['email' => $email, 'company_name' => $invoiceLead['company_name']],
                 $invoiceLead,
                 ['id' => $commissionId, 'gross_amount' => $c['gross_amount'],
+                 'network_bonus' => $c['network_bonus'] ?? 0,   // 4a
                  'platform_fee' => $c['platform_fee'], 'net_amount' => $c['net_amount']]
             );
         }
@@ -585,6 +587,7 @@ function saHandoverToPrincipal(int $dealerId, string $email, string $first, stri
         }
         writeAuditLog('dealer.handed_over', 'dealer', $dealerId, ['user_id' => null],
             ['user_id' => $uid, 'email' => $email, 'invited' => $created], $actorId);
+        sdSyncOrgFromDealer($dealerId);   // 0020: the principal now owns the business org
         $pdo->commit();
     } catch (Throwable $e) {
         $pdo->rollBack();

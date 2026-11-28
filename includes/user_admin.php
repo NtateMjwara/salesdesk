@@ -73,7 +73,7 @@ const UA_BULK_ACTIONS = [
     'resend_verification' => ['group' => 'Email & sign-in','label' => 'Resend verification code',  'done' => 'Sent a verification code to','super' => true,  'email' => true],
     'send_reset'          => ['group' => 'Email & sign-in','label' => 'Send password reset code',  'done' => 'Sent a password reset code to','super' => true, 'email' => true],
     'clear_lockout'       => ['group' => 'Email & sign-in','label' => 'Clear sign-in lockout',     'done' => 'Cleared the lockout for',    'super' => true,  'email' => false],
-    'set_car_limit'       => ['group' => 'Brokers',        'label' => 'Set car limit…',            'done' => 'Set the car limit for',      'super' => false, 'email' => false],
+    'set_car_limit'       => ['group' => 'Brokers',        'label' => 'Set custom car limit…',     'done' => 'Set a custom car limit for', 'super' => true,  'email' => false],
     'export_csv'          => ['group' => 'Export',         'label' => 'Export to CSV',             'done' => 'Exported',                   'super' => true,  'email' => false],
 ];
 
@@ -188,8 +188,14 @@ const UA_LIST_FROM = "
     LEFT JOIN dealers  d          ON d.user_id = u.id
     LEFT JOIN sales_executives se ON se.user_id = u.id
     LEFT JOIN dealers  sed        ON sed.id = se.dealer_id
-    LEFT JOIN organization_members om ON om.user_id = u.id
-    LEFT JOIN organizations o     ON o.id = om.organization_id
+    LEFT JOIN (   -- 2b: brokers can be in several networks; one row per user, best network first
+        SELECT m.user_id, COUNT(*) AS net_count,
+               SUBSTRING_INDEX(GROUP_CONCAT(o.name   ORDER BY (m.status = 'verified') DESC, m.joined_at, m.id SEPARATOR '\x1F'), '\x1F', 1) AS org_name,
+               SUBSTRING_INDEX(GROUP_CONCAT(m.status ORDER BY (m.status = 'verified') DESC, m.joined_at, m.id SEPARATOR '\x1F'), '\x1F', 1) AS org_status
+        FROM organization_members m
+        JOIN organizations o ON o.id = m.organization_id
+        GROUP BY m.user_id
+    ) om ON om.user_id = u.id
 ";
 
 function uaCountUsers(int $adminId, array $f): int
@@ -210,7 +216,7 @@ function uaListUsers(int $adminId, array $f, int $limit = UA_PAGE_SIZE, int $off
                p.first_name, p.last_name, p.phone, p.onboarding_completed, p.car_limit,
                d.id AS dealer_id, d.company_name AS dealer_company, d.verification_status AS dealer_verification,
                sed.company_name AS exec_dealer, se.verification_status AS exec_status,
-               o.name AS org_name, om.status AS org_status
+               om.org_name, om.org_status, COALESCE(om.net_count, 0) AS net_count
         " . UA_LIST_FROM . "
         WHERE {$where}
         ORDER BY {$order}, u.id DESC
@@ -310,7 +316,6 @@ function uaGetUser(int $userId): array|false
                d.verification_status AS dealer_verification, d.is_active AS dealer_active,
                se.id AS exec_id, se.dealer_id AS exec_dealer_id, se.job_title AS exec_job_title,
                se.verification_status AS exec_status, sed.company_name AS exec_dealer,
-               om.organization_id AS org_id, om.status AS org_status, o.name AS org_name,
                sd.id AS desk_id, sd.display_name AS desk_name, sd.slug AS desk_slug, sd.is_active AS desk_active
         FROM users u
         LEFT JOIN profiles p          ON p.user_id = u.id
@@ -318,14 +323,34 @@ function uaGetUser(int $userId): array|false
         LEFT JOIN dealers  d          ON d.user_id = u.id
         LEFT JOIN sales_executives se ON se.user_id = u.id
         LEFT JOIN dealers  sed        ON sed.id = se.dealer_id
-        LEFT JOIN organization_members om ON om.user_id = u.id
-        LEFT JOIN organizations o     ON o.id = om.organization_id
         LEFT JOIN salesdesks sd       ON sd.user_id = u.id
         WHERE u.id = ? AND u.role <> 'admin'
         LIMIT 1
     ");
     $stmt->execute([$userId]);
     return $stmt->fetch();
+}
+
+/**
+ * 2b: a broker's network memberships for the view page, with the
+ * dealership to link to (business orgs are managed on Dealerships).
+ */
+function uaUserNetworks(int $userId): array
+{
+    if (!sdOrgSchemaReady()) {
+        return [];
+    }
+    require_once __DIR__ . '/business.php';
+    $dealerCol = sdBusinessReady() ? '(SELECT MIN(d.id) FROM dealers d WHERE d.organization_id = o.id)' : 'NULL';
+    $stmt = Database::getInstance()->prepare("
+        SELECT o.id AS org_id, o.name AS org_name, m.status, {$dealerCol} AS dealer_id
+        FROM organization_members m
+        JOIN organizations o ON o.id = m.organization_id
+        WHERE m.user_id = ?
+        ORDER BY FIELD(m.status, 'verified', 'pending', 'suspended', 'rejected'), o.name
+    ");
+    $stmt->execute([$userId]);
+    return $stmt->fetchAll();
 }
 
 /** Role-specific activity numbers for the overview tab. */
@@ -482,14 +507,26 @@ function uaSetStatus(int $userId, string $status, int $actorId): array
     return [true, $u['email'] . ' is reactivated.'];
 }
 
-function uaSetCarLimit(int $userId, int $limit, int $actorId): array
+/**
+ * PLANS-1 (0019): a broker's car limit is a custom limit on top of their
+ * plan (account_limit_overrides), superadmin only. Before 0019 has run it
+ * falls back to the old profiles.car_limit column.
+ */
+function uaSetCarLimit(int $userId, int $limit, int $actorId, string $reason = 'Set from the Users list'): array
 {
+    require_once __DIR__ . '/entitlements.php';
     $u = uaGetUser($userId);
     if (!$u || $u['role'] !== 'broker') {
         return [false, 'Car limits only apply to brokers.'];
     }
-    if ($limit < 1 || $limit > 200) {
-        return [false, 'Car limit must be between 1 and 200.'];
+    if ($limit < 1 || $limit > 100000) {
+        return [false, 'Car limit must be between 1 and 100 000.'];
+    }
+    if (sdPlansReady()) {
+        return sdSetLimitOverride('broker', $userId, 'max_desk_cars', $limit, $reason, $actorId);
+    }
+    if (!isSuperadmin($actorId)) {
+        return [false, 'Only a superadmin can change car limits.'];
     }
     Database::getInstance()->prepare("UPDATE profiles SET car_limit = ?, updated_at = NOW() WHERE user_id = ?")
         ->execute([$limit, $userId]);
@@ -784,8 +821,8 @@ function uaBulk(string $action, array $ids, int $actorId, array $opts = []): arr
     $ids = uaCleanIds($ids, $cap);
 
     $limit = (int) ($opts['car_limit'] ?? 0);
-    if ($action === 'set_car_limit' && ($limit < 1 || $limit > 200)) {
-        return [false, 'Car limit must be between 1 and 200. Nothing was changed.'];
+    if ($action === 'set_car_limit' && ($limit < 1 || $limit > 100000)) {
+        return [false, 'Car limit must be between 1 and 100 000. Nothing was changed.'];
     }
 
     $changed  = 0;

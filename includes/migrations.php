@@ -1,6 +1,6 @@
 <?php
 /**
- * SalesDesk — In-app migration runner  (0012–0018)
+ * SalesDesk — In-app migration runner  (0012–0026)
  *
  * WHY: pasting a migration into a web SQL tool (app/admin/database.php,
  * or phpMyAdmin on some hosts) sends the SQL in the request body. Hosting
@@ -24,6 +24,23 @@ const SD_MIGRATIONS = [
     '0016_money_controls.sql'               => 'Money controls: who closed each deal + four-eyes payouts',
     '0017_principal_dealerships.sql'        => 'Principal-owned dealerships: delegation, deal confirmation, listing holds',
     '0018_exec_invitations.sql'             => 'Unplaced sales execs: invitations to join a dealership',
+    '0019_plans.sql'                        => 'Plans: catalogue, limits, subscriptions, custom limits (Free / Pro / Enterprise)',
+    '0020_business_orgs.sql'                => 'Business orgs: every dealership gets its business account; old desk orgs removed',
+    '0021_network_invites.sql'              => 'Business networks: businesses can invite brokers (Pro / Enterprise)',
+    '0022_billing.sql'                      => 'Online billing: PayFast checkouts, payment notifications, subscription billing fields',
+    '0023_plan_grace.sql'                   => 'Downgrade grace: 7-day windows, paused desk cars, paused dealership listings',
+    '0024_vip_network.sql'                  => 'VIP perks 1: network-only stock and the network bonus (Pro / Enterprise businesses)',
+    '0025_network_dashboard.sql'            => 'VIP perks 2: network announcements, business dashboard, network badge',
+    '0026_business_billing.sql'             => 'Business billing: Business Pro pays online (PayFast), Enterprise is invoiced monthly (EFT)',
+];
+
+/**
+ * PHP steps that run right after a migration's SQL succeeds (same request).
+ * file => [include path relative to includes/, function]. The function
+ * receives the admin id and returns string[] notes for the log.
+ */
+const SD_MIGRATION_POST = [
+    '0020_business_orgs.sql' => ['business.php', 'sdBackfillBusinessOrgs'],
 ];
 
 /**
@@ -135,6 +152,24 @@ function sdRunMigration(string $file, int $adminId): array
         }
     }
 
+    // Post-SQL PHP step (e.g. 0020 creates a business org per dealership).
+    if (isset(SD_MIGRATION_POST[$file])) {
+        [$inc, $fn] = SD_MIGRATION_POST[$file];
+        try {
+            require_once __DIR__ . '/' . $inc;
+            foreach ((array) $fn($adminId) as $n) {
+                $notes[] = (string) $n;
+            }
+        } catch (Throwable $e) {
+            error_log("[SalesDesk migration {$file} post-step] " . $e->getMessage());
+            writeAuditLog('db.migration_failed', 'database', 0, null,
+                ['file' => $file, 'error' => 'post-step: ' . $e->getMessage()], $adminId);
+            return ['ok' => false, 'statements' => $count, 'notes' => $notes,
+                    'error' => 'The SQL ran, but the follow-up step failed: ' . $e->getMessage()
+                             . ' — run the migration again to retry it.', 'failed_sql' => ''];
+        }
+    }
+
     writeAuditLog('db.migration_run', 'database', 0, null, ['file' => $file, 'statements' => $count], $adminId);
     return ['ok' => true, 'statements' => $count, 'notes' => $notes, 'error' => '', 'failed_sql' => ''];
 }
@@ -168,6 +203,13 @@ function sdReinstall0013(int $adminId): array
 {
     $pdo   = Database::getInstance();
     $steps = [];
+
+    // 0020: orgs are business accounts now — re-installing the old desk-org
+    // migrations would trim brokers to one network and re-add old rules.
+    if (sdColumnExists($pdo, 'dealers', 'organization_id')) {
+        return ['ok' => false, 'steps' => [],
+                'error' => 'Not available any more: since 0020, organisations are business accounts and the old desk-org reset would undo that.'];
+    }
     $step  = function (string $label, callable $fn) use (&$steps) {
         $fn();
         $steps[] = $label;

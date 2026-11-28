@@ -456,6 +456,11 @@ class CsvImporter implements InventoryImporterInterface
 
     private function insertCar(int $dealerId, array $v, int $importId, ?int $execId, array $rawRow): void
     {
+        // Plans 3b: a dealership over its business plan's dealership limit adds
+        // no NEW cars (existing ones still update). Reported as a failed row.
+        require_once __DIR__ . '/../plan_grace.php';
+        sdAssertDealerCanList($dealerId);
+
         $uuid = generateUuidV4();
         $slug = $this->generateUniqueSlug($dealerId, $v['year'], $v['make'], $v['model'], $v['colour']);
 

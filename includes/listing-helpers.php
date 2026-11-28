@@ -101,15 +101,10 @@ if (!function_exists('sdAttachFirstDesks')) {
         };
     }
 
-    /** @return array<string, string> province name → abbreviation */
-    function sdProvinceAbbr(): array
-    {
-        return [
-            'Gauteng'       => 'GP',  'Western Cape'  => 'WC',  'KwaZulu-Natal' => 'KZN',
-            'Eastern Cape'  => 'EC',  'Limpopo'       => 'LP',  'Mpumalanga'    => 'MP',
-            'North West'    => 'NW',  'Free State'    => 'FS',  'Northern Cape' => 'NC',
-        ];
-    }
+    // sdProvinceAbbr() removed (WISH-1, Nov 2026): nothing called this
+    // array-returning version, and views/partials/vehicle-card.php defines
+    // sdProvinceAbbr(?string): string — loading both files was a fatal
+    // "cannot redeclare". Use the vehicle-card version.
 
     /** "R 349 900" with non-breaking spaces. */
     function sdPrice(float|int|string|null $price): string

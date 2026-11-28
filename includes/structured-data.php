@@ -31,7 +31,7 @@ function renderOrganizationSchema(string $baseUrl, array $socialProfiles = []): 
         '@type'    => 'Organization',
         'name'     => 'SalesDesk',
         'url'      => $baseUrl,
-        'logo'     => $baseUrl . '/assets/img/logo.png',
+        'logo'     => $baseUrl . '/assets/img/brand/salesdesk-logo-ink-on-white.png',
         'description' => "South Africa's independent car marketplace connecting buyers, brokers, and dealerships.",
     ];
     if (!empty($socialProfiles)) {

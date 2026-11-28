@@ -500,15 +500,15 @@ HTML;
 // dealership) as agents; managing admins approve or decline.
 // ============================================================
 
-function sendAgentApplication(string $adminEmail, string $orgName, string $brokerEmail): bool
+function sendAgentApplication(string $adminEmail, string $orgName, string $brokerEmail, ?string $reviewUrl = null): bool
 {
     $orgName     = htmlspecialchars($orgName);
     $brokerEmail = htmlspecialchars($brokerEmail);
-    $reviewUrl   = SITE_URL . '/app/admin/approvals?tab=agents';
+    $reviewUrl   = htmlspecialchars($reviewUrl ?? SITE_URL . '/app/admin/approvals?tab=agents');   // 2c: principals review in the dealer portal
     $body = <<<HTML
-<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">New agent application</h2>
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">New network application</h2>
 <p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">
-  A broker has applied to join <strong>{$orgName}</strong> as an agent:
+  A broker has applied to join <strong>{$orgName}</strong>’s broker network:
 </p>
 <div style="background:#f8faff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin:0 0 20px;">
   <p style="font-size:13px;color:#64748b;margin:0 0 3px;">Email address</p>
@@ -518,28 +518,114 @@ function sendAgentApplication(string $adminEmail, string $orgName, string $broke
   Review application →
 </a>
 HTML;
-    return sendEmail($adminEmail, 'New agent application — ' . html_entity_decode($orgName), $body);
+    return sendEmail($adminEmail, 'New network application — ' . html_entity_decode($orgName), $body);
 }
 
 function sendAgentApproved(string $brokerEmail, string $brokerName, string $orgName, array $brands = []): bool
 {
     $name     = htmlspecialchars($brokerName ?: 'there');
     $org      = htmlspecialchars($orgName);
-    $brandTxt = $brands ? ' You can now add ' . htmlspecialchars(implode(', ', $brands)) . ' cars to your desk.' : '';
-    $url      = SITE_URL . '/app/broker/inventory';
+    $brandTxt = $brands ? ' Its stock: ' . htmlspecialchars(implode(', ', $brands)) . '.' : '';
+    $url      = SITE_URL . '/app/broker/networks';
     $body = <<<HTML
-<h2 style="font-size:20px;font-weight:700;color:#15803d;margin:0 0 8px;">You're an agent at {$org}</h2>
+<h2 style="font-size:20px;font-weight:700;color:#15803d;margin:0 0 8px;">You're in {$org}'s network</h2>
 <p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">Hi {$name},</p>
 <p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
-  Your application to join <strong>{$org}</strong> has been
+  Your application to join <strong>{$org}</strong>'s broker network has been
   <strong style="color:#15803d;">approved</strong>.{$brandTxt}
-  Commission on your leads is still paid to you.
+  Leads on its cars now count towards the network, and your commission is still paid to you in full.
+  You can keep sharing any car on SalesDesk.
 </p>
 <a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
-  Browse cars →
+  My networks →
 </a>
 HTML;
-    return sendEmail($brokerEmail, "You're approved — welcome to {$orgName}", $body);
+    return sendEmail($brokerEmail, "You're approved — welcome to {$orgName}'s network", $body);
+}
+
+/** 2c: a business invited a broker into its network. */
+function sendNetworkInvite(string $brokerEmail, string $brokerName, string $orgName): bool
+{
+    $name = htmlspecialchars($brokerName ?: 'there');
+    $org  = htmlspecialchars($orgName);
+    $url  = SITE_URL . '/app/broker/networks';
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 8px;">{$org} invited you to its network</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">Hi {$name},</p>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 20px;">
+  <strong>{$org}</strong> would like you in its broker network. In a network, your leads on its cars
+  count towards it and its name shows on your desk. You can still share any car on SalesDesk,
+  and your commission is always paid to you in full.
+</p>
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
+  Accept or decline →
+</a>
+HTML;
+    return sendEmail($brokerEmail, "{$orgName} invited you to its broker network", $body);
+}
+
+/**
+ * 0026: a monthly business invoice (Enterprise, paid by EFT). $inv is a
+ * business_invoices row. Prices exclude VAT (SalesDesk isn't VAT-registered).
+ */
+function sendBusinessInvoice(string $to, array $inv): bool
+{
+    $num     = htmlspecialchars((string) $inv['invoice_number']);
+    $billed  = htmlspecialchars((string) $inv['billed_to']);
+    $plan    = htmlspecialchars((string) $inv['plan_name']);
+    $amount  = 'R ' . number_format(((int) $inv['amount_cents']) / 100, 2, '.', ',');
+    $period  = date('j M Y', strtotime((string) $inv['period_start'])) . ' – ' . date('j M Y', strtotime($inv['period_end'] . ' -1 day'));
+    $issued  = date('j M Y', strtotime((string) $inv['issued_at']));
+    $due     = date('j M Y', strtotime((string) $inv['due_at']));
+    $bank    = htmlspecialchars(getPlatformConfig('salesdesk_bank_name',    'FNB'));
+    $acct    = htmlspecialchars(getPlatformConfig('salesdesk_bank_account', '62000000000'));
+    $branch  = htmlspecialchars(getPlatformConfig('salesdesk_bank_branch',  '250655'));
+    $holder  = htmlspecialchars(getPlatformConfig('salesdesk_bank_holder',  'SalesDesk (Pty) Ltd'));
+    $url     = SITE_URL . '/app/billing/invoice?id=' . (int) $inv['id'];
+    $body = <<<HTML
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 4px;">Invoice {$num}</h2>
+<p style="font-size:13px;color:#94a3b8;margin:0 0 18px;">Issued {$issued} · due {$due}</p>
+<table cellpadding="0" cellspacing="0" width="100%" style="font-size:13px;border-collapse:collapse;margin:0 0 18px;">
+  <tr><td style="color:#64748b;padding:4px 0;width:40%;">Billed to</td><td style="color:#1e293b;font-weight:600;">{$billed}</td></tr>
+  <tr><td style="color:#64748b;padding:4px 0;">Plan</td><td style="color:#1e293b;">SalesDesk {$plan} (monthly)</td></tr>
+  <tr><td style="color:#64748b;padding:4px 0;">Period</td><td style="color:#1e293b;">{$period}</td></tr>
+</table>
+<table cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;background:#f8faff;border:1px solid #e2e8f0;border-radius:10px;margin:0 0 18px;">
+  <tr><td style="padding:12px 16px;font-size:14px;font-weight:700;color:#1e293b;">Amount due</td>
+      <td style="padding:12px 16px;font-size:16px;font-family:monospace;font-weight:800;text-align:right;color:#0f4c9e;">{$amount}</td></tr>
+</table>
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 6px;"><strong>Pay by EFT by {$due}</strong>, using <strong>{$num}</strong> as the reference:</p>
+<table cellpadding="0" cellspacing="0" style="font-size:13px;margin:0 0 18px;">
+  <tr><td style="color:#64748b;padding:2px 16px 2px 0;">Bank</td><td style="color:#1e293b;">{$bank}</td></tr>
+  <tr><td style="color:#64748b;padding:2px 16px 2px 0;">Account holder</td><td style="color:#1e293b;">{$holder}</td></tr>
+  <tr><td style="color:#64748b;padding:2px 16px 2px 0;">Account number</td><td style="color:#1e293b;font-family:monospace;">{$acct}</td></tr>
+  <tr><td style="color:#64748b;padding:2px 16px 2px 0;">Branch code</td><td style="color:#1e293b;font-family:monospace;">{$branch}</td></tr>
+</table>
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">View or print the invoice →</a>
+<p style="font-size:12px;color:#94a3b8;line-height:1.6;margin:18px 0 0;">Prices exclude VAT. Questions about this invoice? Reply to this email.</p>
+HTML;
+    return sendEmail($to, "SalesDesk invoice {$inv['invoice_number']} — {$amount}", $body);
+}
+
+/** Plans 4b: a business's announcement to its network brokers. */
+function sendNetworkAnnouncement(string $brokerEmail, string $brokerName, string $orgName, string $title, string $message): bool
+{
+    $name  = htmlspecialchars($brokerName ?: 'there');
+    $org   = htmlspecialchars($orgName);
+    $head  = htmlspecialchars($title);
+    $text  = nl2br(htmlspecialchars($message));
+    $url   = SITE_URL . '/app/broker/networks';
+    $body  = <<<HTML
+<p style="font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin:0 0 6px;">{$org} · network announcement</p>
+<h2 style="font-size:20px;font-weight:700;color:#0f4c9e;margin:0 0 12px;">{$head}</h2>
+<p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 8px;">Hi {$name},</p>
+<div style="font-size:15px;color:#334155;line-height:1.65;margin:0 0 20px;background:#f8faff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;">{$text}</div>
+<a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
+  Open My networks →
+</a>
+<p style="font-size:12px;color:#94a3b8;line-height:1.6;margin:18px 0 0;">You’re getting this because you’re in {$org}’s broker network on SalesDesk.</p>
+HTML;
+    return sendEmail($brokerEmail, "{$orgName}: {$title}", $body);
 }
 
 function sendAgentRejected(string $brokerEmail, string $brokerName, string $orgName, string $reason = ''): bool
@@ -551,17 +637,17 @@ function sendAgentRejected(string $brokerEmail, string $brokerName, string $orgN
           . 'border-radius:8px;padding:12px 14px;margin:0 0 18px;"><strong>Reason:</strong> '
           . htmlspecialchars($reason) . '</p>'
         : '';
-    $url  = SITE_URL . '/app/broker/desk-org';
+    $url  = SITE_URL . '/app/broker/networks';
     $body = <<<HTML
 <h2 style="font-size:20px;font-weight:700;color:#dc2626;margin:0 0 8px;">Application declined</h2>
 <p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 12px;">Hi {$name},</p>
 <p style="font-size:15px;color:#475569;line-height:1.65;margin:0 0 16px;">
-  Your application to join <strong>{$org}</strong> was declined. You can keep working as an
-  independent broker, or apply to a different desk organisation.
+  Your application to join <strong>{$org}</strong>'s broker network was declined. You can keep
+  sharing any car on SalesDesk, or apply to another network.
 </p>
 {$reasonBlock}
 <a href="{$url}" style="display:inline-block;background:#0f4c9e;color:#fff;font-size:15px;font-weight:600;padding:12px 26px;border-radius:8px;text-decoration:none;">
-  See desk organisations →
+  See networks →
 </a>
 HTML;
     return sendEmail($brokerEmail, "Your application to {$orgName} was declined", $body);
@@ -939,6 +1025,13 @@ function sendDealerCommissionInvoice(
     $gross       = 'R ' . number_format((float)($commission['gross_amount']  ?? 0), 2);
     $fee         = 'R ' . number_format((float)($commission['platform_fee']  ?? 0), 2);
     $net         = 'R ' . number_format((float)($commission['net_amount']    ?? 0), 2);
+    // 4a: network bonus (part of the gross) shown as its own line
+    $bonusAmt    = (float) ($commission['network_bonus'] ?? 0);
+    $bonusRow    = $bonusAmt > 0
+        ? '<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 16px 10px 32px;font-size:12px;color:#64748b;">'
+          . 'incl. network bonus (your broker network)</td><td style="padding:6px 16px 10px;font-size:12px;font-family:monospace;'
+          . 'text-align:right;color:#64748b;">R ' . number_format($bonusAmt, 2) . '</td></tr>'
+        : '';
     $salePrice   = isset($lead['car_price'])
         ? 'R ' . number_format((float)$lead['car_price'], 2)
         : '—';
@@ -1004,6 +1097,7 @@ function sendDealerCommissionInvoice(
     <td style="padding:10px 16px;font-size:13px;font-family:monospace;text-align:right;
                color:#1e293b;">{$gross}</td>
   </tr>
+  {$bonusRow}
   <tr style="border-bottom:1px solid #e2e8f0;">
     <td style="padding:10px 16px;font-size:13px;color:#475569;">SalesDesk platform fee</td>
     <td style="padding:10px 16px;font-size:13px;font-family:monospace;text-align:right;

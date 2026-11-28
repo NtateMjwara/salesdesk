@@ -62,6 +62,19 @@ require_once __DIR__ . '/cookie-consent.php';
 define('VISITOR_COOKIE_NAME', 'sd_vid');
 define('VISITOR_COOKIE_DAYS', 90);
 
+// RV-1 (Nov 2026): "Recently viewed" is a rolling window. A car drops off
+// the visitor's list this many days after they last opened it, so someone
+// away for a month starts with an empty list. Only the buyer-facing list
+// is windowed — car_views rows are NOT deleted (dealer/broker view
+// analytics read the same table).
+define('RECENTLY_VIEWED_DAYS', 30);
+
+/** Oldest viewed_at still shown under "Recently viewed" (DB datetime string). */
+function recentlyViewedCutoff(): string
+{
+    return date('Y-m-d H:i:s', time() - RECENTLY_VIEWED_DAYS * 86400);
+}
+
 // ── Public API ────────────────────────────────────────────────
 
 /**

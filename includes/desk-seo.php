@@ -83,6 +83,7 @@ function sdDeskOrg(int $brokerUserId): ?array
         FROM organization_members om
         JOIN organizations o ON o.id = om.organization_id
         WHERE om.user_id = ? AND o.is_active = 1" . sdVerifiedMemberSql('om') . "
+        ORDER BY om.verified_at IS NULL, om.verified_at, om.id   -- 2b: several networks: the first one joined names the desk
         LIMIT 1
     ");
     $stmt->execute([$brokerUserId]);

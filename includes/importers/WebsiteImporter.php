@@ -949,6 +949,11 @@ class WebsiteImporter implements InventoryImporterInterface
 
     private function insertCar(int $dealerId, array $v, string $commType, float $commValue, int $importId, ?int $execId, ?float $deadlineTs = null): void
     {
+        // Plans 3b: a dealership over its business plan's dealership limit adds
+        // no NEW cars (existing ones still update). Reported as a failed row.
+        require_once __DIR__ . '/../plan_grace.php';
+        sdAssertDealerCanList($dealerId);
+
         $uuid   = generateUuidV4();
         $slug   = $this->generateUniqueSlug($dealerId, $v['year'], $v['make'], $v['model'], $v['colour']);
         $images = $this->rehostImages($uuid, $v['image_urls'], [], $deadlineTs);

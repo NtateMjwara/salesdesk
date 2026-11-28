@@ -60,10 +60,22 @@ class ImageRehostService
      * @param string|null $uploadRoot Absolute filesystem path to the
      *                                uploads/cars directory. Defaults to
      *                                <project root>/uploads/cars.
+     *
+     * PATH FIX (Oct 2026): this used to default to dirname(__DIR__) .
+     * '/uploads/cars'. __DIR__ here is includes/importers/, so that
+     * resolved to <project root>/includes/uploads/cars — files were
+     * written there while downloadOne() returned /uploads/cars/... URLs,
+     * which point at <project root>/uploads/cars. Every re-hosted image
+     * therefore 404'd (and /includes/ is 403'd by .htaccess anyway).
+     * Now uses the same UPLOADS_PATH that car-upload.php and every other
+     * upload in the codebase uses, with an equivalent fallback.
+     * Run scripts/move-rehosted-images.php once to relocate images
+     * already saved under the old path.
      */
     public function __construct(?string $uploadRoot = null)
     {
-        $this->uploadRoot = $uploadRoot ?? (dirname(__DIR__) . '/uploads/cars');
+        $this->uploadRoot = $uploadRoot
+            ?? ((defined('UPLOADS_PATH') ? UPLOADS_PATH : dirname(__DIR__, 2) . '/uploads') . '/cars');
     }
 
     /**

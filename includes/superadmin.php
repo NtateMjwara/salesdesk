@@ -39,6 +39,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/business.php';   // 0020: business orgs are managed via their dealership
 
 const SD_STEPUP_TTL      = 900;   // seconds a step-up confirmation stays valid
 const SD_STEPUP_PURPOSE  = 'admin_stepup';
@@ -136,8 +137,12 @@ function adminUserScopeSql(int $adminId, string $alias = 'u'): array
                      WHERE sd_se.user_id = {$alias}.id)
          OR EXISTS (SELECT 1 FROM organization_members sd_om
                       JOIN organization_managers sd_omg ON sd_omg.organization_id = sd_om.organization_id AND sd_omg.admin_user_id = ?
-                     WHERE sd_om.user_id = {$alias}.id)
-        )", [$adminId, $adminId, $adminId]];
+                     WHERE sd_om.user_id = {$alias}.id)" . (sdBusinessReady() ? "
+         OR EXISTS (SELECT 1 FROM organization_members sd_om3   -- 2b: brokers in (or applying to) the networks of their dealerships
+                      JOIN dealers sd_bd ON sd_bd.organization_id = sd_om3.organization_id
+                      JOIN dealer_managers sd_bdm ON sd_bdm.dealer_id = sd_bd.id AND sd_bdm.admin_user_id = ?
+                     WHERE sd_om3.user_id = {$alias}.id)" : '') . "
+        )", sdBusinessReady() ? [$adminId, $adminId, $adminId, $adminId] : [$adminId, $adminId, $adminId]];
 }
 
 /**
@@ -192,7 +197,19 @@ function adminCanActOnOrg(int $adminId, int $orgId): bool
         "SELECT 1 FROM organization_managers WHERE organization_id = ? AND admin_user_id = ? LIMIT 1"
     );
     $stmt->execute([$orgId, $adminId]);
-    return (bool) $stmt->fetchColumn();
+    if ($stmt->fetchColumn()) {
+        return true;
+    }
+    if (!sdBusinessReady()) {
+        return false;
+    }
+    // 2b: a business org is looked after by the admins of its dealerships.
+    $biz = Database::getInstance()->prepare("
+        SELECT 1 FROM dealers d JOIN dealer_managers dm ON dm.dealer_id = d.id AND dm.admin_user_id = ?
+        WHERE d.organization_id = ? LIMIT 1
+    ");
+    $biz->execute([$adminId, $orgId]);
+    return (bool) $biz->fetchColumn();
 }
 
 
@@ -491,7 +508,7 @@ function saPortfolio(int $adminId): array
         FROM organization_managers om
         JOIN organizations o ON o.id = om.organization_id
         LEFT JOIN addresses a ON a.id = o.address_id
-        WHERE om.admin_user_id = ?
+        WHERE om.admin_user_id = ?" . sdLegacyOrgSql('o') . "
         ORDER BY o.name
     ");
     $o->execute([$adminId, $adminId]);
@@ -532,7 +549,7 @@ function saOrphans(): array
             SELECT 1 FROM organization_managers om
             JOIN users u ON u.id = om.admin_user_id AND u.role = 'admin' AND u.status = 'active'
             WHERE om.organization_id = o.id
-        )
+        )" . sdLegacyOrgSql('o') . "
         ORDER BY o.is_active DESC, o.name
     ")->fetchAll();
 
@@ -555,7 +572,7 @@ function saAssignable(int $adminId): array
         SELECT o.id, o.name, a.city
         FROM organizations o
         LEFT JOIN addresses a ON a.id = o.address_id
-        WHERE NOT EXISTS (SELECT 1 FROM organization_managers om WHERE om.organization_id = o.id AND om.admin_user_id = ?)
+        WHERE NOT EXISTS (SELECT 1 FROM organization_managers om WHERE om.organization_id = o.id AND om.admin_user_id = ?)" . sdLegacyOrgSql('o') . "
         ORDER BY o.name
     ");
     $o->execute([$adminId]);

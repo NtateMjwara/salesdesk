@@ -27,6 +27,8 @@ require_once __DIR__ . '/filter-whitelists.php';
 require_once __DIR__ . '/org_membership.php';
 require_once __DIR__ . '/superadmin.php';
 require_once __DIR__ . '/dealer_context.php';
+require_once __DIR__ . '/business.php';       // 2b: networks are scoped through dealerships
+require_once __DIR__ . '/entitlements.php';   // 2b: network size cap
 
 const SD_PROVINCES = [
     'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
@@ -490,6 +492,7 @@ function adminStatusBadge(string $status): string
         'pending'            => 'badge-pending',
         'suspended', 'inactive' => 'badge-suspended',
         'rejected'           => 'badge-rejected',
+        'invited'            => 'badge-pending',   // 2c: network invitation
         default              => 'badge-new',
     };
     return '<span class="badge ' . $class . '">' . htmlspecialchars(ucfirst($status)) . '</span>';
@@ -533,27 +536,54 @@ function adminParseOrgBrands(array $raw): array
     return [$brands, ''];
 }
 
-/** Pending agent applications across the orgs this admin manages. */
+/**
+ * PLANS 2b: WHERE fragment limiting organisations (alias) to the networks an
+ * admin looks after: the business's dealerships they manage (dealer_managers)
+ * or, for any legacy org, organization_managers. Superadmins: everything.
+ *
+ * @return array{0:string,1:array}
+ */
+function adminNetworkScopeSql(int $adminId, string $alias = 'o'): array
+{
+    if (isSuperadmin($adminId)) {
+        return ['1 = 1', []];
+    }
+    $sql    = "EXISTS (SELECT 1 FROM organization_managers sd_nom
+                       WHERE sd_nom.organization_id = {$alias}.id AND sd_nom.admin_user_id = ?)";
+    $params = [$adminId];
+    if (sdBusinessReady()) {
+        $sql     .= " OR EXISTS (SELECT 1 FROM dealers sd_nd
+                                  JOIN dealer_managers sd_ndm ON sd_ndm.dealer_id = sd_nd.id AND sd_ndm.admin_user_id = ?
+                                 WHERE sd_nd.organization_id = {$alias}.id)";
+        $params[] = $adminId;
+    }
+    return ["({$sql})", $params];
+}
+
+/** Pending network applications across the businesses this admin looks after. */
 function adminPendingAgentApplications(int $adminId, ?int $orgId = null): array
 {
-    $join = adminScopeJoin($adminId);
+    [$scope, $params] = adminNetworkScopeSql($adminId, 'o');
+    $dealerCol = sdBusinessReady()
+        ? '(SELECT MIN(d.id) FROM dealers d WHERE d.organization_id = o.id)'
+        : 'NULL';
     $sql = "
         SELECT m.id, m.organization_id AS org_id, m.joined_at AS applied_at,
-               o.name AS org_name,
+               o.name AS org_name, {$dealerCol} AS dealer_id,
                u.email, u.email_verified,
                p.first_name, p.last_name, p.phone,
                sd.display_name AS desk_name, sd.slug AS desk_slug,
                (SELECT COUNT(*) FROM broker_inventory bi WHERE bi.salesdesk_id = sd.id) AS desk_cars,
-               (SELECT COUNT(*) FROM leads l WHERE l.broker_id = m.user_id)              AS total_leads
+               (SELECT COUNT(*) FROM leads l WHERE l.broker_id = m.user_id)              AS total_leads,
+               (SELECT COUNT(*) FROM organization_members m3
+                 WHERE m3.user_id = m.user_id AND m3.status = 'verified')                AS other_networks
         FROM organization_members m
         JOIN organizations o          ON o.id = m.organization_id
-        {$join} organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
         JOIN users u                  ON u.id = m.user_id
         LEFT JOIN profiles p          ON p.user_id = m.user_id
         LEFT JOIN salesdesks sd       ON sd.user_id = m.user_id
-        WHERE m.status = 'pending'
+        WHERE m.status = 'pending' AND {$scope}
     ";
-    $params = [$adminId];
     if ($orgId) {
         $sql     .= " AND m.organization_id = ?";
         $params[] = $orgId;
@@ -565,107 +595,63 @@ function adminPendingAgentApplications(int $adminId, ?int $orgId = null): array
 }
 
 /**
- * approve | reject | suspend | reinstate | remove an agent, scoped to
- * orgs this admin manages.
+ * Everyone in one network who isn't waiting for review (verified,
+ * suspended, declined), for the dealership's Business tab.
+ */
+function adminNetworkMembers(int $orgId): array
+{
+    $stmt = Database::getInstance()->prepare("
+        SELECT m.id, m.status, m.joined_at, m.verified_at, m.rejection_reason,
+               u.email, p.first_name, p.last_name, p.phone,
+               sd.display_name AS desk_name, sd.slug AS desk_slug,
+               (SELECT COUNT(*) FROM broker_inventory bi WHERE bi.salesdesk_id = sd.id) AS desk_cars
+        FROM organization_members m
+        JOIN users u            ON u.id = m.user_id
+        LEFT JOIN profiles p    ON p.user_id = m.user_id
+        LEFT JOIN salesdesks sd ON sd.user_id = m.user_id
+        WHERE m.organization_id = ? AND m.status <> 'pending'
+        ORDER BY FIELD(m.status, 'verified', 'invited', 'suspended', 'rejected'), m.verified_at DESC
+    ");
+    $stmt->execute([$orgId]);
+    return $stmt->fetchAll();
+}
+
+/**
+ * Open or close a business's network to broker applications (Business
+ * tab). The caller has already loaded the dealership through
+ * getManagedDealer(). Core: sdSetNetworkOpen() in org_membership.php.
+ *
+ * @return array{0:bool,1:string}
+ */
+function adminSetNetworkOpen(int $adminId, int $dealerId, bool $open): array
+{
+    return sdSetNetworkOpen($dealerId, $open, $adminId);
+}
+
+/**
+ * Approve / decline / suspend / reinstate / remove / cancel (invite) a
+ * network broker from the admin side. Re-checks scope, so a tampered id
+ * can't reach another business; the rules themselves live in
+ * sdNetworkReview() (shared with the dealer portal, plans 2c).
  *
  * @return array{0:bool,1:string}
  */
 function adminReviewAgent(int $adminId, int $memberId, string $action, string $reason = ''): array
 {
-    $pdo  = Database::getInstance();
-    $join = adminScopeJoin($adminId);
-    $stmt = $pdo->prepare("
-        SELECT m.id, m.user_id, m.organization_id, m.status,
-               o.name AS org_name, o.brands,
-               u.email, p.first_name, p.last_name
+    [$scope, $params] = adminNetworkScopeSql($adminId, 'o');
+    $stmt = Database::getInstance()->prepare("
+        SELECT m.organization_id
         FROM organization_members m
-        JOIN organizations o          ON o.id = m.organization_id
-        {$join} organization_managers om ON om.organization_id = o.id AND om.admin_user_id = ?
-        JOIN users u                  ON u.id = m.user_id
-        LEFT JOIN profiles p          ON p.user_id = m.user_id
-        WHERE m.id = ?
+        JOIN organizations o ON o.id = m.organization_id
+        WHERE m.id = ? AND {$scope}
         LIMIT 1
     ");
-    $stmt->execute([$adminId, $memberId]);
-    $m = $stmt->fetch();
-    if (!$m) {
-        return [false, 'That agent was not found, or belongs to an organisation you don\'t manage.'];
+    $stmt->execute(array_merge([$memberId], $params));
+    $orgId = $stmt->fetchColumn();
+    if (!$orgId) {
+        return [false, 'That broker was not found, or is in a network you don’t look after.'];
     }
-
-    $prev   = $m['status'];
-    $name   = trim(($m['first_name'] ?? '') . ' ' . ($m['last_name'] ?? '')) ?: $m['email'];
-    $org    = $m['org_name'];
-    $orgId  = (int) $m['organization_id'];
-    $reason = mb_substr(trim($reason), 0, 255);
-
-    $allowed = [
-        'approve'   => ['pending'],
-        'reject'    => ['pending'],
-        'suspend'   => ['verified'],
-        'reinstate' => ['suspended'],
-        'remove'    => ['verified', 'suspended', 'rejected'],
-    ];
-    if (!isset($allowed[$action]) || !in_array($prev, $allowed[$action], true)) {
-        return [false, "Can't {$action} an agent who is {$prev}."];
-    }
-
-    if ($action === 'remove') {
-        $pdo->prepare("DELETE FROM organization_members WHERE id = ?")->execute([$memberId]);
-        writeAuditLog('org.agent_removed', 'organization', $orgId,
-            ['user_id' => (int) $m['user_id'], 'status' => $prev], null, $adminId);
-        return [true, "{$name} removed from {$org}. They're an independent broker now."];
-    }
-
-    $new = match ($action) {
-        'approve', 'reinstate' => 'verified',
-        'reject'               => 'rejected',
-        'suspend'              => 'suspended',
-    };
-    $pdo->prepare("
-        UPDATE organization_members
-        SET status = ?, verified_by = ?, verified_at = NOW(),
-            rejection_reason = ?, updated_at = NOW()
-        WHERE id = ?
-    ")->execute([$new, $adminId, in_array($new, ['rejected', 'suspended'], true) ? ($reason ?: null) : null, $memberId]);
-
-    $auditAction = [
-        'approve' => 'approved', 'reject' => 'rejected', 'suspend' => 'suspended', 'reinstate' => 'reinstated',
-    ][$action];
-    writeAuditLog('org.agent_' . $auditAction,
-        'organization', $orgId,
-        ['user_id' => (int) $m['user_id'], 'status' => $prev],
-        ['user_id' => (int) $m['user_id'], 'status' => $new, 'reason' => $reason, 'by' => $adminId], $adminId);
-
-    $pdo->prepare("
-        INSERT INTO notifications (user_id, type, title, body, meta, created_at)
-        VALUES (?, 'agent_status', ?, ?, ?, NOW())
-    ")->execute([
-        (int) $m['user_id'],
-        match ($new) {
-            'verified'  => "You're an agent at {$org}",
-            'rejected'  => "Application to {$org} declined",
-            'suspended' => "Agent access at {$org} suspended",
-        },
-        $reason ?: match ($new) {
-            'verified'  => 'You can now add its cars to your desk.',
-            'rejected'  => 'You can keep working independently or apply elsewhere.',
-            'suspended' => 'You can\'t add new cars until you\'re reinstated.',
-        },
-        json_encode(['org_id' => $orgId]),
-    ]);
-
-    if ($new === 'verified') {
-        sendAgentApproved($m['email'], $name, $org, orgBrands($m['brands']));
-    } elseif ($new === 'rejected') {
-        sendAgentRejected($m['email'], $name, $org, $reason);
-    }
-
-    return [true, match ($action) {
-        'approve'   => "{$name} is now an agent at {$org}.",
-        'reject'    => "{$name}'s application to {$org} was declined.",
-        'suspend'   => "{$name} suspended at {$org}.",
-        'reinstate' => "{$name} reinstated at {$org}.",
-    }];
+    return sdNetworkReview((int) $orgId, $memberId, $action, $reason, $adminId);
 }
 
 
@@ -733,6 +719,12 @@ function adminSchemaProblems(): array
     foreach ($cols as $k => $_) {
         $tables[explode('.', $k)[0]] = true;
     }
+    // 0020 drops the one-org-per-broker key (brokers may join several
+    // networks), so it's only required while the old desk orgs are in use.
+    if (array_key_exists('dealers.organization_id', $cols)) {
+        $need['0013_desk_orgs_online_dealerships.sql']['indexes'] = [];
+    }
+
     $idx = [];
     foreach ($pdo->query("
         SELECT DISTINCT TABLE_NAME, INDEX_NAME FROM information_schema.STATISTICS

@@ -51,7 +51,8 @@ function sdMoneySchemaReady(): bool
 function sdCurrentCloser(): array
 {
     $actor = (int) ($_SESSION['user_id'] ?? 0);
-    $staff = function_exists('sdInStaffWorkspace') && sdInStaffWorkspace();
+    $staff = function_exists('sdInStaffWorkspace') && sdInStaffWorkspace()
+        && !(function_exists('sdInGroupWorkspace') && sdInGroupWorkspace());   // 2d: the business owner isn't SalesDesk staff
     return [$actor, $staff ? 'staff' : 'principal'];
 }
 

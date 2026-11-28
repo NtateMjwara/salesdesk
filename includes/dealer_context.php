@@ -14,6 +14,11 @@
  *   operator   admin, dealership has NO principal, and
  *              dealer_managers.access = 'operate' for me
  *              (or I'm a superadmin)                        → full access
+ *   group      (plans 2d) principal who OWNS the business
+ *              (organizations.owner_user_id) a sister dealership
+ *              belongs to — switched to from the portal       → full access,
+ *              except company / verification / address settings
+ *              when that dealership has its own principal
  *   viewer     any other admin who manages it (access
  *              'view'), or any admin on a dealership that
  *              HAS a principal (delegation = Phase 3)       → read-only
@@ -37,6 +42,7 @@ require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/superadmin.php';
 
 const SD_WORKSPACE_SESSION_KEY = 'workspace_dealer_id';
+const SD_PRINCIPAL_ACTIVE_KEY   = 'dealer_active_id';   // 2d: business owner's chosen dealership
 
 /** Is the dealer_managers.access column there yet (migration 0015)? */
 function sdWorkspaceSchemaReady(): bool
@@ -69,6 +75,13 @@ function sdResolveDealerAccess(int $userId, string $role, ?int $dealerId): ?arra
         $stmt = $pdo->prepare("SELECT id, company_name, user_id, is_active FROM dealers WHERE user_id = ? LIMIT 1");
         $stmt->execute([$userId]);
         $d = $stmt->fetch();
+        // 2d: the business owner switched to another dealership in their business.
+        if ($dealerId && (!$d || (int) $d['id'] !== $dealerId)) {
+            $g = sdGroupDealerAccess($userId, $dealerId);
+            if ($g) {
+                return $g;
+            }
+        }
         return $d ? sdWorkspaceRow($d, 'principal', true, $userId, '') : null;
     }
 
@@ -113,6 +126,58 @@ function sdResolveDealerAccess(int $userId, string $role, ?int $dealerId): ?arra
         'You have view access to this dealership. A superadmin can switch you to Operate.');
 }
 
+/**
+ * 2d: may this principal open $dealerId as the owner of its business?
+ * Returns a 'group' workspace row, or null.
+ */
+function sdGroupDealerAccess(int $userId, int $dealerId): ?array
+{
+    if (!function_exists('sdBusinessReady')) {
+        require_once __DIR__ . '/business.php';
+    }
+    if (!sdBusinessReady()) {
+        return null;
+    }
+    $stmt = Database::getInstance()->prepare("
+        SELECT d.id, d.company_name, d.user_id, d.is_active
+        FROM dealers d
+        JOIN organizations o ON o.id = d.organization_id AND o.is_active = 1
+        WHERE d.id = ? AND o.owner_user_id = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$dealerId, $userId]);
+    $d = $stmt->fetch();
+    return $d ? sdWorkspaceRow($d, 'group', true, $userId, '') : null;
+}
+
+/**
+ * 2d: every dealership a principal can open in the portal: their own,
+ * plus the others in a business they own. Own dealership first.
+ *
+ * @return array<int, array{id:int, company_name:string, is_active:int, is_own:int}>
+ */
+function sdPrincipalDealerships(int $userId): array
+{
+    if (!function_exists('sdBusinessReady')) {
+        require_once __DIR__ . '/business.php';
+    }
+    $pdo = Database::getInstance();
+    if (!sdBusinessReady()) {
+        $s = $pdo->prepare("SELECT id, company_name, is_active, 1 AS is_own FROM dealers WHERE user_id = ? LIMIT 1");
+        $s->execute([$userId]);
+        return $s->fetchAll();
+    }
+    $s = $pdo->prepare("
+        SELECT d.id, d.company_name, d.is_active, (d.user_id = ?) AS is_own
+        FROM dealers d
+        LEFT JOIN organizations o ON o.id = d.organization_id AND o.is_active = 1
+        WHERE d.user_id = ? OR o.owner_user_id = ?
+        ORDER BY is_own DESC, d.company_name
+    ");
+    $s->execute([$userId, $userId, $userId]);
+    return $s->fetchAll();
+}
+
 function sdWorkspaceRow(array $d, string $mode, bool $canWrite, int $actorId, string $reason): array
 {
     return [
@@ -133,11 +198,22 @@ function sdCurrentWorkspace(): ?array
     return $GLOBALS['sdWorkspace'] ?? null;
 }
 
-/** True when an admin (not the principal) is working inside a dealership. */
+/**
+ * True when someone other than the dealership's own principal is working
+ * inside it: an admin, or (2d) the business owner in 'group' mode. Callers
+ * that mean SalesDesk staff only should also check sdInGroupWorkspace().
+ */
 function sdInStaffWorkspace(): bool
 {
     $ws = sdCurrentWorkspace();
     return $ws !== null && $ws['mode'] !== 'principal';
+}
+
+/** 2d: the business owner is running a sister dealership. */
+function sdInGroupWorkspace(): bool
+{
+    $ws = sdCurrentWorkspace();
+    return $ws !== null && $ws['mode'] === 'group';
 }
 
 /**
@@ -172,8 +248,13 @@ function requireDealerWorkspace(array $opts = []): array
         sdWorkspaceDeny($isApi, 403, 'Access denied.', '/');
     }
 
-    $dealerId = $role === 'admin' ? (int) ($_SESSION[SD_WORKSPACE_SESSION_KEY] ?? 0) : null;
+    $dealerId = $role === 'admin'
+        ? (int) ($_SESSION[SD_WORKSPACE_SESSION_KEY] ?? 0)
+        : ((int) ($_SESSION[SD_PRINCIPAL_ACTIVE_KEY] ?? 0) ?: null);   // 2d: business owner's switch
     $ctx      = sdResolveDealerAccess($userId, $role, $dealerId);
+    if ($role === 'dealer' && $dealerId && $ctx && $ctx['dealer_id'] !== $dealerId) {
+        unset($_SESSION[SD_PRINCIPAL_ACTIVE_KEY]);   // no longer theirs to open: back to their own dealership
+    }
 
     if ($ctx === null) {
         if ($role === 'dealer') {
@@ -202,7 +283,8 @@ function requireDealerWorkspace(array $opts = []): array
 
     // ── Central read-only enforcement ─────────────────────────
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
-    if ($ctx['mode'] === 'delegate' && !empty($opts['principal_only']) && !in_array($method, ['GET', 'HEAD'], true)) {
+    if (in_array($ctx['mode'], ['delegate', 'group'], true) && $ctx['has_principal']
+        && !empty($opts['principal_only']) && !in_array($method, ['GET', 'HEAD'], true)) {
         $ctx['can_write'] = false;
         $ctx['reason']    = 'Company, verification and address settings stay with the principal.';
     }

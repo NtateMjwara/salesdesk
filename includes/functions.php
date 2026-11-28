@@ -798,22 +798,15 @@ function computeNetAmount(float $grossAmount, float $feePct): float
 
 function getBrokerBankAccount(int $brokerId, ?int $orgId = null): array|false
 {
-    $pdo = Database::getInstance();
-
-    if ($orgId) {
-        $stmt = $pdo->prepare("
-            SELECT * FROM bank_accounts
-            WHERE organization_id = ? AND is_primary = 1
-            LIMIT 1
-        ");
-        $stmt->execute([$orgId]);
-        $row = $stmt->fetch();
-        if ($row) return $row;
-    }
-
+    // PLANS 2a (0020): the org takes no cut — a commission is ALWAYS paid
+    // into the broker's own primary account. $orgId is ignored; it used to
+    // route the money to the org's bank account (old broker-agency model),
+    // which would now mean paying a broker's commission to a dealership.
+    $pdo  = Database::getInstance();
     $stmt = $pdo->prepare("
         SELECT * FROM bank_accounts
         WHERE user_id = ? AND organization_id IS NULL AND is_primary = 1
+        ORDER BY id DESC
         LIMIT 1
     ");
     $stmt->execute([$brokerId]);
@@ -890,6 +883,37 @@ function generateIdempotencyKey(int $commissionId, int $brokerId, ?int $orgId): 
 
 
 // ============================================================
+// RESERVED DESK SLUGS
+// ============================================================
+
+/**
+ * Words a broker desk slug (salesdesk.co.za/{slug}/) can never be: every
+ * top-level folder or page, and the reserved words in .htaccess §7.
+ * Used by the slug check (api/salesdesks/check-slug.php), sign-up
+ * (auth/authentication.php step 3) and the rename in app/settings.php.
+ * Add a new top-level page here and in .htaccess §7.
+ */
+const SD_RESERVED_DESK_SLUGS = [
+    // Folders and top-level pages
+    'account', 'api', 'app', 'assets', 'auth', 'broker', 'c', 'careers', 'cars-for-sale',
+    'cron', 'db', 'desks', 'how-it-works', 'includes', 'index', 'news', 'newsletter',
+    'outreach', 'pricing', 'public', 'scripts', 'sitemap', 'tools', 'vehicle', 'vendor',
+    'views', 'uploads',
+    // .htaccess §7 and planned pages
+    'about', 'admin', 'brokers', 'compare', 'contact', 'dashboard', 'dealers', 'guides',
+    'help', 'login', 'logout', 'popia', 'privacy', 'register', 'reviews', 'search', 'sell',
+    'terms', 'support', 'plans', 'billing',
+    // Roles and platform words
+    'car', 'dealer', 'exec', 'org', 'platform', 'salesdesk',
+];
+
+function sdIsReservedDeskSlug(string $slug): bool
+{
+    return in_array(strtolower(trim($slug)), SD_RESERVED_DESK_SLUGS, true);
+}
+
+
+// ============================================================
 // ADMIN DATA HELPERS
 // ============================================================
 
@@ -903,6 +927,9 @@ function getPendingVerifications(?int $scopeAdminId = null): array
     $restrict = $scopeAdminId !== null && function_exists('isSuperadmin') && !isSuperadmin($scopeAdminId);
     $dealerScope = $restrict ? ' AND d.id IN (SELECT dm.dealer_id FROM dealer_managers dm WHERE dm.admin_user_id = ?)' : '';
     $orgScope    = $restrict ? ' AND o.id IN (SELECT om.organization_id FROM organization_managers om WHERE om.admin_user_id = ?)' : '';
+    // 0020: a business org is verified through its dealership's CIPC check, so it isn't listed twice.
+    require_once __DIR__ . '/business.php';
+    $orgScope   .= sdLegacyOrgSql('o');
 
     $dealerStmt = $pdo->prepare("
         SELECT

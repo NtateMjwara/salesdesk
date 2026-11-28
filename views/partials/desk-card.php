@@ -55,6 +55,7 @@ function sdDeskCard(array $desk, array $previews = [], array $opts = []): string
     $deskUrl    = '/' . rawurlencode($desk['slug']) . '/';
     $carsCount  = (int) ($desk['cars_count'] ?? 0);
     $hasOrg     = $showOrg && !empty($desk['org_name']);
+    $netBadge   = $opts['network_badge'] ?? null;   // 4b: on a VIP network's page, each member's card
     $orgOk      = ($desk['org_verification'] ?? null) === 'verified';
 
     ob_start(); ?>
@@ -79,8 +80,11 @@ function sdDeskCard(array $desk, array $previews = [], array $opts = []): string
         </span>
       </div>
 
-      <?php if ($hasOrg || !empty($desk['tagline'])): ?>
+      <?php if ($hasOrg || $netBadge || !empty($desk['tagline'])): ?>
       <div class="dk-card__meta">
+        <?php if ($netBadge): ?>
+        <span class="pub-badge dk-vip-badge"><i class="fa-solid fa-crown" aria-hidden="true"></i> <?= $e($netBadge) ?> network broker</span>
+        <?php endif; ?>
         <?php if ($hasOrg): ?>
         <span class="pub-badge <?= $orgOk ? 'pub-badge-verified' : 'pub-badge-desk' ?>"><i class="fa-solid <?= $orgOk ? 'fa-circle-check' : 'fa-building' ?>" aria-hidden="true"></i> <?= $e($desk['org_name']) ?></span>
         <?php endif; ?>

@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin partial — pending desk organisation agent applications.  (0013)
+ * Admin partial — pending business network applications.  (0013, plans 2b)
  *
  * Expects:
  *   array $agentPending  rows from adminPendingAgentApplications()
@@ -16,7 +16,7 @@ $showOrg = $showOrg ?? false;
     <thead>
       <tr>
         <th>Broker</th>
-        <?php if ($showOrg): ?><th>Organisation</th><?php endif; ?>
+        <?php if ($showOrg): ?><th>Network</th><?php endif; ?>
         <th>SalesDesk</th>
         <th>Track record</th>
         <th>Applied</th>
@@ -32,17 +32,18 @@ $showOrg = $showOrg ?? false;
           <div class="adm-sub"><?= htmlspecialchars($app['email']) ?><?= $app['phone'] ? ' · ' . htmlspecialchars($app['phone']) : '' ?></div>
         </td>
         <?php if ($showOrg): ?>
-        <td><a href="/app/admin/desk-orgs-view?id=<?= (int) $app['org_id'] ?>"><?= htmlspecialchars($app['org_name']) ?></a></td>
+        <td><?php if (!empty($app['dealer_id'])): ?><a href="/app/admin/dealerships-view?id=<?= (int) $app['dealer_id'] ?>&amp;tab=business"><?= htmlspecialchars($app['org_name']) ?></a><?php else: ?><?= htmlspecialchars($app['org_name']) ?><?php endif; ?></td>
         <?php endif; ?>
         <td class="adm-muted">
           <?php if ($app['desk_slug']): ?>
             <a href="/<?= htmlspecialchars($app['desk_slug']) ?>/" target="_blank" rel="noopener"><?= htmlspecialchars($app['desk_name']) ?> ↗</a>
           <?php else: ?>—<?php endif; ?>
         </td>
-        <td class="adm-muted"><?= (int) $app['desk_cars'] ?> car<?= (int) $app['desk_cars'] === 1 ? '' : 's' ?> · <?= (int) $app['total_leads'] ?> lead<?= (int) $app['total_leads'] === 1 ? '' : 's' ?></td>
+        <td class="adm-muted"><?= (int) $app['desk_cars'] ?> car<?= (int) $app['desk_cars'] === 1 ? '' : 's' ?> · <?= (int) $app['total_leads'] ?> lead<?= (int) $app['total_leads'] === 1 ? '' : 's' ?>
+          <?php if (!empty($app['other_networks'])): ?><div class="adm-sub">In <?= (int) $app['other_networks'] ?> other network<?= (int) $app['other_networks'] === 1 ? '' : 's' ?></div><?php endif; ?></td>
         <td class="adm-muted"><?= date('d M Y', strtotime($app['applied_at'])) ?></td>
         <td><div class="adm-actions">
-          <form method="POST" data-confirm="Approve <?= htmlspecialchars($appName) ?> as an agent at <?= htmlspecialchars($app['org_name']) ?>? They'll be emailed.">
+          <form method="POST" data-confirm="Add <?= htmlspecialchars($appName) ?> to <?= htmlspecialchars($app['org_name']) ?>’s network? They’ll be emailed.">
             <?= csrf_hidden_field() ?>
             <input type="hidden" name="kind" value="agent">
             <input type="hidden" name="member_id" value="<?= (int) $app['id'] ?>">

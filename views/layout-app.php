@@ -27,13 +27,14 @@
  *   string $pageContent    — main page HTML (from ob_get_clean())
  *   string $flashOk        — green flash message
  *   string $flashError     — red flash message
- *   string $assetVersion   — cache-buster suffix (default: today YYYYMMDD)
+ *   string $assetVersion   — legacy; CSS/JS now use sdAsset() content hashes (CACHE-2)
  *   bool   $hideNav        — set true to suppress the top nav (e.g. onboarding)
  *   array  $pageStyles     — extra stylesheet paths for this page (e.g. ['/assets/css/admin.css'])
  *   array  $pageScripts    — extra script paths, loaded after global.js
  */
 
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/assets.php';   // CACHE-2: sdAsset() content-hash URLs
 require_once __DIR__ . '/../includes/database.php';
 require_once __DIR__ . '/../includes/csrf.php';
 $pageTitle    = $pageTitle    ?? 'SalesDesk';
@@ -107,7 +108,10 @@ $currentUserDisplayName = trim("{$currentUserFirstName} {$currentUserLastName}")
 // and styles, plus the workspace banner below. $sdWorkspace is set by
 // requireDealerWorkspace() on /app/dealer/* pages only.
 $sdWorkspace   = $GLOBALS['sdWorkspace'] ?? null;
-$inStaffWs     = $sdWorkspace && ($sdWorkspace['mode'] ?? 'principal') !== 'principal';
+$inStaffWs     = $sdWorkspace && !in_array($sdWorkspace['mode'] ?? 'principal', ['principal', 'group'], true);   // 2d: group = the business owner, not staff
+// 2d: a business owner with several dealerships gets a switcher bar.
+$sdGroupChoices = ($currentUserRole === 'dealer' && $sdWorkspace && function_exists('sdPrincipalDealerships'))
+    ? sdPrincipalDealerships((int) ($_SESSION['user_id'] ?? 0)) : [];
 $navRole       = $inStaffWs ? 'dealer' : $currentUserRole;
 
 // Role-specific nav links.
@@ -117,7 +121,8 @@ $navLinks = match ($navRole) {
         '/app/broker/inventory.php'  => 'Marketplace',
         '/app/broker/leads.php'      => 'My Leads',
         '/app/broker/earnings.php'   => 'Earnings',
-        '/app/broker/desk-org'       => 'Organisation',
+        '/app/broker/networks'       => 'Networks',   // 2b: business networks
+        '/app/broker/plan'           => 'Plan',
     ],
     'dealer'     => [
         '/app/dealer/dashboard.php'  => 'Dashboard',
@@ -125,6 +130,8 @@ $navLinks = match ($navRole) {
         '/app/dealer/import.php'     => 'Import',
         '/app/dealer/leads.php'      => 'Leads',
         '/app/dealer/team.php'       => 'Team',
+        '/app/dealer/network'        => 'Network',   // 2c: the business's broker network
+        '/app/dealer/plan'           => 'Plan',      // 0026: business plan + billing
     ],
     'sales_exec' => [
         '/app/exec/dashboard.php'    => 'Dashboard',
@@ -143,13 +150,12 @@ $navLinks = match ($navRole) {
             '/app/admin/workspace'       => 'Workspaces',
             '/app/admin/approvals'       => 'Approvals',
             '/app/admin/unplaced-execs'  => 'Unplaced execs',
-            '/app/admin/desk-orgs'       => 'Desk orgs',
+            '/app/admin/plans'           => 'Plans',   // 0020: Desk orgs retired; orgs live on Dealerships
             '/app/admin/payouts.php'     => 'Payouts',
             '/app/admin/audit.php'       => 'Audit',
         ] : [
             '/app/admin/dealerships'     => 'Dealerships',
             '/app/admin/workspace'       => 'Workspaces',
-            '/app/admin/desk-orgs'       => 'Desk orgs',
             '/app/admin/approvals'       => 'Approvals',
             '/app/admin/unplaced-execs'  => 'Unplaced execs',
             '/app/admin/users'           => 'Users',
@@ -178,35 +184,33 @@ $settingsPath = match ($currentUserRole) {
   <title><?= htmlspecialchars($pageTitle) ?> | SalesDesk</title>
 
   <!-- Global assets -->
-  <link rel="stylesheet" href="/assets/css/global.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/components.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/global.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/components.css') ?>">
 
   <!-- Font Awesome (icons) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/img/logo.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logo.png">   
+  <!-- Favicons, app icons, manifest (BRAND-1) -->
+<?php require __DIR__ . '/partials/brand-head.php'; ?>
 
   <!-- Role-specific CSS -->
   <?php if ($navRole === 'broker'): ?>
-  <link rel="stylesheet" href="/assets/css/broker.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/broker.css') ?>">
   <?php elseif (in_array($navRole, ['dealer', 'sales_exec'])): ?>
-  <link rel="stylesheet" href="/assets/css/dealer.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/dealer-dashboard-patch.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/dealer-analytics-patch.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/dealer-settings-leads-team-patch.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/exec-leads-patch.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/dealer.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/dealer-dashboard-patch.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/dealer-analytics-patch.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/dealer-settings-leads-team-patch.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/exec-leads-patch.css') ?>">
   <?php endif; ?>
 
   <?php if ($inStaffWs): ?>
-  <link rel="stylesheet" href="/assets/css/workspace.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/workspace.css') ?>">
   <?php endif; ?>
 
   <!-- Page-specific CSS -->
   <?php foreach (($pageStyles ?? []) as $pageStyleHref): ?>
-  <link rel="stylesheet" href="<?= htmlspecialchars($pageStyleHref) ?>?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset($pageStyleHref) ?>">
   <?php endforeach; ?>
 
   <style>
@@ -247,16 +251,15 @@ $settingsPath = match ($currentUserRole) {
       padding-right: max(1.5rem, env(safe-area-inset-right));
     }
 
+    /* BRAND-1: SVG lockup; height steps down with the topnav below */
     .topnav-brand {
-      font-family: var(--serif);
-      font-size: 1.1rem;
-      font-weight: 500;
-      color: var(--text);
-      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
       flex-shrink: 0;
+      text-decoration: none;
     }
-    .topnav-brand em { font-style: italic; color: var(--p); }
     .topnav-brand:hover { text-decoration: none; }
+    .brand-logo-img { display: block; width: auto; height: 28px; }
 
     /* Spacer that pushes right-side controls flush right */
     .topnav-sep { flex: 1; }
@@ -543,13 +546,10 @@ $settingsPath = match ($currentUserRole) {
       flex-shrink: 0;
     }
     .drawer-brand {
-      font-family: var(--serif);
-      font-size: 1.05rem;
-      font-weight: 500;
-      color: var(--text);
+      display: inline-flex;
+      align-items: center;
       text-decoration: none;
     }
-    .drawer-brand em { font-style: italic; color: var(--p); }
     .drawer-brand:hover { text-decoration: none; }
 
     .drawer-close {
@@ -751,7 +751,7 @@ $settingsPath = match ($currentUserRole) {
     ══════════════════════════════════════ */
     @media (max-width: 768px) {
       .topnav { height: 52px; padding-left: 0.875rem; padding-right: 0.875rem; gap: 0.5rem; }
-      .topnav-brand { font-size: 1rem; }
+      .topnav-brand .brand-logo-img { height: 26px; }
 
       .app-body { padding: 1.25rem 1rem 3rem; }
 
@@ -773,7 +773,7 @@ $settingsPath = match ($currentUserRole) {
     ══════════════════════════════════════ */
     @media (max-width: 480px) {
       .topnav { height: 50px; padding-left: 0.75rem; padding-right: 0.75rem; gap: 0.375rem; }
-      .topnav-brand { font-size: 0.95rem; }
+      .topnav-brand .brand-logo-img { height: 24px; }
 
       .app-body { padding: 1rem 0.875rem 2.5rem; }
 
@@ -803,7 +803,7 @@ $settingsPath = match ($currentUserRole) {
     ══════════════════════════════════════ */
     @media (max-width: 360px) {
       .topnav { height: 48px; padding-left: 0.625rem; padding-right: 0.625rem; }
-      .topnav-brand { font-size: 0.9rem; }
+      .topnav-brand .brand-logo-img { height: 22px; }
       .topnav-hamburger { min-width: 36px; min-height: 36px; }
 
       .app-body { padding: 0.875rem 0.75rem 2rem; }
@@ -923,8 +923,8 @@ $settingsPath = match ($currentUserRole) {
       'sales_exec' => '/app/exec/dashboard.php',
       'admin'      => '/app/admin/users.php',
       default      => '/app/dashboard.php',
-    } ?>" class="drawer-brand">
-      Sales<em>Desk</em>
+    } ?>" class="drawer-brand" aria-label="SalesDesk home">
+      <img class="brand-logo-img" src="/assets/img/brand/salesdesk-logo.svg?v=<?= SD_BRAND_V ?>" alt="SalesDesk" width="113" height="28">
     </a>
     <button class="drawer-close" id="drawerClose" aria-label="Close navigation">
       <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -1043,7 +1043,7 @@ $settingsPath = match ($currentUserRole) {
     'admin'      => '/app/admin/users.php',
     default      => '/app/dashboard.php',
   } ?>" class="topnav-brand" aria-label="SalesDesk home">
-    Sales<em>Desk</em>
+    <img class="brand-logo-img" src="/assets/img/brand/salesdesk-logo.svg?v=<?= SD_BRAND_V ?>" alt="SalesDesk" width="113" height="28">
   </a>
 
   <!-- Desktop nav links (hidden ≤ 900px via CSS) -->
@@ -1162,6 +1162,35 @@ $settingsPath = match ($currentUserRole) {
 </nav>
 <?php endif; ?>
 
+<?php if (count($sdGroupChoices) > 1): ?>
+<!-- ── 2d: business owner's dealership switcher ───────────── -->
+<div class="grp-bar<?= $sdWorkspace['mode'] === 'group' ? ' grp-bar--sister' : '' ?>" role="region" aria-label="Dealership">
+  <div class="grp-bar__inner">
+    <span class="grp-bar__text">
+      <i class="fa-solid fa-building" aria-hidden="true"></i>
+      <?php if ($sdWorkspace['mode'] === 'group'): ?>
+      Working in <strong><?= htmlspecialchars($sdWorkspace['company_name']) ?></strong>, part of your business.<?php if ($sdWorkspace['has_principal']): ?> <span class="grp-bar__note">Its company settings stay with its own principal.</span><?php endif; ?>
+      <?php else: ?>
+      Working in <strong><?= htmlspecialchars($sdWorkspace['company_name']) ?></strong>, your own dealership.
+      <?php endif; ?>
+    </span>
+    <form method="POST" action="/app/dealer/switch" class="grp-bar__form">
+      <input type="hidden" name="<?= htmlspecialchars(CSRF_TOKEN_NAME) ?>" value="<?= htmlspecialchars(generateCSRFToken()) ?>">
+      <input type="hidden" name="back" value="<?= htmlspecialchars(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?: '') ?>">
+      <label class="grp-bar__label" for="grp-switch">Switch to</label>
+      <select class="grp-bar__select" id="grp-switch" name="dealer_id" data-grp-switch>
+        <?php foreach ($sdGroupChoices as $gc): ?>
+        <option value="<?= (int) $gc['id'] ?>" <?= (int) $gc['id'] === (int) $sdWorkspace['dealer_id'] ? 'selected' : '' ?>>
+          <?= htmlspecialchars($gc['company_name']) ?><?= (int) $gc['is_own'] ? ' (yours)' : '' ?><?= !(int) $gc['is_active'] ? ' · offline' : '' ?>
+        </option>
+        <?php endforeach; ?>
+      </select>
+      <button class="grp-bar__btn" type="submit">Go</button>
+    </form>
+  </div>
+</div>
+<?php endif; ?>
+
 <?php if ($inStaffWs): ?>
 <!-- ── 0015: dealer workspace banner ──────────────────────── -->
 <div class="ws-banner ws-banner--<?= htmlspecialchars($sdWorkspace['mode']) ?>" role="status">
@@ -1221,11 +1250,11 @@ $settingsPath = match ($currentUserRole) {
 </main>
 
 <!-- ── Global JS ───────────────────────────────────────────── -->
-<script src="/assets/js/global.js?v=<?= $assetVersion ?>"></script>
+<script src="<?= sdAsset('/assets/js/global.js') ?>"></script>
 
 <!-- Page-specific JS -->
 <?php foreach (($pageScripts ?? []) as $pageScriptSrc): ?>
-<script src="<?= htmlspecialchars($pageScriptSrc) ?>?v=<?= $assetVersion ?>" defer></script>
+<script src="<?= sdAsset($pageScriptSrc) ?>" defer></script>
 <?php endforeach; ?>
 
 <script>

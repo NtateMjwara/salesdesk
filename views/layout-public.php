@@ -21,7 +21,8 @@
  *   string $layoutVariant   'wide' (default) | 'narrow'
  *   bool   $showBreadcrumb, array $breadcrumbs [[label, href|null], …]
  *   string $shareUrl, $shareTitle
- *   string $assetVersion    cache-buster (default: today)
+ *   string $assetVersion    cache-buster for page $extraCss (default: today).
+ *                           Shell CSS/JS use sdAsset() content hashes (CACHE-2).
  *   string $pageContent     page HTML (from ob_get_clean())
  *   string $extraCss        page <link> tags, rendered last in <head>
  *   array  $extraJs         page script paths, e.g. ['/assets/js/browse.js'],
@@ -80,6 +81,7 @@
 
 // ── Defaults ──────────────────────────────────────────────────
 require_once __DIR__ . '/../includes/structured-data.php';
+require_once __DIR__ . '/../includes/assets.php';   // CACHE-2: sdAsset() content-hash URLs
 
 $pageTitle      = $pageTitle      ?? 'SalesDesk';
 $siteName       = $siteName       ?? 'SalesDesk';
@@ -184,9 +186,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
   <meta name="robots" content="noindex,follow">
   <?php endif; ?>
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/favicon.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logos.png">
+  <!-- Favicons, app icons, manifest (BRAND-1) -->
+<?php require __DIR__ . '/partials/brand-head.php'; ?>
 
   <!-- Open Graph -->
   <meta property="og:type"        content="website">
@@ -239,8 +240,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 
   <!-- First-party shell CSS: preloaded, synchronous (nav must paint styled) -->
-  <link rel="preload" as="style" href="/assets/css/global.css?v=<?= $assetVersion ?>">
-  <link rel="preload" as="style" href="/assets/css/public-shell.css?v=<?= $assetVersion ?>">
+  <link rel="preload" as="style" href="<?= sdAsset('/assets/css/global.css') ?>">
+  <link rel="preload" as="style" href="<?= sdAsset('/assets/css/public-shell.css') ?>">
 
   <!-- PERF-3 / PERF-4: fonts + icons load async and never block render -->
   <link rel="stylesheet" href="<?= htmlspecialchars($googleFontsUrl) ?>"
@@ -263,17 +264,17 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
       5. how-it-works.css  async                (opt-out: $includeHowItWorksCss)
       6. $extraCss         page-specific stylesheet(s)
   -->
-  <link rel="stylesheet" href="/assets/css/global.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/public-shell.css?v=<?= $assetVersion ?>">
-  <link rel="stylesheet" href="/assets/css/public.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/global.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/public-shell.css') ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/public.css') ?>">
   <?php if ($includeBrowseCss): ?>
-  <link rel="stylesheet" href="/assets/css/browse.css?v=<?= $assetVersion ?>">
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/browse.css') ?>">
   <?php endif; ?>
   <?php if ($includeHowItWorksCss): ?>
-  <link rel="stylesheet" href="/assets/css/how-it-works.css?v=<?= $assetVersion ?>"
+  <link rel="stylesheet" href="<?= sdAsset('/assets/css/how-it-works.css') ?>"
         media="print" onload="this.media='all'">
   <noscript>
-    <link rel="stylesheet" href="/assets/css/how-it-works.css?v=<?= $assetVersion ?>">
+    <link rel="stylesheet" href="<?= sdAsset('/assets/css/how-it-works.css') ?>">
   </noscript>
   <?php endif; ?>
 
@@ -291,8 +292,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
     <!-- Brand -->
     <a href="/" class="pub-nav__brand" aria-label="SalesDesk home">
-      <img class="pub-nav__mark" src="/assets/img/logo-mark.png" alt="" width="44" height="15">
-      <span class="pub-nav__name">sales<span>desk</span></span>
+      <img class="pub-nav__logo" src="/assets/img/brand/salesdesk-logo.svg?v=<?= SD_BRAND_V ?>"
+           alt="SalesDesk" width="145" height="36" fetchpriority="high">
     </a>
 
     <!-- Primary links (hidden ≤ 1100px — drawer takes over) -->
@@ -306,93 +307,35 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <span class="pub-chevron" aria-hidden="true"><i class="fa-solid fa-chevron-down"></i></span>
         </button>
 
-        <div class="pub-mega-panel" id="navBuyPanel">
-          <div class="pub-mega-cols">
-
-            <div class="pub-mega-col">
-              <div class="pub-mega-col-label">By condition</div>
-              <a href="/cars-for-sale/?condition=new" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-star"></i></span>
-                <span class="pub-mega-item-text">New cars
-                  <span class="pub-mega-item-sub">Factory-fresh, full warranty</span>
-                </span>
-              </a>
-              <a href="/cars-for-sale/?condition=used" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-car"></i></span>
-                <span class="pub-mega-item-text">Pre-owned cars
-                  <span class="pub-mega-item-sub">From verified dealerships</span>
-                </span>
-              </a>
-              <a href="/cars-for-sale/?condition=demo" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-car-side"></i></span>
-                <span class="pub-mega-item-text">Demo cars
-                  <span class="pub-mega-item-sub">Low mileage, big savings</span>
-                </span>
-              </a>
-              <a href="/cars-for-sale/?fuel_type[]=Electric" class="pub-mega-item">
-                <span class="pub-mega-icon"><i class="fa-solid fa-bolt"></i></span>
-                <span class="pub-mega-item-text">Electric vehicles
-                  <span class="pub-mega-item-sub">EVs &amp; plug-in hybrids</span>
-                </span>
-              </a>
-            </div>
-
-            <div class="pub-mega-divider" aria-hidden="true"></div>
-
-            <div class="pub-mega-col">
-              <div class="pub-mega-col-label">By body style</div>
-              <a href="/cars-for-sale/?body_type[]=SUV" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-truck-monster"></i></span>
-                <span class="pub-mega-item-text">SUVs &amp; 4×4s</span>
-              </a>
-              <a href="/cars-for-sale/?body_type[]=Bakkie" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-truck-pickup"></i></span>
-                <span class="pub-mega-item-text">Bakkies</span>
-              </a>
-              <a href="/cars-for-sale/?body_type[]=Hatchback" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-car-side"></i></span>
-                <span class="pub-mega-item-text">Hatchbacks</span>
-              </a>
-              <a href="/cars-for-sale/?body_type[]=Sedan" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-car"></i></span>
-                <span class="pub-mega-item-text">Sedans</span>
-              </a>
-              <a href="/cars-for-sale/?body_type[]=MPV" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-van-shuttle"></i></span>
-                <span class="pub-mega-item-text">MPVs &amp; family cars</span>
-              </a>
-            </div>
-
-            <div class="pub-mega-divider" aria-hidden="true"></div>
-
-            <div class="pub-mega-col">
-              <div class="pub-mega-col-label">By budget</div>
-              <a href="/cars-for-sale/?price_max=200000" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-tag"></i></span>
-                <span class="pub-mega-item-text">Under R200k</span>
-              </a>
-              <a href="/cars-for-sale/?price_min=200000&amp;price_max=400000" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-tag"></i></span>
-                <span class="pub-mega-item-text">R200k – R400k</span>
-              </a>
-              <a href="/cars-for-sale/?price_min=400000&amp;price_max=700000" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-tag"></i></span>
-                <span class="pub-mega-item-text">R400k – R700k</span>
-              </a>
-              <a href="/cars-for-sale/?price_min=700000" class="pub-mega-item pub-mega-item--compact">
-                <span class="pub-mega-icon"><i class="fa-solid fa-gem"></i></span>
-                <span class="pub-mega-item-text">R700k and up</span>
-              </a>
-            </div>
-
-            <a href="/cars-for-sale/" class="pub-mega-promo">
-              <span>
-                <span class="pub-mega-promo__eyebrow">Live inventory</span>
-                <span class="pub-mega-promo__title">Every car from every verified dealer, in one search.</span>
+        <div class="pub-mega-panel pub-mega-panel--single" id="navBuyPanel">
+          <div class="pub-mega-col">
+            <a href="/cars-for-sale/?condition=new" class="pub-mega-item">
+              <span class="pub-mega-icon"><i class="fa-solid fa-star"></i></span>
+              <span class="pub-mega-item-text">New cars
+                <span class="pub-mega-item-sub">Factory-fresh, full warranty</span>
               </span>
-              <span class="pub-mega-promo__link">Browse all cars <i class="fa-solid fa-arrow-right"></i></span>
             </a>
-
+            <a href="/cars-for-sale/?condition=used" class="pub-mega-item">
+              <span class="pub-mega-icon"><i class="fa-solid fa-car"></i></span>
+              <span class="pub-mega-item-text">Pre-owned cars
+                <span class="pub-mega-item-sub">From verified dealerships</span>
+              </span>
+            </a>
+            <a href="/cars-for-sale/?condition=demo" class="pub-mega-item">
+              <span class="pub-mega-icon"><i class="fa-solid fa-car-side"></i></span>
+              <span class="pub-mega-item-text">Demo cars
+                <span class="pub-mega-item-sub">Low mileage, big savings</span>
+              </span>
+            </a>
+            <a href="/cars-for-sale/?fuel_type[]=Electric" class="pub-mega-item">
+              <span class="pub-mega-icon"><i class="fa-solid fa-bolt"></i></span>
+              <span class="pub-mega-item-text">Electric vehicles
+                <span class="pub-mega-item-sub">EVs &amp; plug-in hybrids</span>
+              </span>
+            </a>
+            <a href="/cars-for-sale/" class="pub-mega-all">
+              Browse all cars <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </a>
           </div>
         </div>
       </div>
@@ -441,6 +384,12 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
                 <span class="pub-mega-icon"><i class="fa-solid fa-store"></i></span>
                 <span class="pub-mega-item-text">List as a dealership
                   <span class="pub-mega-item-sub">Inventory, leads &amp; commission in one place</span>
+                </span>
+              </a>
+              <a href="/pricing" class="pub-mega-item">
+                <span class="pub-mega-icon"><i class="fa-solid fa-tags"></i></span>
+                <span class="pub-mega-item-text">Pricing
+                  <span class="pub-mega-item-sub">Free to start — plans for brokers and dealerships</span>
                 </span>
               </a>
             </div>
@@ -531,8 +480,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
         <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
       </button>
 
-      <a href="/account/wishlist/" class="pub-nav__icon-btn" aria-label="Saved cars (<?= $navWishlistCount ?>)" data-wishlist-link>
-        <i class="fa-regular fa-heart" aria-hidden="true"></i>
+      <a href="/account/wishlist/" class="pub-nav__icon-btn<?= $navWishlistCount ? ' has-saved' : '' ?>" aria-label="Saved cars (<?= $navWishlistCount ?>)" data-wishlist-link>
+        <i class="fa-<?= $navWishlistCount ? 'solid' : 'regular' ?> fa-heart" aria-hidden="true"></i>
         <span class="pub-nav__count" data-wishlist-count <?= $navWishlistCount ? '' : 'hidden' ?>><?= $navWishlistCount ?></span>
       </a>
 
@@ -577,6 +526,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <a href="/how-it-works/brokers" class="pub-acct-item"><i class="fa-solid fa-id-card"></i> For brokers</a>
           <a href="/how-it-works/sales-exec" class="pub-acct-item"><i class="fa-solid fa-user-tie"></i> For sales executives</a>
           <a href="/how-it-works/dealers" class="pub-acct-item"><i class="fa-solid fa-building-user"></i> For dealers</a>
+          <a href="/pricing" class="pub-acct-item"><i class="fa-solid fa-tags"></i> Pricing</a>
 
           <div class="pub-acct-divider"></div>
           <?php if ($navLoggedIn): ?>
@@ -647,8 +597,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
     <div class="pub-mobile-nav__head">
       <a href="/" class="pub-nav__brand" aria-label="SalesDesk home">
-        <img class="pub-nav__mark" src="/assets/img/logo-mark.png" alt="" width="44" height="15">
-        <span class="pub-nav__name">Sales<span>Desk</span></span>
+        <img class="pub-nav__logo" src="/assets/img/brand/salesdesk-logo.svg?v=<?= SD_BRAND_V ?>"
+             alt="SalesDesk" width="129" height="32" loading="lazy">
       </a>
       <button class="pub-nav__icon-btn" type="button" data-nav-close aria-label="Close menu">
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -680,6 +630,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <a href="/how-it-works/brokers"     class="pub-mobile-nav__item"><i class="fa-solid fa-id-card"></i> Become a broker</a>
           <a href="/how-it-works/sales-exec"  class="pub-mobile-nav__item"><i class="fa-solid fa-user-tie"></i> Sales executives</a>
           <a href="/how-it-works/dealers"     class="pub-mobile-nav__item"><i class="fa-solid fa-store"></i> List as a dealership</a>
+          <a href="/pricing"                  class="pub-mobile-nav__item"><i class="fa-solid fa-tags"></i> Pricing</a>
         </div>
       </details>
 
@@ -700,7 +651,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <?php if ($navLoggedIn): ?>
           <a href="<?= htmlspecialchars($navDashLink) ?>" class="pub-mobile-nav__item"><i class="fa-solid fa-gauge"></i> My dashboard</a>
           <?php endif; ?>
-          <a href="/account/wishlist/"        class="pub-mobile-nav__item"><i class="fa-regular fa-heart"></i> Saved cars<?= $navWishlistCount ? ' (' . $navWishlistCount . ')' : '' ?></a>
+          <a href="/account/wishlist/"        class="pub-mobile-nav__item"><i class="fa-regular fa-heart"></i> Saved cars <span data-wishlist-inline><?= $navWishlistCount ? '(' . $navWishlistCount . ')' : '' ?></span></a>
           <a href="/account/recently-viewed/" class="pub-mobile-nav__item"><i class="fa-solid fa-clock-rotate-left"></i> Recently viewed</a>
           <a href="/account/saved-searches/"  class="pub-mobile-nav__item"><i class="fa-regular fa-bookmark"></i> Saved searches</a>
           <?php if ($navLoggedIn): ?>
@@ -760,8 +711,8 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
 
       <div class="sd-footer__col sd-footer__col--brand">
         <a href="/" class="sd-footer__brand" aria-label="SalesDesk home">
-          <img class="sd-footer__logo" src="/assets/img/logo-icon.png" alt="" width="44" height="15" loading="lazy">
-          <span class="sd-footer__name">Sales<span>Desk</span></span>
+          <img class="sd-footer__logo" src="/assets/img/brand/salesdesk-logo-white.svg?v=<?= SD_BRAND_V ?>"
+               alt="SalesDesk" width="161" height="40" loading="lazy">
         </a>
         <p class="sd-footer__desc">
           South Africa's commission-first car sales network. Verified dealers,
@@ -796,6 +747,7 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
           <a href="/how-it-works/brokers"     class="sd-footer__link">Brokers</a>
           <a href="/how-it-works/sales-exec"  class="sd-footer__link">Sales executives</a>
           <a href="/how-it-works/dealers"     class="sd-footer__link">Dealers</a>
+          <a href="/pricing"                  class="sd-footer__link">Pricing</a>
           <a href="/auth/register"            class="sd-footer__link">Create your desk</a>
         </div>
       </div>
@@ -870,14 +822,14 @@ $fontAwesomeUrl = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css
        4. public-nav.js         mega panels, drawer, search sheet
        5. $extraJs              page scripts
      ══════════════════════════════════════════════════════ -->
-<script src="/assets/js/global.js?v=<?= $assetVersion ?>" defer></script>
-<script src="/assets/js/search-typeahead.js?v=<?= $assetVersion ?>" defer></script>
-<script src="/assets/js/public.js?v=<?= $assetVersion ?>" defer></script>
-<script src="/assets/js/public-nav.js?v=<?= $assetVersion ?>" defer></script>
+<script src="<?= sdAsset('/assets/js/global.js') ?>" defer></script>
+<script src="<?= sdAsset('/assets/js/search-typeahead.js') ?>" defer></script>
+<script src="<?= sdAsset('/assets/js/public.js') ?>" defer></script>
+<script src="<?= sdAsset('/assets/js/public-nav.js') ?>" defer></script>
 <?php foreach ((array) $extraJs as $jsPath):
     if (!is_string($jsPath) || !str_starts_with($jsPath, '/assets/js/')) continue;
     if ($jsPath === '/assets/js/search-typeahead.js') continue;   // already loaded above ?>
-<script src="<?= htmlspecialchars($jsPath) ?>?v=<?= $assetVersion ?>" defer></script>
+<script src="<?= sdAsset($jsPath) ?>" defer></script>
 <?php endforeach; ?>
 
 <?php

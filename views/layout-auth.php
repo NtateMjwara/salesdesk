@@ -44,10 +44,8 @@ $needsDealerSearch = $needsDealerSearch ?? false;
   <link rel="stylesheet" href="/assets/css/auth.css?v=<?= $assetVersion ?>">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/img/logo.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/img/logo.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/img/logo.png"> 
+  <!-- Favicons, app icons, manifest (BRAND-1) -->
+<?php require __DIR__ . '/partials/brand-head.php'; ?>
     
   <!--
     FIX-01: global.js loaded in <head> (synchronously, no defer/async).
@@ -92,27 +90,9 @@ $needsDealerSearch = $needsDealerSearch ?? false;
       margin-bottom: 1.75rem;
     }
 
-    .auth-brand-logo {
-      width: 34px;
-      height: 34px;
-      background: var(--p);
-      border-radius: 9px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-size: 14px;
-      flex-shrink: 0;
-    }
-
-    .auth-brand-name {
-      font-family: var(--serif);
-      font-size: 1.15rem;
-      font-weight: 500;
-      color: var(--text);
-    }
-
-    .auth-brand-name em { font-style: italic; color: var(--p); }
+    /* BRAND-1: SVG lockup replaces the car-icon tile + serif text */
+    .auth-brand-link { display: inline-flex; align-items: center; }
+    .auth-brand-img  { display: block; width: auto; height: 32px; }
 
     .auth-brand-badge {
       font-size: 9px;
@@ -132,10 +112,10 @@ $needsDealerSearch = $needsDealerSearch ?? false;
 
   <!-- Shared brand header -->
   <div class="auth-brand">
-    <div class="auth-brand-logo">
-      <i class="fa-solid fa-car-side"></i>
-    </div>
-    <div class="auth-brand-name">Sales<em>Desk</em></div>
+    <a class="auth-brand-link" href="/" aria-label="SalesDesk home">
+      <img class="auth-brand-img" src="/assets/img/brand/salesdesk-logo.svg?v=<?= SD_BRAND_V ?>"
+           alt="SalesDesk" width="129" height="32">
+    </a>
     <div class="auth-brand-badge">ZA</div>
   </div>
 

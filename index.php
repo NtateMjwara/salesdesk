@@ -84,6 +84,7 @@ declare(strict_types=1);
 require_once 'includes/security.php';
 require_once 'includes/session.php';
 require_once 'includes/database.php';
+require_once __DIR__ . '/includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once 'includes/functions.php';
 require_once 'includes/visitor.php';
 
@@ -110,7 +111,7 @@ try {
         SELECT COUNT(DISTINCT c.id)
         FROM cars c
         JOIN dealers d ON d.id = c.dealer_id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND d.is_active = 1
     ")->fetchColumn();
 } catch (Throwable) {
@@ -129,7 +130,7 @@ try {
         FROM cars c
         JOIN dealers d           ON d.id  = c.dealer_id
         JOIN addresses a         ON a.id  = d.address_id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND d.is_active = 1
           AND a.province IS NOT NULL
         GROUP BY a.province
@@ -181,7 +182,7 @@ try {
             )
             GROUP BY bi2.car_id
         ) first_desk ON first_desk.car_id = c.id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND d.is_active = 1
         ORDER BY c.created_at DESC
         LIMIT 8
@@ -205,7 +206,10 @@ try {
     $orgPreviews = [];
 }
 
-// ── Live: Recently Viewed (last 8 distinct cars for this visitor) ──
+// ── Live: Recently Viewed (RV-1: last 5 distinct cars, last 30 days) ──
+// The strip shows 4 or 5 cards depending on width (home.css .home-recent);
+// "View all" goes to /account/recently-viewed/. Views older than
+// RECENTLY_VIEWED_DAYS (includes/visitor.php) drop off automatically.
 // MIGRATION 0012 SYNC FIX: dropped the desk_slug IS NOT NULL gate —
 // a car the visitor genuinely viewed (via /cars-for-sale/car/{slug}/,
 // the platform-attributed route) shouldn't disappear from their own
@@ -232,16 +236,30 @@ try {
             GROUP BY bi2.car_id
         ) first_desk ON first_desk.car_id = c.id
         WHERE cv.visitor_session_id = ?
-          AND c.status = 'active'
+          AND cv.viewed_at >= ?
+          AND c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND d.is_active = 1
         GROUP BY c.id
         ORDER BY MAX(cv.viewed_at) DESC
-        LIMIT 8
+        LIMIT 5
     ");
-    $recentStmt->execute([$visitor['id']]);
+    $recentStmt->execute([$visitor['id'], recentlyViewedCutoff()]);
     $recentlyViewed = $recentStmt->fetchAll();
+
+    // Full count for the tab badge + "View all (N)"
+    $recentCountStmt = $pdo->prepare("
+        SELECT COUNT(DISTINCT cv.car_id)
+        FROM car_views cv
+        JOIN cars c    ON c.id = cv.car_id AND c.status = 'active' AND " . sdPublicCarSql('c') . "
+        JOIN dealers d ON d.id = c.dealer_id AND d.is_active = 1
+        WHERE cv.visitor_session_id = ?
+          AND cv.viewed_at >= ?
+    ");
+    $recentCountStmt->execute([$visitor['id'], recentlyViewedCutoff()]);
+    $recentTotal = (int) $recentCountStmt->fetchColumn();
 } catch (Throwable) {
     $recentlyViewed = [];
+    $recentTotal    = 0;
 }
 
 // ── Live: Wishlist ───────────────────────────────────────────────
@@ -274,7 +292,7 @@ try {
                 GROUP BY bi2.car_id
             ) first_desk ON first_desk.car_id = c.id
             WHERE c.id IN ($placeholders)
-              AND c.status = 'active'
+              AND c.status = 'active' AND " . sdPublicCarSql('c') . "
               AND d.is_active = 1
         ");
         $wishStmt->execute($wishlistIds);
@@ -292,7 +310,7 @@ try {
 // ── Live: inventory facets for the hero search + tiles (HOME-3) ──
 // Same base filter as $totalCars (status=active + dealer active) so
 // every number shown matches what /cars-for-sale/ renders on click.
-$facetBase = "FROM cars c JOIN dealers d ON d.id = c.dealer_id WHERE c.status = 'active' AND d.is_active = 1";
+$facetBase = "FROM cars c JOIN dealers d ON d.id = c.dealer_id WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND d.is_active = 1";
 try {
     $makeCounts = $pdo->query("SELECT c.make, COUNT(*) AS cnt {$facetBase} GROUP BY c.make ORDER BY c.make")
                       ->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -480,7 +498,7 @@ ob_start();
       <div class="home-tabs__list" role="tablist" aria-label="Your activity">
         <?php
         $actTabs = array_filter([
-            'recent'   => !empty($recentlyViewed) ? ['Recently viewed', count($recentlyViewed)] : null,
+            'recent'   => !empty($recentlyViewed) ? ['Recently viewed', max($recentTotal ?? 0, count($recentlyViewed))] : null,
             'wishlist' => !empty($wishlistCars)   ? ['Saved cars', count($wishlistCars)]        : null,
             'saved'    => !empty($savedSearches)  ? ['Saved searches', count($savedSearches)]   : null,
         ]);
@@ -496,8 +514,15 @@ ob_start();
 
       <?php if (!empty($recentlyViewed)): ?>
       <div class="home-tabs__panel" role="tabpanel" id="tab-recent" aria-labelledby="tab-btn-recent" <?= $firstTab !== 'recent' ? 'hidden' : '' ?>>
-        <div class="pub-rail home-rail">
+        <div class="home-recent">
           <?php foreach ($recentlyViewed as $car) echo sdVehicleCard($car, ['variant' => 'compact', 'wishlisted' => in_array((int) $car['id'], $wishIds, true)]); ?>
+        </div>
+        <div class="home-tabs__more">
+          <a href="/account/recently-viewed/" class="pub-btn pub-btn-ghost">
+            View all recently viewed<?php $rvAll = max($recentTotal ?? 0, count($recentlyViewed)); ?>
+            <span class="home-tabs__more-count">(<?= $rvAll ?>)</span>
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+          </a>
         </div>
       </div>
       <?php endif; ?>
@@ -506,6 +531,11 @@ ob_start();
       <div class="home-tabs__panel" role="tabpanel" id="tab-wishlist" aria-labelledby="tab-btn-wishlist" <?= $firstTab !== 'wishlist' ? 'hidden' : '' ?>>
         <div class="pub-rail home-rail">
           <?php foreach ($wishlistCars as $car) echo sdVehicleCard($car, ['variant' => 'compact', 'wishlisted' => true]); ?>
+        </div>
+        <div class="home-tabs__more">
+          <a href="/account/wishlist/" class="pub-btn pub-btn-ghost">
+            View all saved cars <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+          </a>
         </div>
       </div>
       <?php endif; ?>

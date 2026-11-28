@@ -11,6 +11,7 @@ require_once '../../includes/security.php';
 require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
+require_once '../../includes/vip_network.php';   // 4a: network-only badge
 require_once '../../includes/csrf.php';
 
 applyCachePolicy('auth');
@@ -131,6 +132,7 @@ $carsStmt = $pdo->prepare("
         c.image_urls, c.status, c.created_at, c.sold_at,
         c.uploaded_by_exec_id,
         " . (sdPhase3Ready() ? "c.hold_reason," : "NULL AS hold_reason,") . "   -- 0017
+        " . (sdVipReady() ? "c.network_only, c.network_exclusive," : "0 AS network_only, 0 AS network_exclusive,") . "   -- 4a
         COUNT(DISTINCT bi.id) AS broker_count,
         COUNT(DISTINCT l.id)  AS lead_count,
         COUNT(DISTINCT CASE WHEN l.status = 'closed' THEN l.id END) AS deals_count,
@@ -154,6 +156,7 @@ $pageTitle = 'Inventory';
 
 ob_start();
 ?>
+<?php require __DIR__ . '/../../views/partials/dealer-listings-paused.php'; /* 3b */ ?>
 
 <!-- ── Header ─────────────────────────────────────────────── -->
 <div style="display:flex;align-items:center;justify-content:space-between;
@@ -267,6 +270,12 @@ ob_start();
       <div style="position:absolute;top:8px;left:8px;">
         <span class="badge badge-<?= $car['status'] ?>"><?= $car['status'] ?></span>
       </div>
+      <?php if ((int) $car['network_only']): /* 4a */ ?>
+      <a class="d-net-only-badge" href="/app/dealer/network?tab=perks"
+         title="<?= (int) $car['network_exclusive'] ? 'Only your network brokers can list this car' : 'Marked network-only — switches on with a Pro or Enterprise plan' ?>">
+        <i class="fa-solid fa-lock" aria-hidden="true"></i> Network only<?= (int) $car['network_exclusive'] ? '' : ' (off)' ?>
+      </a>
+      <?php endif; ?>
       <!-- Exec badge -->
       <?php if ($car['exec_name'] && trim($car['exec_name']) !== ' '): ?>
       <div style="position:absolute;top:8px;right:8px;font-size:9px;font-family:var(--mono);

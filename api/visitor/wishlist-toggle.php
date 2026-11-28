@@ -7,10 +7,22 @@
  * No authentication required — uses the sd_vid cookie.
  *
  * Request (form POST or JSON):
- *   car_id   int   required
+ *   car_id   int     required
+ *   ref      string  optional — the page's ?ref= tracking code (32 hex)
  *
  * Response JSON:
- *   { wishlisted: bool, car_id: int }
+ *   { wishlisted: bool, car_id: int, count: int }
+ *   count = how many cars the visitor now has saved (drives the nav badge)
+ *
+ * v2 (Nov 2026, WISH-1):
+ *   – Rate-limit check moved inside the try. If it threw (e.g. a DB
+ *     hiccup on api_rate_limits) PHP printed an HTML fatal error, the
+ *     browser couldn't parse it and every heart rolled back with
+ *     "Couldn't update saved cars".
+ *   – Only ADDING requires an active car. A saved car that has since
+ *     sold or been withdrawn can now be removed (it used to 404, so it
+ *     was stuck on the Saved cars page forever).
+ *   – Returns the new total so the nav count is exact, not +1/-1 guesses.
  *
  * Rate limited: 60 requests per minute per IP (standard API limit).
  * CSRF: accepts X-Requested-With: XMLHttpRequest as a CORS double-submit
@@ -47,22 +59,21 @@ if (($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') !== 'XMLHttpRequest') {
     exit;
 }
 
-// ── Rate limit ────────────────────────────────────────────────
-$ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-if (!checkApiRateLimit($ip, 'wishlist_toggle')) {
-    http_response_code(429);
-    echo json_encode(['error' => 'Too many requests.']);
-    exit;
-}
-
 // ── Parse input ───────────────────────────────────────────────
 $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
 if (str_contains($contentType, 'application/json')) {
     $body  = json_decode(file_get_contents('php://input'), true) ?? [];
     $carId = (int) ($body['car_id'] ?? 0);
+    $ref   = (string) ($body['ref'] ?? '');
 } else {
     $carId = (int) ($_POST['car_id'] ?? 0);
+    $ref   = (string) ($_POST['ref'] ?? '');
 }
+// The page's own ?ref= (sent by public.js). A POST to this endpoint has
+// no ?ref= of its own, so without this a car saved from a broker's share
+// link lost its attribution whenever the visitor hadn't (yet) accepted
+// functional cookies (getActiveTrackingCode() only persists with consent).
+$pageRef = preg_match('/^[a-f0-9]{32}$/i', $ref) ? $ref : null;
 
 if ($carId <= 0) {
     http_response_code(422);
@@ -70,31 +81,46 @@ if ($carId <= 0) {
     exit;
 }
 
-// ── Verify car exists and is active ──────────────────────────
 try {
-    $pdo     = Database::getInstance();
-    $carStmt = $pdo->prepare("SELECT id FROM cars WHERE id = ? AND status = 'active' LIMIT 1");
-    $carStmt->execute([$carId]);
-    if (!$carStmt->fetch()) {
-        http_response_code(404);
-        echo json_encode(['error' => 'Car not found or unavailable.']);
+    $pdo = Database::getInstance();
+
+    // ── Rate limit (never fatal — a limiter failure must not break saving)
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    try {
+        $allowed = checkApiRateLimit($ip, 'wishlist_toggle');
+    } catch (Throwable $rlErr) {
+        error_log('[SalesDesk wishlist-toggle] rate limiter unavailable: ' . $rlErr->getMessage());
+        $allowed = true;
+    }
+    if (!$allowed) {
+        http_response_code(429);
+        echo json_encode(['error' => 'Too many requests.']);
         exit;
     }
 
     // ── Visitor session ───────────────────────────────────────
-    $visitor      = initVisitorSession();
-    $trackingCode = getActiveTrackingCode($visitor);
+    $visitor   = initVisitorSession();
+    $visitorId = (int) $visitor['id'];
+
+    // ── Adding needs a live car; removing never does ─────────
+    if (!isCarWishlisted($visitorId, $carId)) {
+        $carStmt = $pdo->prepare("SELECT id FROM cars WHERE id = ? AND status = 'active' LIMIT 1");
+        $carStmt->execute([$carId]);
+        if (!$carStmt->fetch()) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Car not found or unavailable.']);
+            exit;
+        }
+    }
 
     // ── Toggle ────────────────────────────────────────────────
-    $isNowWishlisted = toggleWishlist(
-        $visitor['id'],
-        $carId,
-        $trackingCode
-    );
+    $trackingCode    = $pageRef ?? getActiveTrackingCode($visitor);
+    $isNowWishlisted = toggleWishlist($visitorId, $carId, $trackingCode);
 
     echo json_encode([
         'wishlisted' => $isNowWishlisted,
         'car_id'     => $carId,
+        'count'      => count(getWishlistCarIds($visitorId)),
     ], JSON_THROW_ON_ERROR);
 
 } catch (Throwable $e) {

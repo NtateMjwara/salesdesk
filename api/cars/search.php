@@ -81,6 +81,7 @@ declare(strict_types=1);
 require_once '../../includes/security.php';
 require_once '../../includes/response.php';
 require_once '../../includes/database.php';
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../../includes/functions.php';
 require_once '../../includes/session.php';
 
@@ -175,7 +176,7 @@ if ($excludeDesk) {
 
 try {
     $pdo    = Database::getInstance();
-    $where  = ["c.status = 'active'", "d.is_active = 1"];
+    $where  = ["c.status = 'active' AND " . sdPublicCarSql('c') . "", "d.is_active = 1"];
     $params = [];
 
     // ── Text search ────────────────────────────────────────────

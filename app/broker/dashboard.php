@@ -15,6 +15,8 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/org_membership.php';
+require_once '../../includes/entitlements.php';
+require_once '../../includes/plan_grace.php';   // 3b: downgrade window banner
 
 applyCachePolicy('auth');
 requireLogin();
@@ -55,6 +57,10 @@ $orgStmt = $pdo->prepare("
 ");
 $orgStmt->execute([$userId]);
 $orgs = $orgStmt->fetchAll();
+// 0020: the org team view (org-context) is retired; networks live on
+// My networks (plans 2b), so the My Desk / Org switcher stays hidden.
+$orgs = [];
+unset($_SESSION['org_context']);
 
 // Active org context from session.
 $orgContext = (int) ($_SESSION['org_context'] ?? 0);
@@ -83,8 +89,11 @@ if (!empty($_GET['switch_context'])) {
 // ── Stats queries ─────────────────────────────────────────────
 $now          = date('Y-m-d H:i:s');
 $monthStart   = date('Y-m-01 00:00:00');
-$defaultLimit = getPlatformConfigInt('broker_car_limit_default', 10);
-$carLimit     = $desk['car_limit'] ?? $defaultLimit;
+// PLANS-1: plan / custom limit, capped by the org agent limit — the same
+// rule the Marketplace enforces (this card used to ignore the org cap).
+$carRules     = brokerCatalogueRules($userId);
+$carLimit     = brokerDeskCarLimit($userId, $carRules['car_limit']);   // null = unlimited
+$myPlan       = sdAccountPlan('broker', $userId);
 
 // Active cars on desk.
 $activeCarsStmt = $pdo->prepare("
@@ -147,8 +156,12 @@ $recentLeads = $recentLeadsStmt->fetchAll();
 $pageTitle   = 'Dashboard | ' . $desk['display_name'];
 $brokerName  = trim(($desk['first_name'] ?? '') . ' ' . ($desk['last_name'] ?? '')) ?: $desk['display_name'];
 
+$graceState  = sdBrokerDeskState($userId);   // 3b
+
 ob_start();
 ?>
+
+<?php require __DIR__ . '/../../views/partials/grace-banner.php'; ?>
 
 <!-- Context switcher (only if in an org) -->
 <?php if (!empty($orgs)): ?>
@@ -168,31 +181,40 @@ ob_start();
 </div>
 <?php endif; ?>
 
-<!-- 0013: desk organisation status -->
-<?php $membership = getBrokerMembership($userId); $mStatus = $membership['status'] ?? 'independent'; ?>
-<?php if ($mStatus === 'pending'): ?>
+<!-- 2b: business networks summary (details on /app/broker/networks) -->
+<?php
+  $myNets    = brokerNetworks($userId);
+  $netsIn    = array_values(array_filter($myNets, static fn ($n) => $n['status'] === 'verified'));
+  $netsWait  = array_values(array_filter($myNets, static fn ($n) => $n['status'] === 'pending'));
+  $netsInv   = array_values(array_filter($myNets, static fn ($n) => $n['status'] === 'invited'));   // 2c
+  $openCount = (!$netsIn && !$netsWait) ? count(listOpenNetworks()) : 0;
+  $netNames  = static fn (array $rows): string => implode(', ', array_map(static fn ($n) => $n['org_name'], array_slice($rows, 0, 3)))
+                                                   . (count($rows) > 3 ? ' +' . (count($rows) - 3) : '');
+?>
+<?php if ($netsInv): ?>
+<div class="dorg-banner dorg-banner-invite">
+  <i class="fa-solid fa-envelope-open-text"></i>
+  <span><strong><?= htmlspecialchars($netNames($netsInv)) ?></strong> invited you to join <?= count($netsInv) === 1 ? 'its network' : 'their networks' ?>.</span>
+  <a href="/app/broker/networks">Review</a>
+</div>
+<?php endif; ?>
+<?php if ($netsIn): ?>
+<div class="dorg-banner">
+  <i class="fa-solid fa-building"></i>
+  <span>You’re in <?= count($netsIn) === 1 ? 'the' : count($netsIn) ?> <strong><?= htmlspecialchars($netNames($netsIn)) ?></strong> network<?= count($netsIn) === 1 ? '' : 's' ?><?= $netsWait ? ', with ' . count($netsWait) . ' application' . (count($netsWait) === 1 ? '' : 's') . ' waiting' : '' ?>.</span>
+  <a href="/app/broker/networks">My networks</a>
+</div>
+<?php elseif ($netsWait): ?>
 <div class="dorg-banner dorg-banner-pending">
   <i class="fa-solid fa-clock"></i>
-  <span>Your application to join <strong><?= htmlspecialchars($membership['org_name']) ?></strong> is waiting for approval.</span>
-  <a href="/app/broker/desk-org">View</a>
+  <span>Your application<?= count($netsWait) === 1 ? '' : 's' ?> to <strong><?= htmlspecialchars($netNames($netsWait)) ?></strong> <?= count($netsWait) === 1 ? 'is' : 'are' ?> waiting for review.</span>
+  <a href="/app/broker/networks">View</a>
 </div>
-<?php elseif ($mStatus === 'suspended'): ?>
-<div class="dorg-banner dorg-banner-suspended">
-  <i class="fa-solid fa-pause"></i>
-  <span>Your agent access at <strong><?= htmlspecialchars($membership['org_name']) ?></strong> is suspended.</span>
-  <a href="/app/broker/desk-org">Details</a>
-</div>
-<?php elseif ($mStatus === 'rejected'): ?>
-<div class="dorg-banner dorg-banner-suspended">
-  <i class="fa-solid fa-circle-xmark"></i>
-  <span>Your application to <strong><?= htmlspecialchars($membership['org_name']) ?></strong> was declined. You're working independently.</span>
-  <a href="/app/broker/desk-org">See organisations</a>
-</div>
-<?php elseif ($mStatus === 'independent'): ?>
+<?php elseif ($openCount): ?>
 <div class="dorg-banner">
   <i class="fa-solid fa-people-group"></i>
-  <span>You're an independent broker. Join a desk organisation to sell its brands as one of its agents.</span>
-  <a href="/app/broker/desk-org">Browse organisations</a>
+  <span><?= $openCount ?> dealership network<?= $openCount === 1 ? ' is' : 's are' ?> taking brokers. Joining is free and you keep sharing any car.</span>
+  <a href="/app/broker/networks">Find a network</a>
 </div>
 <?php endif; ?>
 
@@ -230,11 +252,18 @@ ob_start();
       <i class="fa-solid fa-car-side"></i>
     </div>
     <div class="stat-main">
-      <div class="stat-num"><?= $activeCars ?><span class="stat-denom"> / <?= $carLimit ?></span></div>
+      <div class="stat-num"><?= $activeCars ?><span class="stat-denom"> / <?= sdLimitText($carLimit) ?></span></div>
       <div class="stat-label">Cars on desk</div>
     </div>
     <div class="stat-sub">
-      <?= $carLimit - $activeCars ?> slot<?= ($carLimit - $activeCars) !== 1 ? 's' : '' ?> remaining
+      <?php if ($carLimit === null): ?>
+      No limit on your desk
+      <?php else: $slotsLeft = max(0, $carLimit - $activeCars); ?>
+      <?= $slotsLeft ?> slot<?= $slotsLeft !== 1 ? 's' : '' ?> remaining
+      <?php endif; ?>
+      <?php if ($myPlan): ?>
+      · <a class="plan-chip" href="/app/broker/plan"><?= htmlspecialchars($myPlan['name']) ?> plan</a>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -427,5 +456,5 @@ ob_start();
 
 <?php
 $pageContent = ob_get_clean();
-$pageStyles  = ['/assets/css/desk-org.css'];
+$pageStyles  = ['/assets/css/desk-org.css', '/assets/css/plans.css'];
 require_once '../../views/layout-app.php';

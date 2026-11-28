@@ -168,8 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('/app/settings.php?section=desk');
         }
 
-        $reserved = ['auth','app','api','admin','assets','uploads','public','c','broker','dealer','exec','org','help','about','privacy','terms','support','contact','login','register'];
-        if (in_array($newSlug, $reserved, true)) {
+        if (sdIsReservedDeskSlug($newSlug)) {   // shared list: includes/functions.php
             $_SESSION['flash_error'] = 'That slug is reserved. Please choose another.';
             redirect('/app/settings.php?section=desk');
         }

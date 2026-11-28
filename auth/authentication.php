@@ -272,6 +272,11 @@ function handleWizardDesk(): never
 
     $pdo = Database::getInstance();
 
+    // A desk named "Pricing" or "Help" must not take a platform URL.
+    if (sdIsReservedDeskSlug($slug)) {
+        $slug = trim(substr($slug, 0, 54), '-') . '-desk';
+    }
+
     $baseSlug = $slug;
     $suffix   = 2;
     while (true) {
@@ -295,25 +300,35 @@ function handleWizardDesk(): never
     $wz['desk_display_name'] = $displayName;
     $wz['desk_slug']         = $slug;
 
-    // 0013: desk organisation choice. 0 = independent broker.
-    // Choosing an org creates a 'pending' agent application that the
-    // org's managing admins approve at /app/admin/approvals.
+    // 2b: optional business networks (checkboxes, org_ids[]). Each pick
+    // becomes a 'pending' application reviewed by the admins managing that
+    // dealership. Unticking one on the back button withdraws it. The plan's
+    // max_networks applies (Free: 3).
     require_once __DIR__ . '/../includes/org_membership.php';
-    $orgId   = (int) ($_POST['org_id'] ?? 0);
-    $current = getBrokerMembership($userId);
-
-    if ($orgId > 0 && (!$current || (int) $current['org_id'] !== $orgId)) {
-        if ($current && $current['status'] === 'pending') {
-            brokerLeaveOrg($userId); // changed their mind on the back button
+    $picked = array_values(array_unique(array_filter(array_map('intval', (array) ($_POST['org_ids'] ?? [])))));
+    $existing = [];
+    foreach (brokerNetworks($userId) as $n) {
+        $existing[(int) $n['org_id']] = $n['status'];
+    }
+    foreach ($existing as $oid => $st) {
+        if ($st === 'pending' && !in_array($oid, $picked, true)) {
+            brokerLeaveNetwork($userId, $oid);   // changed their mind
+            unset($existing[$oid]);
         }
-        [$ok, $msg] = applyBrokerToOrg($userId, $orgId, (string) ($wz['email'] ?? ''));
+    }
+    $toApply = array_values(array_filter($picked, static fn ($oid) => !isset($existing[$oid]) || $existing[$oid] === 'rejected'));
+    $allow   = brokerNetworkAllowance($userId);
+    if ($allow['limit'] !== null && $allow['used'] + count($toApply) > $allow['limit']) {
+        wizardRedirect(3, 'Your plan lets you join up to ' . $allow['limit'] . ($allow['limit'] === 1 ? ' network' : ' networks') . '. Untick '
+            . ($allow['used'] + count($toApply) - $allow['limit']) . ' and try again.');
+    }
+    foreach ($toApply as $oid) {
+        [$ok, $msg] = applyToNetwork($userId, $oid, (string) ($wz['email'] ?? ''));
         if (!$ok) {
             wizardRedirect(3, $msg);
         }
-    } elseif ($orgId === 0 && $current && $current['status'] === 'pending') {
-        brokerLeaveOrg($userId);
     }
-    $wz['org_id'] = $orgId;
+    $wz['org_ids'] = $picked;
 
     wizardRedirect(4);
 }
@@ -388,6 +403,14 @@ function handleWizardCompany(): never
                 }
             }
         }
+    }
+
+    // 0020: the dealership's business account (org) takes its real name now.
+    require_once __DIR__ . '/../includes/business.php';
+    $dIdStmt = $pdo->prepare("SELECT id FROM dealers WHERE user_id = ? LIMIT 1");
+    $dIdStmt->execute([$userId]);
+    if ($dIdForOrg = (int) $dIdStmt->fetchColumn()) {
+        sdSyncOrgFromDealer($dIdForOrg);
     }
 
     $wz['company_name']  = $companyName;
@@ -634,6 +657,13 @@ function handleWizardAddress(): never
         if (isDealer()) {
             $pdo->prepare("UPDATE dealers SET address_id = ?, updated_at = NOW() WHERE user_id = ?")
                 ->execute([$addressId, $userId]);
+            // 0020: the business org shares the dealership's address
+            require_once __DIR__ . '/../includes/business.php';
+            $dIdStmt = $pdo->prepare("SELECT id FROM dealers WHERE user_id = ? LIMIT 1");
+            $dIdStmt->execute([$userId]);
+            if ($dIdForOrg = (int) $dIdStmt->fetchColumn()) {
+                sdSyncOrgFromDealer($dIdForOrg);
+            }
         } else {
             $pdo->prepare("UPDATE profiles SET address_id = ? WHERE user_id = ?")
                 ->execute([$addressId, $userId]);

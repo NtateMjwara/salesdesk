@@ -54,6 +54,8 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/mailer.php';
 require_once '../../includes/response.php';
+require_once '../../includes/business.php';   // 0020: sdLeadOrgSubquery()
+require_once '../../includes/vip_network.php'; // 4a: network-only cars, network bonus
 
 applyCachePolicy('api');
 header('Content-Type: application/json; charset=utf-8');
@@ -188,9 +190,7 @@ try {
                 se.verification_status  AS exec_verification,
                 eu.email                AS exec_email,
                 ep.first_name           AS exec_first,
-                (SELECT om.organization_id FROM organization_members om
-                 WHERE om.user_id = sd.user_id" . sdVerifiedMemberSql('om') . "   -- 0013: approved agents only
-                 LIMIT 1) AS organization_id
+                " . sdLeadOrgSubquery('sd', 'd') . " AS organization_id   -- 0020: the dealership network, only if the broker is a verified member
             FROM broker_inventory bi
             JOIN salesdesks sd        ON sd.id  = bi.salesdesk_id
             JOIN cars c               ON c.id   = bi.car_id
@@ -235,9 +235,7 @@ try {
                 se.verification_status  AS exec_verification,
                 eu.email                AS exec_email,
                 ep.first_name           AS exec_first,
-                (SELECT om.organization_id FROM organization_members om
-                 WHERE om.user_id = sd.user_id" . sdVerifiedMemberSql('om') . "   -- 0013: approved agents only
-                 LIMIT 1) AS organization_id
+                " . sdLeadOrgSubquery('sd', 'd') . " AS organization_id   -- 0020: the dealership network, only if the broker is a verified member
             FROM salesdesks sd
             JOIN broker_inventory bi  ON bi.salesdesk_id = sd.id
             JOIN cars c               ON c.id   = bi.car_id
@@ -310,6 +308,15 @@ try {
 
         if ($track) {
             $isPlatformAttribution = true;
+            // 4a: a network-only car is never a platform listing — buyers
+            // reach it through a network broker's desk.
+            if (sdVipReady()) {
+                $ex = $pdo->prepare("SELECT network_exclusive FROM cars WHERE id = ?");
+                $ex->execute([(int) $track['car_id']]);
+                if ((int) $ex->fetchColumn()) {
+                    $track = null;
+                }
+            }
         }
     }
 
@@ -402,6 +409,14 @@ try {
     ]);
 
     $leadId = (int) $pdo->lastInsertId();
+
+    // 4a: a network broker's lead locks in the business's network bonus
+    // as it is now (paid on close with the commission).
+    if (!empty($track['organization_id']) && sdVipReady()
+        && ($bonus = sdOrgBonus((int) $track['organization_id']))) {
+        $pdo->prepare("UPDATE leads SET network_bonus_type = ?, network_bonus_value = ? WHERE id = ?")
+            ->execute([$bonus['type'], $bonus['value'], $leadId]);
+    }
 
     // ── STEP 5: Increment broker_inventory view counter ────────
     // Platform-attributed leads have no broker_inventory row.

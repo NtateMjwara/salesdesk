@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 require_once '../../includes/security.php';
 require_once '../../includes/database.php';
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../../includes/functions.php';
 require_once '../../includes/visitor.php';
 require_once '../../includes/listing-helpers.php';
@@ -84,7 +85,7 @@ try {
             ORDER BY last_viewed DESC
             LIMIT 16
         ) v
-        JOIN cars c           ON c.id = v.car_id AND c.status = 'active'
+        JOIN cars c           ON c.id = v.car_id AND c.status = 'active' AND " . sdPublicCarSql('c') . "
         JOIN dealers d        ON d.id = c.dealer_id AND d.is_active = 1
         LEFT JOIN addresses a ON a.id = d.address_id
         ORDER BY v.last_viewed DESC
@@ -103,7 +104,7 @@ try {
             FROM cars c
             JOIN dealers d        ON d.id = c.dealer_id AND d.is_active = 1
             LEFT JOIN addresses a ON a.id = d.address_id
-            WHERE c.id IN ({$in}) AND c.status = 'active'
+            WHERE c.id IN ({$in}) AND c.status = 'active' AND " . sdPublicCarSql('c') . "
         ");
         $stmt->execute($wishIds);
         $order = array_flip($wishIds);

@@ -179,6 +179,7 @@ $pageTitle = 'Import from Motus';
 
 ob_start();
 ?>
+<?php require __DIR__ . '/../../views/partials/dealer-listings-paused.php'; /* 3b */ ?>
 
 <style>
 /* ── Scoped to this page — small, purposeful additions only ─────────── */

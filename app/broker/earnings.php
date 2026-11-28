@@ -15,6 +15,7 @@ require_once '../../includes/security.php';
 require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
+require_once '../../includes/vip_network.php';   // 4a: network bonus
 require_once '../../includes/csrf.php';
 
 applyCachePolicy('auth');
@@ -93,6 +94,7 @@ $bankAccount = $bankStmt->fetch();
 $commStmt = $pdo->prepare("
     SELECT
         cm.id, cm.uuid, cm.gross_amount, cm.platform_fee, cm.net_amount,
+        " . (sdVipReady() ? 'cm.network_bonus' : '0 AS network_bonus') . ",
         cm.status, cm.approved_at, cm.paid_at, cm.created_at,
         l.uuid AS lead_uuid, l.buyer_name,
         c.make, c.model, c.year,
@@ -338,7 +340,9 @@ ob_start();
         </td>
         <td style="font-size:12px;color:var(--muted);"><?= htmlspecialchars($c['dealer_name']) ?></td>
         <td style="font-size:12px;color:var(--muted);"><?= htmlspecialchars($c['buyer_name']) ?></td>
-        <td style="font-family:var(--mono);font-size:12px;"><?= formatZAR((float)$c['gross_amount']) ?></td>
+        <td style="font-family:var(--mono);font-size:12px;"><?= formatZAR((float)$c['gross_amount']) ?>
+          <?php if ((float) $c['network_bonus'] > 0): ?><div class="net-bonus-note">incl. <?= formatZAR((float) $c['network_bonus']) ?> network bonus</div><?php endif; ?>
+        </td>
         <td style="font-family:var(--mono);font-size:12px;color:var(--red);">
           -<?= formatZAR((float)$c['platform_fee']) ?>
         </td>

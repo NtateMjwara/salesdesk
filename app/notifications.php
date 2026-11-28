@@ -96,6 +96,8 @@ ob_start();
                   'payout_failed'    => 'var(--red-bg)',
                   'lead_nudge'       => 'var(--amb-bg)',
                   'lead_stale_flag'  => 'var(--red-bg)',
+                  'plan_limit'       => 'var(--amb-bg)',
+                  'network_announcement' => 'var(--p-light)',
                   default            => 'var(--bg)',
                 } ?>;color:<?= match($n['type']) {
                   'new_lead'         => 'var(--green)',
@@ -104,6 +106,8 @@ ob_start();
                   'payout_failed'    => 'var(--red)',
                   'lead_nudge'       => 'var(--amber)',
                   'lead_stale_flag'  => 'var(--red)',
+                  'plan_limit'       => 'var(--amber)',
+                  'network_announcement' => 'var(--p)',
                   default            => 'var(--muted)',
                 } ?>;">
       <i class="fa-solid <?= match($n['type']) {
@@ -113,6 +117,8 @@ ob_start();
         'payout_failed'    => 'fa-triangle-exclamation',
         'lead_nudge'       => 'fa-bell',
         'lead_stale_flag'  => 'fa-flag',
+        'plan_limit'       => 'fa-hourglass-half',
+        'network_announcement' => 'fa-bullhorn',
         default            => 'fa-circle-info',
       } ?>"></i>
     </div>
@@ -127,6 +133,11 @@ ob_start();
       <div style="font-size:12px;color:var(--muted);line-height:1.5;">
         <?= htmlspecialchars($n['body']) ?>
       </div>
+      <?php endif; ?>
+      <?php /* 3b: notifications can carry a link (meta.link, same-site paths only) */
+        $nLink = is_string($meta['link'] ?? null) && preg_match('#^/(?!/)[A-Za-z0-9/_\-.?=&%\#]*$#', $meta['link']) ? $meta['link'] : null;
+        if ($nLink): ?>
+      <a class="notif-link" href="<?= htmlspecialchars($nLink) ?>">Open <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
       <?php endif; ?>
     </div>
 

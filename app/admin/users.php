@@ -44,6 +44,8 @@ require_once '../../includes/csrf.php';
 require_once '../../includes/mailer.php';
 require_once '../../includes/response.php';
 require_once '../../includes/user_admin.php';   // loads admin_scope.php + superadmin.php
+require_once '../../includes/entitlements.php';   // PLANS-1: plan + car limit column
+require_once '../../includes/business.php';       // 0020: org verification mirrors the dealership
 
 applyCachePolicy('auth');
 requireRole('admin');
@@ -83,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $targetOrg    = (int) ($_POST['org_id']    ?? 0);
 
     // Superadmin-only single-row actions (bulk checks per action in uaBulk()).
-    $superOnly = ['activate', 'activate_verify', 'verify_email'];
+    $superOnly = ['activate', 'activate_verify', 'verify_email', 'set_car_limit'];   // PLANS-1: limits are superadmin-only
     if (in_array($action, $superOnly, true) && !$isSuperadmin) {
         $_SESSION['flash_error'] = 'Only a superadmin can do that.';
         redirect($returnTo);
@@ -148,6 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ")->execute([$targetDealer]);
             writeAuditLog('dealer.cipc_approved', 'dealer', $targetDealer,
                 ['verification_status' => $dealer['verification_status']], ['verification_status' => 'verified'], $adminId);
+            sdSyncOrgFromDealer($targetDealer);   // 0020
             if ($dealer['email']) {
                 sendDealerVerified(['email' => $dealer['email'], 'company_name' => $dealer['company_name']]);
             }
@@ -173,6 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             writeAuditLog('dealer.cipc_rejected', 'dealer', $targetDealer,
                 ['verification_status' => $dealer['verification_status']],
                 ['verification_status' => 'rejected', 'reason' => $reason], $adminId);
+            sdSyncOrgFromDealer($targetDealer);   // 0020
             if ($dealer['email']) {
                 sendDealerVerificationRejected(['email' => $dealer['email'], 'company_name' => $dealer['company_name']], $reason);
             }
@@ -208,7 +212,10 @@ $page       = min($page, $pages);
 $users      = uaListUsers($adminId, $filters, UA_PAGE_SIZE, ($page - 1) * UA_PAGE_SIZE);
 $pending    = getPendingVerifications($adminId);
 $cipcCount  = count($pending['dealers']) + count($pending['orgs']);
-$defaultCarLimit = getPlatformConfigInt('broker_car_limit_default', 10);
+$planSummaries = sdBrokerPlanSummaries(array_map(static fn ($u) => (int) $u['id'],
+                   array_filter($users, static fn ($u) => $u['role'] === 'broker')));
+$freeDefault   = sdDefaultPlan('broker');
+$freeLimit     = ($freeDefault ? sdPlanLimit($freeDefault, 'max_desk_cars') : null) ?? 150;   // bulk input default
 $hasFilters = uaHasFilters($filters);
 $bulkMenu   = uaBulkMenu($isSuperadmin);
 $view       = $filters['view'];
@@ -339,7 +346,7 @@ ob_start();
         <th>Role</th>
         <th>Status</th>
         <th>Activity</th>
-        <th class="ua-col-num">Car limit</th>
+        <th class="ua-col-num">Plan · cars</th>
         <th class="ua-col-actions"><span class="sr-only">Actions</span></th>
       </tr>
     </thead>
@@ -363,7 +370,8 @@ ob_start();
       $displayName = uaDisplayName($u);
       $userLink    = '/app/admin/users-view?id=' . $uid;
       $context     = $u['exec_dealer'] ? 'Sales exec at ' . $u['exec_dealer']
-                   : ($u['org_name'] ? 'Agent · ' . $u['org_name'] . ($u['org_status'] !== 'verified' ? ' (' . $u['org_status'] . ')' : '') : '');
+                   : ($u['org_name'] ? 'Network · ' . $u['org_name'] . ($u['org_status'] !== 'verified' ? ' (' . $u['org_status'] . ')' : '')
+                       . ((int) $u['net_count'] > 1 ? ' +' . ((int) $u['net_count'] - 1) : '') : '');   // 2b: several networks
       $nameLine    = implode(' · ', array_filter([$displayName, $context]));
       $isDealer    = $u['role'] === 'dealer' ? '1' : '0';
     ?>
@@ -396,9 +404,12 @@ ob_start();
         <div><span class="ua-activity-k">Joined</span> <?= date('d M Y', strtotime($u['created_at'])) ?></div>
         <div><span class="ua-activity-k">Last in</span> <?= $u['last_login'] ? date('d M Y', strtotime($u['last_login'])) : 'Never' ?></div>
       </td>
-      <td class="ua-col-num" data-label="Car limit">
-        <?php if ($u['role'] === 'broker'): ?>
-        <span class="adm-mono"><?= (int) ($u['car_limit'] ?? $defaultCarLimit) ?></span>
+      <td class="ua-col-num" data-label="Plan · cars">
+        <?php if ($u['role'] === 'broker' && ($ps = $planSummaries[$uid] ?? null)): ?>
+        <span class="adm-sub"><?= htmlspecialchars($ps['plan']) ?><?= $ps['comped'] ? ' (comped)' : '' ?></span>
+        <span class="adm-mono" title="<?= $ps['custom'] ? 'Custom limit' : 'Plan limit' ?>"><?= sdLimitText($ps['limit']) ?><?= $ps['custom'] ? '*' : '' ?></span>
+        <?php elseif ($u['role'] === 'broker'): ?>
+        <span class="adm-mono"><?= (int) ($u['car_limit'] ?? getPlatformConfigInt('broker_car_limit_default', 10)) ?></span>
         <?php else: ?><span class="adm-sub">—</span><?php endif; ?>
       </td>
       <td class="ua-col-actions">
@@ -478,8 +489,8 @@ ob_start();
     </select>
     <label class="ua-bulk-limit" data-bulk-limit hidden>
       <span class="sr-only">Car limit</span>
-      <input class="finput" type="number" name="car_limit" min="1" max="200" value="<?= (int) $defaultCarLimit ?>"
-             aria-label="New car limit"> <span class="adm-muted">cars</span>
+      <input class="finput" type="number" name="car_limit" min="1" max="100000" value="<?= (int) $freeLimit ?>"
+             aria-label="New custom car limit"> <span class="adm-muted">cars (custom limit)</span>
     </label>
     <span class="adm-muted ua-bulk-hint" data-bulk-hint></span>
     <button class="btn btn-primary btn-sm" type="submit" data-bulk-submit disabled>Apply</button>

@@ -19,6 +19,7 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/admin_scope.php';
+require_once '../../includes/business.php';     // 0020: every dealership is a business org
 
 applyCachePolicy('auth');
 requireRole('admin');
@@ -87,6 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'verification_status' => $verified ? 'verified' : 'unverified',
                     'is_active'           => $isActive ? 1 : 0,
                 ], $adminId);
+
+                // 0020: the dealership's business account (org) is created with it.
+                sdEnsureDealerOrganization($dealerId, $adminId);
 
                 $pdo->commit();
                 $_SESSION['flash_ok'] = "{$companyName} created. Sales execs can now apply to join it.";

@@ -24,6 +24,7 @@ declare(strict_types=1);
 require_once '../../includes/security.php';
 require_once '../../includes/response.php';
 require_once '../../includes/database.php';
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../../includes/functions.php';
 
 applyCachePolicy('api');
@@ -79,7 +80,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT DISTINCT c.make AS label
         FROM cars c {$deskJoin}
-        WHERE c.status = 'active' AND c.make LIKE ?
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND c.make LIKE ?
         ORDER BY c.make
         LIMIT 5
     ");
@@ -90,7 +91,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT DISTINCT CONCAT(c.make, ' ', c.model) AS label
         FROM cars c {$deskJoin}
-        WHERE c.status = 'active' AND CONCAT(c.make, ' ', c.model) LIKE ?
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND CONCAT(c.make, ' ', c.model) LIKE ?
         ORDER BY label
         LIMIT 6
     ");
@@ -101,7 +102,7 @@ try {
     $stmt = $pdo->prepare("
         SELECT DISTINCT c.body_type AS label
         FROM cars c {$deskJoin}
-        WHERE c.status = 'active' AND c.body_type IS NOT NULL AND c.body_type LIKE ?
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND c.body_type IS NOT NULL AND c.body_type LIKE ?
         ORDER BY c.body_type
         LIMIT 4
     ");

@@ -19,6 +19,9 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/admin_scope.php';
+require_once '../../includes/business.php';     // 0020: business org + plan card
+require_once '../../includes/entitlements.php'; // 0020: business plan (tab=business)
+require_once '../../includes/invoicing.php';    // 0026: business billing (PayFast + invoices)
 
 applyCachePolicy('auth');
 requireRole('admin');
@@ -27,7 +30,7 @@ adminRequireSchema('Dealership');   // clear 'run migration' screen if the DB is
 $pdo      = Database::getInstance();
 $adminId  = (int) $_SESSION['user_id'];
 $dealerId = (int) ($_GET['id'] ?? $_POST['dealer_id'] ?? 0);
-$tab      = in_array($_GET['tab'] ?? '', ['team', 'details', 'managers', 'platform'], true) ? $_GET['tab'] : 'team';
+$tab      = in_array($_GET['tab'] ?? '', ['team', 'details', 'business', 'managers', 'platform'], true) ? $_GET['tab'] : 'team';
 
 $dealer = $dealerId ? getManagedDealer($adminId, $dealerId) : false;
 if (!$dealer) {
@@ -41,6 +44,39 @@ $self = '/app/admin/dealerships-view?id=' . $dealerId;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
+
+    // 2d: Enterprise — which dealerships belong to the business (superadmin;
+    // the functions re-check)
+    if (in_array($action, ['biz_attach', 'biz_detach', 'biz_rename', 'biz_owner'], true)) {
+        $bizOrgId = sdDealerOrgId($dealerId);
+        [$ok, $msg] = !$bizOrgId ? [false, 'Run 0020 Business orgs in Admin → Migrations first.'] : match ($action) {
+            'biz_attach' => sdAttachDealership($bizOrgId, (int) ($_POST['attach_dealer_id'] ?? 0), $adminId),
+            'biz_detach' => sdDetachDealership((int) ($_POST['detach_dealer_id'] ?? 0), $adminId),
+            'biz_rename' => sdRenameBusiness($bizOrgId, (string) ($_POST['business_name'] ?? ''), $adminId),
+            'biz_owner'  => sdSetBusinessOwner($bizOrgId, (int) ($_POST['owner_user_id'] ?? 0), $adminId),
+        };
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($self . '&tab=business#dealerships');
+    }
+
+    // 2b: the business's broker network (Business tab) — managing admins
+    if ($action === 'net_open' || $action === 'net_close') {
+        [$ok, $msg] = adminSetNetworkOpen($adminId, $dealerId, $action === 'net_open');
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($self . '&tab=business#network');
+    }
+    if (($_POST['kind'] ?? '') === 'agent'
+        && in_array($action, ['approve', 'reject', 'suspend', 'reinstate', 'remove', 'cancel'], true)) {
+        $memberId = (int) ($_POST['member_id'] ?? $_POST['target_id'] ?? 0);
+        $orgOfDealer = sdDealerOrgId($dealerId);
+        $own = $pdo->prepare("SELECT 1 FROM organization_members WHERE id = ? AND organization_id = ?");
+        $own->execute([$memberId, (int) $orgOfDealer]);
+        [$ok, $msg] = $orgOfDealer && $own->fetchColumn()
+            ? adminReviewAgent($adminId, $memberId, $action, (string) ($_POST['reason'] ?? ''))
+            : [false, 'That broker isn’t in this dealership’s network.'];
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($self . '&tab=business#network');
+    }
 
     // Sales exec review — approve / reject / suspend / reinstate
     if (in_array($action, ['approve', 'reject', 'suspend', 'reinstate'], true)) {
@@ -99,6 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             writeAuditLog('dealer.updated_by_admin', 'dealer', $dealerId, $before,
                 ['company_name' => $name, 'verification_status' => $newStatus], $adminId);
+            sdSyncOrgFromDealer($dealerId);   // 0020: keep the business org in step
             $pdo->commit();
             $_SESSION['flash_ok'] = 'Dealership details saved.';
         } catch (Throwable $e) {
@@ -157,6 +194,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect($self . '&tab=managers');
     }
 
+    // 0020: business plan + custom limits (superadmin; re-checked in entitlements.php)
+    if (in_array($action, ['biz_set_plan', 'biz_set_limit', 'biz_clear_limit'], true)) {
+        $bizBack = $self . '&tab=business#plan';
+        if (!isSuperadmin($adminId)) {
+            $_SESSION['flash_error'] = 'Only a superadmin can change plans and limits.';
+            redirect($bizBack);
+        }
+        $bizOrgId = sdEnsureDealerOrganization($dealerId, $adminId);
+        if (!$bizOrgId) {
+            $_SESSION['flash_error'] = 'Run 0020 Business orgs in Admin → Migrations first.';
+            redirect($bizBack);
+        }
+        $limitKey = (string) ($_POST['limit_key'] ?? '');
+        [$ok, $msg] = match ($action) {
+            'biz_set_plan'    => sdSetAccountPlan('organization', $bizOrgId, (string) ($_POST['plan_code'] ?? ''),
+                                     (string) ($_POST['plan_status'] ?? ''), (string) ($_POST['plan_until'] ?? ''),
+                                     (string) ($_POST['plan_note'] ?? ''), $adminId),
+            'biz_set_limit'   => sdSetLimitOverride('organization', $bizOrgId, $limitKey,
+                                     !empty($_POST['limit_unlimited']) ? null : (int) ($_POST['limit_value'] ?? -1),
+                                     (string) ($_POST['limit_reason'] ?? ''), $adminId),
+            'biz_clear_limit' => sdClearLimitOverride('organization', $bizOrgId, $limitKey, $adminId),
+        };
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($bizBack);
+    }
+
+    // 0026: business billing — PayFast cancel + monthly invoices (superadmin; re-checked inside)
+    if (in_array($action, ['biz_billing_cancel', 'inv_start', 'inv_stop', 'inv_paid', 'inv_void', 'inv_resend'], true)) {
+        $bizBack = $self . '&tab=business#billing';
+        if (!isSuperadmin($adminId)) {
+            $_SESSION['flash_error'] = 'Only a superadmin can manage business billing.';
+            redirect($bizBack);
+        }
+        $bizOrgId = (int) sdEnsureDealerOrganization($dealerId, $adminId);
+        $invId    = (int) ($_POST['inv_id'] ?? 0);
+        // An invoice action must be for this business.
+        if ($invId && (($i = sdInvoice($invId)) === null || (int) $i['organization_id'] !== $bizOrgId)) {
+            $_SESSION['flash_error'] = 'That invoice isn’t this business’s.';
+            redirect($bizBack);
+        }
+        [$ok, $msg] = match ($action) {
+            'biz_billing_cancel' => sdBillingCancel('organization', $bizOrgId, $adminId),
+            'inv_start'          => sdStartInvoicing($bizOrgId, (string) ($_POST['plan_code'] ?? ''), $adminId),
+            'inv_stop'           => sdStopInvoicing($bizOrgId, $adminId),
+            'inv_paid'           => sdMarkInvoicePaid($invId, (string) ($_POST['reference'] ?? ''), $adminId),
+            'inv_void'           => sdVoidInvoice($invId, (string) ($_POST['reason'] ?? ''), $adminId),
+            'inv_resend'         => sdResendInvoice($invId, $adminId),
+        };
+        $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+        redirect($bizBack);
+    }
+
     // Co-managers — 0014: assigning admins is a superadmin action
     if (in_array($action, ['add_manager', 'remove_manager'], true) && !isSuperadmin($adminId)) {
         $_SESSION['flash_error'] = 'Only a superadmin can change who manages this.';
@@ -204,6 +293,55 @@ $statsStmt->execute([$dealerId, $dealerId, $dealerId]);
 $stats = $statsStmt->fetch();
 
 $managers = adminListManagers('dealer', $dealerId);
+
+// 0020: the dealership's business account (loaded for its tab only)
+$biz = ['ready' => sdBusinessReady(), 'org' => null];
+if ($tab === 'business' && $biz['ready']) {
+    $bizOrgId = sdEnsureDealerOrganization($dealerId, $adminId);   // heals a missing org
+    if ($bizOrgId) {
+        $bo = $pdo->prepare("
+            SELECT o.id, o.name, o.slug, o.verification_status, o.is_active, u.email AS owner_email
+            FROM organizations o
+            LEFT JOIN users u ON u.id = o.owner_user_id
+            WHERE o.id = ?
+        ");
+        $bo->execute([$bizOrgId]);
+        $biz['org'] = $bo->fetch() ?: null;
+        $bd = $pdo->prepare("SELECT id, company_name FROM dealers WHERE organization_id = ? ORDER BY company_name");
+        $bd->execute([$bizOrgId]);
+        $biz['dealers'] = $bd->fetchAll();
+        $bb = $pdo->prepare("SELECT COUNT(*) FROM organization_members m WHERE m.organization_id = ?" . sdVerifiedMemberSql('m'));
+        $bb->execute([$bizOrgId]);
+        $biz['brokers']     = (int) $bb->fetchColumn();
+        $biz['plans_ready'] = sdPlansReady();
+        $biz['plan']        = $biz['plans_ready'] ? sdAccountPlan('organization', $bizOrgId) : null;
+        $biz['overrides']   = $biz['plans_ready'] ? sdLimitOverrides('organization', $bizOrgId) : [];
+        $biz['plans']       = $biz['plans_ready'] ? array_filter(sdPlans('organization'), static fn ($p) => $p['is_active']) : [];
+        $biz['keys']        = array_filter(SD_LIMIT_KEYS, static fn ($d) => $d['audience'] === 'organization');
+        // 2d: Enterprise
+        $biz['dealerships']  = sdOrgDealerships($bizOrgId);
+        $biz['dealer_limit'] = sdOrgDealerLimit($bizOrgId);
+        // 3b: downgrade window (over the dealership limit) + paused dealerships
+        require_once __DIR__ . '/../../includes/plan_grace.php';
+        $biz['grace']        = sdGraceReady() ? sdGraceOpen('organization', $bizOrgId, 'max_dealerships') : null;
+        // 4a: VIP perks summary
+        require_once __DIR__ . '/../../includes/vip_network.php';
+        $biz['perks']        = sdVipReady() ? sdNetworkPerkSummary($bizOrgId) : null;
+        // 4b: the business's latest announcements to its network
+        require_once __DIR__ . '/../../includes/network_dashboard.php';
+        $biz['anns']         = sdAnnouncements($bizOrgId, 3);
+        // 0026: business billing
+        $biz['inv_ready']    = sdInvoicingReady();
+        $biz['invoices']     = sdOrgInvoices($bizOrgId, 12);
+        $biz['bill_plans']   = array_filter(sdPlans('organization'), static fn ($p) => $p['is_active'] && !$p['is_default'] && (int) $p['price_cents'] > 0);
+        $biz['attachable']   = isSuperadmin($adminId) ? sdAttachableDealerships($bizOrgId) : [];
+        // 2b: network
+        $biz['accepting']    = (int) ($pdo->query('SELECT accepting_applications FROM organizations WHERE id = ' . (int) $bizOrgId)->fetchColumn());
+        $biz['pending']      = adminPendingAgentApplications($adminId, $bizOrgId);
+        $biz['members']      = adminNetworkMembers($bizOrgId);
+        $biz['broker_limit'] = entitlement('organization', $bizOrgId, 'max_network_brokers');
+    }
+}
 $teamSize = count(array_filter($roster, fn($r) => $r['verification_status'] === 'verified'));
 
 // ── Render ────────────────────────────────────────────────────
@@ -239,7 +377,7 @@ ob_start();
 </div>
 
 <nav class="adm-tabs" aria-label="Dealership sections">
-  <?php $dvTabs = ['team' => 'Team & requests', 'details' => 'Details', 'managers' => 'Managers'];
+  <?php $dvTabs = ['team' => 'Team & requests', 'details' => 'Details', 'business' => 'Business', 'managers' => 'Managers'];
         if (isSuperadmin($adminId)) { $dvTabs['platform'] = 'Platform controls'; } ?>
   <?php foreach ($dvTabs as $key => $label): ?>
   <a href="<?= $self ?>&amp;tab=<?= $key ?>" class="adm-tab<?= $tab === $key ? ' is-active' : '' ?>"
@@ -381,6 +519,10 @@ ob_start();
     </div>
   </div>
   <?php endif; ?>
+
+<?php elseif ($tab === 'business'): /* 0020 */ ?>
+
+  <?php include __DIR__ . '/../../views/partials/admin/dealer-business-panel.php'; ?>
 
 <?php elseif ($tab === 'platform' && isSuperadmin($adminId)): /* 0017 */ ?>
 

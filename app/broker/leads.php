@@ -15,6 +15,7 @@ require_once '../../includes/session.php';
 require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
+require_once '../../includes/vip_network.php';   // 4a: network bonus
 
 applyCachePolicy('auth');
 requireLogin();
@@ -80,6 +81,7 @@ $leadsStmt = $pdo->prepare("
         l.consent_at,
         l.attribution_locked,
         l.attributed_at,
+        " . (sdVipReady() ? 'l.network_bonus_type, l.network_bonus_value, cm.network_bonus,' : 'NULL AS network_bonus_type, NULL AS network_bonus_value, 0 AS network_bonus,') . "
         l.created_at,
         l.updated_at,
         c.make, c.model, c.year, c.price, c.slug AS car_slug,
@@ -328,7 +330,9 @@ ob_start();
         <div class="ld-contact-grid">
           <div class="ld-contact-row">
             <span class="ld-label">Gross</span>
-            <span class="ld-value"><?= formatZAR((float)$ld['gross_amount']) ?></span>
+            <span class="ld-value"><?= formatZAR((float)$ld['gross_amount']) ?>
+              <?php if ((float) $ld['network_bonus'] > 0): ?><span class="net-bonus-note">incl. <?= formatZAR((float) $ld['network_bonus']) ?> network bonus</span><?php endif; ?>
+            </span>
           </div>
           <div class="ld-contact-row">
             <span class="ld-label">Net to you</span>
@@ -345,6 +349,12 @@ ob_start();
             </span>
           </div>
         </div>
+      </div>
+      <?php elseif ($ld['network_bonus_type'] && !in_array($ld['status'], ['closed', 'lost'], true)): /* 4a */ ?>
+      <div class="ld-section">
+        <div class="ld-section-title"><i class="fa-solid fa-gift"></i> Network bonus</div>
+        <p class="net-bonus-locked"><?= htmlspecialchars(sdBonusText($ld['network_bonus_type'], $ld['network_bonus_value'])) ?>
+          on top of the commission if this sale closes — locked in when the lead came in.</p>
       </div>
       <?php endif; ?>
 

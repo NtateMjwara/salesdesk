@@ -55,13 +55,8 @@ if (!$slug || !preg_match('/^[a-z0-9][a-z0-9\-]{1,59}$/', $slug)) {
  * it's SalesDesk's own name for this feature and a broker owning
  * salesdesk.co.za/platform/ would be confusing regardless.
  */
-$reserved = [
-    'auth', 'app', 'api', 'admin', 'assets', 'uploads', 'public',
-    'cars-for-sale', 'broker', 'dealer', 'exec', 'org', 'help', 'about',
-    'privacy', 'terms', 'support', 'contact', 'login', 'register',
-    'car', 'platform',
-];
-if (in_array($slug, $reserved, true)) {
+// Pricing page: one shared list (includes/functions.php SD_RESERVED_DESK_SLUGS).
+if (sdIsReservedDeskSlug($slug)) {
     echo json_encode(['available' => false, 'reason' => 'reserved']);
     exit;
 }

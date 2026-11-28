@@ -151,6 +151,62 @@ ob_start();
 </div>
 <?php endif; ?>
 
+<?php /* ── 3b: business over its dealership limit ───────────── */
+  require_once __DIR__ . '/../../includes/plan_grace.php';
+  require_once __DIR__ . '/../../includes/business.php';
+  $gOrgId    = sdBusinessReady() ? sdDealerOrgId((int) $ws['dealer_id']) : null;
+  $gPaused   = sdDealerListingsPaused((int) $ws['dealer_id']);
+  $gWindow   = $gOrgId && sdGraceReady() ? sdGraceOpen('organization', $gOrgId, 'max_dealerships') : null;
+  $gIsOwner  = $gOrgId && (int) Database::getInstance()->query('SELECT COALESCE(owner_user_id, 0) FROM organizations WHERE id = ' . (int) $gOrgId)->fetchColumn()
+               === (int) ($_SESSION['user_id'] ?? 0);
+  $gPausedN  = 0;
+  if ($gIsOwner && !$gPaused) {
+      $gp = Database::getInstance()->prepare('SELECT COUNT(*) FROM dealers WHERE organization_id = ? AND listings_paused_at IS NOT NULL');
+      $gp->execute([(int) $gOrgId]);
+      $gPausedN = (int) $gp->fetchColumn();
+  } ?>
+<?php if ($gPaused): ?>
+<div class="alert alert-warn d-net-alert">
+  <i class="fa-solid fa-pause alert-icon"></i>
+  <div>
+    <strong>New listings are paused for this dealership.</strong>
+    Its business has more dealerships than its plan allows. Existing cars stay live; new uploads and imports wait until the
+    business renews its plan or this dealership is moved out.
+  </div>
+</div>
+<?php elseif ($gWindow && $gIsOwner): ?>
+<div class="alert alert-warn d-net-alert">
+  <i class="fa-solid fa-hourglass-half alert-icon"></i>
+  <div>
+    <strong>Your business is over its dealership limit</strong> — <?= (int) $gWindow['used_at_start'] ?> dealerships, the plan allows
+    <?= (int) $gWindow['limit_value'] ?>. Renew the plan by <strong><?= htmlspecialchars(date('j M Y', strtotime((string) $gWindow['ends_at']))) ?></strong>,
+    or the extra dealerships can't add new cars after that (their existing cars stay live). Contact SalesDesk to renew.
+  </div>
+</div>
+<?php elseif ($gPausedN > 0): ?>
+<div class="alert alert-warn d-net-alert">
+  <i class="fa-solid fa-pause alert-icon"></i>
+  <div>
+    <strong><?= $gPausedN ?> of your dealerships can't add new cars</strong> — your business has more dealerships than its plan allows.
+    Their existing cars stay live. Renew the plan, or ask SalesDesk to move a dealership out, to lift this.
+  </div>
+</div>
+<?php endif; ?>
+
+<?php /* ── 2c: broker network applications waiting ───────────── */
+  require_once __DIR__ . '/../../includes/org_membership.php';
+  $netOrgId   = sdNetworksReady() ? sdDealerOrgId((int) $ws['dealer_id']) : null;
+  $netSummary = $netOrgId ? sdNetworkSummary($netOrgId) : null; ?>
+<?php if ($netSummary && $netSummary['pending'] > 0 && sdCanManageNetwork($ws, $netOrgId)): ?>
+<div class="alert alert-info d-net-alert">
+  <i class="fa-solid fa-people-group alert-icon"></i>
+  <div>
+    <strong><?= $netSummary['pending'] ?> broker<?= $netSummary['pending'] === 1 ? '' : 's' ?></strong> want<?= $netSummary['pending'] === 1 ? 's' : '' ?> to join your network.
+    <a href="/app/dealer/network">Review →</a>
+  </div>
+</div>
+<?php endif; ?>
+
 <?php /* ── Page header ──────────────────────────────────────── */ ?>
 <div class="dash-header">
   <div class="dash-header__text">

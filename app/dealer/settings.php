@@ -29,6 +29,7 @@ require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 
 require_once __DIR__ . '/../../includes/dealer_context.php';
+require_once __DIR__ . '/../../includes/business.php';   // 0020: org mirrors the dealership
 
 applyCachePolicy('auth');
 // 0017: delegates may help run the dealership, but company / verification /
@@ -137,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             SET company_name = ?, brand_focus = ?, logo_url = ?, updated_at = NOW()
             WHERE id = ?
         ")->execute([$companyName, $brandJson, $logoUrl, $dealerId]);
+        sdSyncOrgFromDealer($dealerId);   // 0020: business org name/logo follow the dealership
 
         writeAuditLog('dealer.profile_updated', 'dealer', $dealerId, null,
             ['company_name' => $companyName]);
@@ -215,6 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $addressId = (int) $pdo->lastInsertId();
             $pdo->prepare("UPDATE dealers SET address_id=? WHERE id=?")->execute([$addressId, $dealerId]);
         }
+        sdSyncOrgFromDealer($dealerId);   // 0020
 
         $_SESSION['flash_ok'] = 'Address updated.';
         redirect('/app/dealer/settings.php?section=address');

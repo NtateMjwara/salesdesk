@@ -251,6 +251,7 @@ $pageTitle = 'Import inventory';
 
 ob_start();
 ?>
+<?php require __DIR__ . '/../../views/partials/dealer-listings-paused.php'; /* 3b */ ?>
 
 <div style="max-width:760px;margin:0 auto;">
 

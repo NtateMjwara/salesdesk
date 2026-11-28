@@ -5,7 +5,8 @@
  *
  * One place for everything waiting on this admin:
  *   execs  — sales execs asking to join a dealership the admin manages
- *   agents — brokers applying to a desk organisation the admin manages
+ *   agents — brokers applying to a business network (plans 2b: scoped through
+ *            the dealerships the admin manages)
  *
  * Both lists are scoped (dealer_managers / organization_managers), and the
  * review helpers re-check scope, so a tampered id can't reach anything else.
@@ -60,7 +61,7 @@ ob_start();
     Sales execs <?php if ($pending): ?><span class="adm-tab-count"><?= count($pending) ?></span><?php endif; ?>
   </a>
   <a href="?tab=agents" class="adm-tab<?= $tab === 'agents' ? ' is-active' : '' ?>" <?= $tab === 'agents' ? 'aria-current="page"' : '' ?>>
-    Desk org agents <?php if ($agentPending): ?><span class="adm-tab-count"><?= count($agentPending) ?></span><?php endif; ?>
+    Network brokers <?php if ($agentPending): ?><span class="adm-tab-count"><?= count($agentPending) ?></span><?php endif; ?>
   </a>
 </nav>
 
@@ -75,11 +76,11 @@ ob_start();
   <?php endif; ?>
 <?php else: ?>
   <p class="adm-muted adm-gap">
-    Brokers applying to a desk organisation you manage. Approved agents can add the organisation's brands to their desk
-    and carry its name. Their commission is unchanged.
+    Brokers applying to join the network of a dealership you manage. Approved brokers carry the business's name, and their
+    leads on its cars count towards the network. They can still share any car, and their commission is unchanged.
   </p>
   <?php if (!$agentPending): ?>
-    <div class="empty"><span class="empty-icon">✓</span>No agent applications waiting.</div>
+    <div class="empty"><span class="empty-icon">✓</span>No network applications waiting.</div>
   <?php else: ?>
     <?php $showOrg = true; include __DIR__ . '/../../views/partials/admin/agent-requests-table.php'; ?>
   <?php endif; ?>

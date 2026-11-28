@@ -43,8 +43,8 @@ $userStats = $pdo->query("
 $pendingDealerVerifications = (int) $pdo->query(
     "SELECT COUNT(*) FROM dealers WHERE verification_status = 'pending'"
 )->fetchColumn();
-$pendingOrgVerifications = (int) $pdo->query(
-    "SELECT COUNT(*) FROM organizations WHERE verification_status = 'pending'"
+$pendingOrgVerifications = (int) $pdo->query(   // 0020: business orgs verify through their dealership
+    "SELECT COUNT(*) FROM organizations o WHERE o.verification_status = 'pending'" . sdLegacyOrgSql('o')
 )->fetchColumn();
 $pendingVerificationsTotal = $pendingDealerVerifications + $pendingOrgVerifications;
 

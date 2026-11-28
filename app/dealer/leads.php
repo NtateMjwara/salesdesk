@@ -93,10 +93,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($newStatus === 'closed') {
                     // Get car + commission info, including broker contact
                     // details so we can email them on close (D-03 follow-up).
+                    require_once __DIR__ . '/../../includes/vip_network.php';   // 4a
                     $carStmt = $pdo->prepare("
                         SELECT c.price, c.commission_type, c.commission_value,
                                c.make, c.model, c.year, c.uploaded_by_exec_id,
                                l.broker_id, l.salesdesk_id, l.organization_id,
+                               " . (sdVipReady() ? 'l.network_bonus_type, l.network_bonus_value,' : 'NULL AS network_bonus_type, NULL AS network_bonus_value,') . "
                                bu.email      AS broker_email,
                                bp.first_name AS broker_first,
                                bp.last_name  AS broker_last
@@ -114,6 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $gross      = $carData['commission_type'] === 'fixed'
                             ? (float) $carData['commission_value']
                             : round($carData['price'] * $carData['commission_value'] / 100, 2);
+                        // 4a: network bonus locked in on the lead, part of the commission
+                        $bonus      = sdBonusAmount($carData['network_bonus_type'], $carData['network_bonus_value'], $carData['price']);
+                        $gross      = round($gross + $bonus, 2);
                         $fee        = round($gross * $feePercent / 100, 2);
                         $net        = round($gross - $fee, 2);
 
@@ -152,8 +157,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 }
 
                                 $commId = (int) $pdo->lastInsertId();
+                                if ($bonus > 0) {
+                                    $pdo->prepare("UPDATE commissions SET network_bonus = ? WHERE id = ?")->execute([$bonus, $commId]);
+                                }
                                 writeAuditLog('commission.created', 'commission', $commId, null,
-                                    ['status' => 'pending', 'gross' => $gross, 'net' => $net,
+                                    ['status' => 'pending', 'gross' => $gross, 'network_bonus' => $bonus, 'net' => $net,
                                      'closed_by' => $closedBy, 'closed_via' => $closedVia]);
 
                                 // 0017: SalesDesk staff closed a deal on a principal's
@@ -209,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     sendDealerCommissionInvoice(
                                         ['email' => $dealerEmail, 'company_name' => $dealer['company_name']],
                                         $invoiceLead,
-                                        ['id' => $commId, 'gross_amount' => $gross,
+                                        ['id' => $commId, 'gross_amount' => $gross, 'network_bonus' => $bonus,
                                          'platform_fee' => $fee, 'net_amount' => $net]
                                     );
                                 }
@@ -772,10 +780,13 @@ ob_start();
         and notify them by email.
       </p>
       <?php
+        require_once __DIR__ . '/../../includes/vip_network.php';   // 4a
         $feeP  = getPlatformConfigInt('platform_fee_percent', 10);
         $gross = $detailLead['commission_type'] === 'fixed'
           ? (float) $detailLead['commission_value']
           : round($detailLead['price'] * $detailLead['commission_value'] / 100, 2);
+        $nBonus = sdBonusAmount($detailLead['network_bonus_type'] ?? null, $detailLead['network_bonus_value'] ?? 0, $detailLead['price']);
+        $gross  = round($gross + $nBonus, 2);
         $fee   = round($gross * $feeP / 100, 2);
         $net   = round($gross - $fee, 2);
       ?>
@@ -785,6 +796,12 @@ ob_start();
           <span style="font-size:12px;color:var(--muted);">Gross commission</span>
           <span style="font-size:13px;font-family:var(--mono);">R <?= number_format($gross, 0) ?></span>
         </div>
+        <?php if ($nBonus > 0): /* 4a */ ?>
+        <div class="dl-bonus-line">
+          <span>incl. network bonus (<?= htmlspecialchars(sdBonusText($detailLead['network_bonus_type'], $detailLead['network_bonus_value'])) ?>)</span>
+          <span>R <?= number_format($nBonus, 0) ?></span>
+        </div>
+        <?php endif; ?>
         <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
           <span style="font-size:12px;color:var(--muted);">Platform fee (<?= $feeP ?>%)</span>
           <span style="font-size:13px;font-family:var(--mono);color:var(--red);">- R <?= number_format($fee, 0) ?></span>

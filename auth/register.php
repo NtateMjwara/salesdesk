@@ -159,7 +159,7 @@ if (empty($_SESSION['wz'])) {
         'dealer_id'         => null,
         'dealer_name'       => '',
         'job_title'         => '',
-        'org_id'            => 0,      // 0013: desk organisation applied to (0 = independent)
+        'org_ids'           => [],     // 2b: business networks applied to at signup (none = independent)
     ];
 }
 
@@ -433,35 +433,33 @@ ob_start();
     Your slug is automatically generated from the name you choose. You can rename it once after setup from your account settings.
   </div>
 
-  <?php /* 0013 — choose a desk organisation (online dealership) or stay independent */
-        $openOrgs = listOpenDeskOrgs();
-        $pickedOrg = (int) ($wz['org_id'] ?? 0); ?>
+  <?php /* 2b — optionally apply to business networks (several allowed, up to the plan's limit) */
+        $wzUserId  = (int) ($wz['user_id'] ?? 0);
+        $openNets  = listOpenNetworks($wzUserId ?: null);
+        $openNets  = array_values(array_filter($openNets, static fn ($n) => !$n['full'] || $n['my_status'] === 'pending'));
+        $pickedNet = array_map('intval', (array) ($wz['org_ids'] ?? []));
+        $netCap    = $wzUserId ? brokerNetworkAllowance($wzUserId)['limit'] : null; ?>
+  <?php if ($openNets): ?>
   <fieldset class="org-choice">
-    <legend class="flabel">Work as</legend>
+    <legend class="flabel">Join a network <span class="flabel-opt">optional<?= $netCap !== null ? ' · up to ' . (int) $netCap : '' ?></span></legend>
+    <?php foreach (array_slice($openNets, 0, 8) as $n):
+      $isPicked = in_array((int) $n['id'], $pickedNet, true) || $n['my_status'] === 'pending'; ?>
     <label class="org-option">
-      <input type="radio" name="org_id" value="0" <?= $pickedOrg === 0 ? 'checked' : '' ?>>
+      <input type="checkbox" name="org_ids[]" value="<?= (int) $n['id'] ?>" <?= $isPicked ? 'checked' : '' ?>>
       <span class="org-option-body">
-        <span class="org-option-name">Independent broker</span>
-        <span class="org-option-meta">Share any car on the marketplace. You can join an organisation later.</span>
-      </span>
-    </label>
-    <?php foreach ($openOrgs as $o): ?>
-    <label class="org-option">
-      <input type="radio" name="org_id" value="<?= (int) $o['id'] ?>" <?= $pickedOrg === (int) $o['id'] ? 'checked' : '' ?>>
-      <span class="org-option-body">
-        <span class="org-option-name"><?= htmlspecialchars($o['name']) ?></span>
+        <span class="org-option-name"><?= htmlspecialchars($n['name']) ?></span>
         <span class="org-option-meta">
-          <?= $o['brand_list'] ? 'Sells ' . htmlspecialchars(implode(', ', $o['brand_list'])) : 'All brands' ?>
-          <?= $o['city'] ? ' · ' . htmlspecialchars($o['city']) : '' ?>
-          · <?= (int) $o['agent_count'] ?> agent<?= (int) $o['agent_count'] === 1 ? '' : 's' ?>
+          <?= $n['brand_list'] ? htmlspecialchars(implode(', ', array_slice($n['brand_list'], 0, 3))) . ' · ' : '' ?>
+          <?= $n['city'] ? htmlspecialchars($n['city']) . ' · ' : '' ?>
+          <?= (int) $n['live_cars'] ?> live car<?= (int) $n['live_cars'] === 1 ? '' : 's' ?>
         </span>
       </span>
     </label>
     <?php endforeach; ?>
-    <?php if ($openOrgs): ?>
-    <p class="org-choice-note">Joining an organisation makes you one of its agents: an admin approves you, then you share its brands and still earn your full commission.</p>
-    <?php endif; ?>
+    <p class="org-choice-note">A network is a dealership’s circle of brokers. Its team reviews your application.
+      You can still share any car on SalesDesk, and your commission is always paid to you. You can join more later from My networks.</p>
   </fieldset>
+  <?php endif; ?>
 
   <button class="btn-auth" type="submit" id="desk-submit-btn" disabled>Continue <i class="fa-solid fa-arrow-right"></i></button>
 </form>

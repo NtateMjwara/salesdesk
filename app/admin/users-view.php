@@ -5,8 +5,8 @@
  *
  *   overview — identity, connections (dealership, employer, desk org,
  *              SalesDesk), role numbers, sign-in health.
- *   edit     — superadmin: name, phone, bio, address, broker car limit,
- *              sign-in email (step-up; old address is notified).
+ *   edit     — superadmin: name, phone, bio, address, broker plan & custom
+ *              limits (PLANS-1), sign-in email (step-up; old address is notified).
  *   account  — status (activate / suspend / reactivate, dealer cascade),
  *              email verification (verify / un-verify / resend code),
  *              password reset code, clear sign-in lockout, finish onboarding.
@@ -26,6 +26,8 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/user_admin.php';   // loads admin_scope.php + superadmin.php
+require_once '../../includes/entitlements.php'; // PLANS-1
+require_once '../../includes/billing.php';      // Phase 3: PayFast subscriptions
 
 applyCachePolicy('auth');
 requireRole('admin');
@@ -62,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $everyone  = ['suspend_user', 'reactivate_user'];
     $superOnly = ['activate', 'verify_email', 'unverify_email', 'resend_verification', 'send_reset',
-                  'clear_lockout', 'complete_onboarding', 'update_profile', 'change_email', 'set_car_limit'];
+                  'clear_lockout', 'complete_onboarding', 'update_profile', 'change_email', 'set_car_limit',
+                  'set_plan', 'set_limit', 'clear_limit', 'billing_cancel'];
 
     if (!in_array($action, $everyone, true) && !(in_array($action, $superOnly, true) && $isSuperadmin)) {
         $_SESSION['flash_error'] = 'Only a superadmin can do that.';
@@ -87,6 +90,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'update_profile'      => uaUpdateProfile($targetId, $_POST, $adminId),
         'change_email'        => uaChangeEmail($targetId, (string) ($_POST['new_email'] ?? ''), !empty($_POST['keep_verified']), $adminId),
         'set_car_limit'       => uaSetCarLimit($targetId, (int) ($_POST['car_limit'] ?? 0), $adminId),
+        // PLANS-1: plan + custom limits (superadmin; also checked inside entitlements.php)
+        'set_plan'            => sdSetAccountPlan('broker', $targetId, (string) ($_POST['plan_code'] ?? ''),
+                                     (string) ($_POST['plan_status'] ?? ''), (string) ($_POST['plan_until'] ?? ''),
+                                     (string) ($_POST['plan_note'] ?? ''), $adminId),
+        'set_limit'           => sdSetLimitOverride('broker', $targetId, (string) ($_POST['limit_key'] ?? ''),
+                                     !empty($_POST['limit_unlimited']) ? null : (int) ($_POST['limit_value'] ?? -1),
+                                     (string) ($_POST['limit_reason'] ?? ''), $adminId),
+        'clear_limit'         => sdClearLimitOverride('broker', $targetId, (string) ($_POST['limit_key'] ?? ''), $adminId),
+        // Phase 3: stop an online (PayFast) subscription for the broker
+        'billing_cancel'      => sdBillingCancel('broker', $targetId, $adminId),
     };
     $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
     redirect($back);
@@ -105,7 +118,18 @@ $isSuspended  = $user['status'] === 'suspended';
 $verified     = (int) $user['email_verified'] === 1;
 $hasPassword  = (int) $user['has_password'] === 1;
 $onboarded    = (int) $user['onboarding_completed'] === 1;
-$defaultLimit = getPlatformConfigInt('broker_car_limit_default', 10);
+// PLANS-1: plan + limits (brokers only)
+$isBroker     = $user['role'] === 'broker';
+$plansReady   = sdPlansReady();
+$acctPlan     = $isBroker && $plansReady ? sdAccountPlan('broker', $targetId) : null;
+$acctSub      = $acctPlan['subscription'] ?? null;
+// 3b: desk over its car limit (window) / cars paused by the limit
+require_once '../../includes/plan_grace.php';
+$acctGrace    = $isBroker && $plansReady && sdGraceReady() ? sdBrokerDeskState($targetId) : null;
+$overrides    = $isBroker && $plansReady ? sdLimitOverrides('broker', $targetId) : [];
+$brokerPlans  = $plansReady ? array_filter(sdPlans('broker'), static fn ($p) => $p['is_active']) : [];
+$brokerKeys   = array_filter(SD_LIMIT_KEYS, static fn ($d) => $d['audience'] === 'broker');
+$deskLimit    = $isBroker ? entitlement('broker', $targetId, 'max_desk_cars') : null;
 $fmt          = fn(?string $d, string $f = 'd M Y, H:i') => $d ? date($f, strtotime($d)) : '—';
 
 // Problems worth flagging at the top of every tab.
@@ -163,8 +187,16 @@ ob_start();
           <dt>Email</dt>     <dd><?= htmlspecialchars($user['email']) ?></dd>
           <dt>Phone</dt>     <dd><?php if ($user['phone']): ?><a href="tel:<?= htmlspecialchars(preg_replace('/[^0-9+]/', '', $user['phone'])) ?>"><?= htmlspecialchars($user['phone']) ?></a><?php else: ?>—<?php endif; ?></dd>
           <dt>Location</dt>  <dd><?= htmlspecialchars(implode(', ', array_filter([$user['suburb'], $user['city'], $user['province']])) ?: '—') ?></dd>
-          <?php if ($user['role'] === 'broker'): ?>
-          <dt>Car limit</dt> <dd><?= (int) ($user['car_limit'] ?? $defaultLimit) ?><?= $user['car_limit'] === null ? ' (platform default)' : '' ?></dd>
+          <?php if ($isBroker): ?>
+          <dt>Plan</dt>
+          <dd>
+            <?php if ($acctPlan): ?>
+            <?= htmlspecialchars($acctPlan['name']) ?>
+            <?php if ($acctPlan['source'] === 'subscription'): ?><span class="adm-sub">· <?= htmlspecialchars(sdSubStatusLabel($acctSub)) ?><?= !empty($acctSub['current_period_end']) ? ' until ' . date('j M Y', strtotime($acctSub['current_period_end'])) : '' ?></span><?php endif; ?>
+            <?php else: ?>—<span class="adm-sub"> (run 0019 Plans)</span><?php endif; ?>
+          </dd>
+          <dt>Desk cars</dt>
+          <dd><?= sdLimitText($deskLimit) ?><?= isset($overrides['max_desk_cars']) ? ' <span class="adm-sub">(custom limit)</span>' : '' ?></dd>
           <?php endif; ?>
           <?php if ($user['bio']): ?>
           <dt>Bio</dt>       <dd class="ua-pre"><?= htmlspecialchars($user['bio']) ?></dd>
@@ -212,14 +244,20 @@ ob_start();
             <a href="/app/admin/unplaced-execs">Unplaced execs →</a>
           </div></li>
           <?php endif; ?>
-          <?php if ($user['org_id']): ?>
+          <?php $userNetworks = $user['role'] === 'broker' ? uaUserNetworks($targetId) : []; /* 2b */ ?>
+          <?php foreach ($userNetworks as $net): ?>
           <li class="adm-list-row"><div>
-            <span class="adm-sub">Agent of desk organisation</span><br>
-            <a class="adm-strong" href="/app/admin/desk-orgs-view?id=<?= (int) $user['org_id'] ?>"><?= htmlspecialchars((string) $user['org_name']) ?></a>
-            <?= adminStatusBadge((string) $user['org_status']) ?>
+            <span class="adm-sub">Business network</span><br>
+            <?php if ($net['dealer_id']): ?>
+            <a class="adm-strong" href="/app/admin/dealerships-view?id=<?= (int) $net['dealer_id'] ?>&amp;tab=business"><?= htmlspecialchars((string) $net['org_name']) ?></a>
+            <?php else: ?>
+            <span class="adm-strong"><?= htmlspecialchars((string) $net['org_name']) ?></span>
+            <?php endif; ?>
+            <?= adminStatusBadge((string) $net['status']) ?>
           </div></li>
-          <?php elseif ($user['role'] === 'broker'): ?>
-          <li class="adm-list-row"><div><span class="adm-muted">Independent broker (no desk organisation).</span></div></li>
+          <?php endforeach; ?>
+          <?php if ($user['role'] === 'broker' && !$userNetworks): ?>
+          <li class="adm-list-row"><div><span class="adm-muted">Not in any business network.</span></div></li>
           <?php endif; ?>
           <?php if ($user['desk_id']): ?>
           <li class="adm-list-row"><div>
@@ -293,19 +331,146 @@ ob_start();
     </div>
   </div>
 
-  <?php if ($user['role'] === 'broker'): ?>
-  <div class="card adm-card">
+  <?php if ($isBroker): ?>
+  <!-- PLANS-1: plan + custom limits -->
+  <div class="card adm-card adm-card-wide" id="plan">
     <div class="card-body">
-      <h2 class="adm-h2">Car limit</h2>
-      <p class="adm-muted adm-gap">How many cars this broker can keep on their desk. Platform default: <?= $defaultLimit ?>.</p>
-      <form method="POST" action="<?= $self ?>" class="adm-inline">
+      <h2 class="adm-h2">Plan &amp; limits</h2>
+      <?php if (!$plansReady): ?>
+      <div class="alert alert-warn"><span class="alert-icon">!</span>
+        <div>Run <strong>0019 Plans</strong> in <a href="/app/admin/migrations">Migrations</a> to manage plans.</div>
+      </div>
+      <?php else: ?>
+      <p class="adm-muted adm-gap">
+        Currently on <strong><?= htmlspecialchars($acctPlan['name'] ?? 'Free') ?></strong>
+        <?php if ($acctPlan && $acctPlan['source'] === 'subscription'): ?>
+        — <?= htmlspecialchars(sdSubStatusLabel($acctSub)) ?><?= !empty($acctSub['current_period_end']) ? ' until ' . date('j M Y', strtotime($acctSub['current_period_end'])) : '' ?>
+        <?= !empty($acctSub['note']) ? '· “' . htmlspecialchars($acctSub['note']) . '”' : '' ?>
+        <?php endif; ?>.
+        <em>Paid</em> set here means they pay SalesDesk directly (e.g. EFT), <em>Comped</em> means free of charge.
+      </p>
+
+      <?php if ($acctGrace && ($acctGrace['grace'] || $acctGrace['parked_plan'])): /* 3b */ ?>
+      <div class="alert alert-warn adm-gap">
+        <span class="alert-icon"><i class="fa-solid fa-pause"></i></span>
+        <div>
+          <?php if ($acctGrace['grace']): ?>
+          <strong>Desk over its car limit</strong> — <?= (int) $acctGrace['live'] ?> live, the plan allows <?= (int) $acctGrace['limit'] ?>.
+          The broker chooses which stay live; the rest pause on <?= htmlspecialchars(date('j M Y', strtotime((string) $acctGrace['grace']['ends_at']))) ?>.
+          <?php endif; ?>
+          <?php if ($acctGrace['parked_plan']): ?>
+          <strong><?= (int) $acctGrace['parked_plan'] ?> car<?= $acctGrace['parked_plan'] === 1 ? '' : 's' ?> paused</strong> by the limit (kept, not deleted) —
+          they come back automatically when the plan or a custom limit gives room.
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($acctSub && ($acctSub['provider'] ?? '') === 'payfast' && sdSubscriptionGrants($acctSub)): /* Phase 3 */ ?>
+      <div class="alert <?= (int) ($acctSub['cancel_at_period_end'] ?? 0) ? 'alert-info' : ($acctSub['status'] === 'past_due' ? 'alert-warn' : 'alert-success') ?> adm-gap">
+        <span class="alert-icon"><i class="fa-solid fa-credit-card"></i></span>
+        <div>
+          <strong>Pays online (PayFast)</strong> — <?= htmlspecialchars(sdPriceText((int) ($acctSub['amount_cents'] ?? 0))) ?>/month,
+          paid through <?= date('j M Y', strtotime((string) $acctSub['current_period_end'] . ' -' . SD_BILLING_GRACE_DAYS . ' days')) ?>
+          <?= (int) ($acctSub['cancel_at_period_end'] ?? 0) ? '· <strong>cancelled</strong>, ends then' : ($acctSub['status'] === 'past_due' ? '· <strong>last payment failed</strong>' : '· renews monthly') ?>.
+          <?php if ($acctSub['last_payment_at']): ?><span class="adm-sub">Last payment <?= date('j M Y', strtotime((string) $acctSub['last_payment_at'])) ?>. Token <span class="adm-mono"><?= htmlspecialchars(substr((string) $acctSub['provider_ref'], 0, 8)) ?>…</span></span><?php endif; ?>
+          <?php if (!(int) ($acctSub['cancel_at_period_end'] ?? 0)): ?>
+          <form method="POST" action="<?= $self ?>#plan" class="adm-inline-form"
+                data-confirm="Cancel this broker’s PayFast subscription? They won’t be charged again and keep the plan until the paid-through date.">
+            <?= csrf_hidden_field() ?>
+            <input type="hidden" name="action" value="billing_cancel">
+            <input type="hidden" name="tab" value="edit">
+            <button class="btn btn-ghost btn-sm" type="submit">Cancel online subscription</button>
+          </form>
+          <?php endif; ?>
+        </div>
+      </div>
+      <?php endif; ?>
+
+      <form method="POST" action="<?= $self ?>#plan" class="plan-assign"
+            data-confirm="Change <?= htmlspecialchars($name, ENT_QUOTES) ?>’s plan?">
         <?= csrf_hidden_field() ?>
-        <input type="hidden" name="action" value="set_car_limit">
+        <input type="hidden" name="action" value="set_plan">
         <input type="hidden" name="tab" value="edit">
-        <input class="finput ua-limit-input" type="number" name="car_limit" min="1" max="200"
-               value="<?= (int) ($user['car_limit'] ?? $defaultLimit) ?>" aria-label="Car limit">
-        <button class="btn btn-primary btn-sm" type="submit">Set limit</button>
+        <div class="fgroup">
+          <label class="flabel" for="plan_code">Plan</label>
+          <select class="finput" id="plan_code" name="plan_code">
+            <?php foreach ($brokerPlans as $bp): ?>
+            <option value="<?= htmlspecialchars($bp['code']) ?>" <?= ($acctPlan['code'] ?? '') === $bp['code'] ? 'selected' : '' ?>>
+              <?= htmlspecialchars($bp['name']) ?> — <?= htmlspecialchars(sdPlanPriceLabel($bp)) ?>
+            </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <fieldset class="fgroup plan-status">
+          <legend class="flabel">For paid plans</legend>
+          <label><input type="radio" name="plan_status" value="active" <?= ($acctSub['status'] ?? 'active') !== 'comped' ? 'checked' : '' ?>> Paid</label>
+          <label><input type="radio" name="plan_status" value="comped" <?= ($acctSub['status'] ?? '') === 'comped' ? 'checked' : '' ?>> Comped (free)</label>
+        </fieldset>
+        <div class="fgroup">
+          <label class="flabel" for="plan_until">Until <span class="flabel-opt">optional</span></label>
+          <input class="finput" id="plan_until" name="plan_until" type="date" min="<?= date('Y-m-d', strtotime('+1 day')) ?>"
+                 value="<?= !empty($acctSub['current_period_end']) ? date('Y-m-d', strtotime($acctSub['current_period_end'])) : '' ?>">
+        </div>
+        <div class="fgroup plan-note">
+          <label class="flabel" for="plan_note">Note <span class="flabel-opt">optional</span></label>
+          <input class="finput" id="plan_note" name="plan_note" maxlength="255" placeholder="e.g. Launch offer — 3 months free"
+                 value="<?= htmlspecialchars((string) ($acctSub['note'] ?? '')) ?>">
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">Save plan</button>
       </form>
+      <p class="adm-sub">After the end date the broker drops back to Free automatically. Choosing Free removes the plan.</p>
+
+      <h3 class="adm-h3 adm-section-gap">Limits</h3>
+      <div class="roster-wrap">
+        <table class="roster plan-limits">
+          <thead><tr><th>Limit</th><th>Plan</th><th>Custom</th><th>In force</th><th>Set a custom limit</th></tr></thead>
+          <tbody>
+          <?php foreach ($brokerKeys as $key => $def):
+            $planVal = $acctPlan ? sdPlanLimit($acctPlan, $key) : $def['fallback'];
+            $ov      = $overrides[$key] ?? null; ?>
+            <tr>
+              <td>
+                <span class="adm-strong"><?= htmlspecialchars($def['label']) ?></span>
+                <?php if ($key === 'max_networks'): ?><div class="adm-sub">Enforced from plans Phase 2</div><?php endif; ?>
+              </td>
+              <td class="adm-mono"><?= sdLimitText($planVal, $key) ?></td>
+              <td>
+                <?php if ($ov): ?>
+                <span class="adm-mono"><?= sdLimitText($ov['limit_value'], $key) ?></span>
+                <div class="adm-sub">“<?= htmlspecialchars((string) $ov['reason']) ?>”<?= $ov['set_by_name'] ? ' — ' . htmlspecialchars($ov['set_by_name']) : '' ?>, <?= date('j M Y', strtotime($ov['set_at'])) ?></div>
+                <form method="POST" action="<?= $self ?>#plan" class="adm-inline-form">
+                  <?= csrf_hidden_field() ?>
+                  <input type="hidden" name="action" value="clear_limit">
+                  <input type="hidden" name="tab" value="edit">
+                  <input type="hidden" name="limit_key" value="<?= $key ?>">
+                  <button class="btn btn-ghost btn-sm" type="submit">Remove</button>
+                </form>
+                <?php else: ?><span class="adm-sub">—</span><?php endif; ?>
+              </td>
+              <td class="adm-mono adm-strong"><?= sdLimitText(entitlement('broker', $targetId, $key), $key) ?></td>
+              <td>
+                <form method="POST" action="<?= $self ?>#plan" class="plan-limit-form">
+                  <?= csrf_hidden_field() ?>
+                  <input type="hidden" name="action" value="set_limit">
+                  <input type="hidden" name="tab" value="edit">
+                  <input type="hidden" name="limit_key" value="<?= $key ?>">
+                  <input class="finput ua-limit-input" type="number" name="limit_value" min="0" max="100000"
+                         value="<?= $ov && $ov['limit_value'] !== null ? (int) $ov['limit_value'] : ($planVal ?? '') ?>"
+                         aria-label="<?= htmlspecialchars($def['label']) ?>">
+                  <label class="plan-unl"><input type="checkbox" name="limit_unlimited" value="1" <?= $ov && $ov['limit_value'] === null ? 'checked' : '' ?>> Unlimited</label>
+                  <input class="finput" name="limit_reason" maxlength="255" placeholder="Reason (required)" required
+                         aria-label="Reason for <?= htmlspecialchars($def['label']) ?>">
+                  <button class="btn btn-primary btn-sm" type="submit">Set</button>
+                </form>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+      <p class="adm-sub">A custom limit beats the plan until you remove it. A desk organisation’s agent car limit can still cap desk cars until Phase 2.</p>
+      <?php endif; ?>
     </div>
   </div>
   <?php endif; ?>

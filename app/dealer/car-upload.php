@@ -198,6 +198,21 @@ if (empty($_SESSION['car_wz'])) {
 $_SESSION['car_wz']['_dealer_id'] = $dealerId;   // 0015
 $wz   = &$_SESSION['car_wz'];
 $step = (int) ($wz['step'] ?? 1);
+
+// Plans 3b: a dealership over its business plan's dealership limit can't
+// publish NEW cars until the business upgrades or detaches a dealership.
+require_once __DIR__ . '/../../includes/plan_grace.php';
+$listingsPaused = sdDealerListingsPaused($dealerId);
+
+// Plans 4a: a principal (or the business owner) on a Pro / Enterprise
+// business can publish a car straight away as network-only.
+require_once __DIR__ . '/../../includes/vip_network.php';
+require_once __DIR__ . '/../../includes/org_membership.php';
+$canNetOnly = false;
+if ($execId === null && sdVipReady() && isset($ws)) {
+    $netOrgId   = (int) Database::getInstance()->query('SELECT COALESCE(organization_id, 0) FROM dealers WHERE id = ' . (int) $dealerId)->fetchColumn();
+    $canNetOnly = $netOrgId && sdOrgVipActive($netOrgId) && sdCanManageNetwork($ws, $netOrgId);
+}
 $csrf = generateCSRFToken();
 
 // ── Handle reset ──────────────────────────────────────────────
@@ -385,12 +400,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $wz['commission_type']  = $commType;
             $wz['commission_value'] = $commValue;
+            $wz['network_only']     = $canNetOnly && !empty($_POST['network_only']) ? 1 : 0;   // 4a
             $wz['step'] = 6;
             redirect('/app/dealer/car-upload.php');
         }
     }
 
     // ── Publish ───────────────────────────────────────────────
+    if ($action === 'publish' && $listingsPaused) {
+        $error  = 'New listings are paused for this dealership: its business has more dealerships than its plan allows. Your draft is kept — publish it once the business upgrades or the dealership is detached.';
+        $action = '';   // stay on the review step with the draft untouched
+    }
     if ($action === 'publish') {
         // Cover photo selection — move chosen image to index 0 before INSERT.
         $coverIdx = (int) ($_POST['cover_idx'] ?? 0);
@@ -518,6 +538,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // on failure, $error is set above and execution falls through to
         // the normal render path below, landing back on step 6.
         if (!isset($error)) {
+            if (!empty($wz['network_only']) && $canNetOnly) {   // 4a
+                sdSetCarsNetworkOnly($dealerId, [$carId], [$carId], (int) $_SESSION['user_id']);
+            }
             unset($_SESSION['car_wz']);
             $_SESSION['flash_ok'] = "{$flashYear} {$flashMake} {$flashModel} listed successfully.";
             redirect($isExec ? '/app/exec/inventory.php' : '/app/dealer/inventory.php');
@@ -641,6 +664,13 @@ ob_start();
 <?php endif; ?>
 
 <div style="max-width:680px;margin:0 auto;">
+
+<?php if ($listingsPaused && empty($error)): ?>
+<div class="alert alert-warn">
+  <i class="fa-solid fa-pause alert-icon"></i>
+  New listings are paused for this dealership — its business is over its plan's dealership limit. You can still prepare a car, but it can't be published until the business upgrades. Existing cars stay live.
+</div>
+<?php endif; ?>
 
 <?php if ($step === 1): ?>
 <!-- ═══════════════════════════════
@@ -1313,6 +1343,16 @@ ob_start();
       </div>
       <div id="commPreviewNote" style="font-size:11px;color:var(--muted);margin-top:3px;"></div>
     </div>
+
+    <?php if ($canNetOnly): /* 4a */ ?>
+    <label class="cu-netonly">
+      <input type="checkbox" name="network_only" value="1" <?= !empty($wz['network_only']) ? 'checked' : '' ?>>
+      <span>
+        <strong>Network only</strong>
+        <span class="cu-netonly__help">Only your network brokers can list and share this car. Change it any time under Network → VIP perks.</span>
+      </span>
+    </label>
+    <?php endif; ?>
 
   </form><!-- /commForm — closed here; no Back form nested inside -->
 

@@ -10,12 +10,25 @@
  * Car limit enforced on "Add to Desk" (b10, D-10).
  * Share sheet rendered inline per car (b4).
  *
- * FIX: deskStmt now selects p.car_limit (previously omitted), so
- * this page enforces the broker's actual per-broker override (set
- * via app/admin/users.php "set_car_limit") instead of always
- * falling back to the platform default. Platform default was raised
- * from 10 to 150 — see includes/config.php DEFAULT_BROKER_CAR_LIMIT
- * and db/0003_update_broker_car_limit.sql.
+ * DESK-1 (Nov 2026): "Add to Desk" works in place (no reload, stays in
+ * the Marketplace) — assets/js/broker-inventory.js. The page's inline
+ * <style> / <script> moved to assets/css|js/broker-inventory.*.
+ *
+ * PLANS-1 (0019): the desk car limit comes from the broker's plan
+ * (Free 150 · Pro unlimited) or a superadmin custom limit, via
+ * brokerDeskCarLimit() in includes/entitlements.php. The desk org's
+ * agent car limit still caps it until plans Phase 2. A null limit
+ * means unlimited.
+ *
+ * PLANS-3b (0023): cars over the limit after a downgrade are paused
+ * ("parked" in broker_inventory_parked), never deleted. My Desk lists
+ * them with Bring back / Remove; adding a parked car from the
+ * Marketplace brings the same row (views, link) back.
+ *
+ * PLANS-4a (0024): network-only cars show in the Marketplace only to
+ * verified members of their business (badge "Network only"); cars of a
+ * business whose network the broker is in show its network bonus. The
+ * "Networks" filter narrows to those businesses' cars (net=mine | id).
  */
 
 declare(strict_types=1);
@@ -26,6 +39,9 @@ require_once '../../includes/database.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/org_membership.php';
+require_once '../../includes/entitlements.php';
+require_once '../../includes/plan_grace.php';
+require_once '../../includes/vip_network.php';   // 4a
 
 applyCachePolicy('auth');
 requireLogin();
@@ -50,102 +66,136 @@ if (!$desk) {
 }
 
 $salesdeskId  = (int) $desk['id'];
-$defaultLimit = getPlatformConfigInt('broker_car_limit_default', 10);
 
 // 0013: desk organisation catalogue rules.
 //   independent → full marketplace
 //   agent       → only the org's brands (empty list = legacy org, unrestricted)
 //   pending / suspended → can browse the org's brands, can't add
-// Car limit precedence: per-broker override > org agent limit > platform default.
+// PLANS-1: car limit = plan / custom limit, capped by the org agent limit (null = unlimited).
 $rules    = brokerCatalogueRules($userId);
 $brands   = $rules['mode'] === 'independent' ? [] : $rules['brands'];
-$carLimit = $desk['car_limit'] ?? ($rules['car_limit'] ?? $defaultLimit);
+$carLimit = brokerDeskCarLimit($userId, $rules['car_limit']);
+$myPlan   = sdAccountPlan('broker', $userId);
 $csrf         = generateCSRFToken();
 
 // ── Handle POST: Add to Desk / Remove from Desk ───────────────
+// DESK-1 (Nov 2026): the Marketplace adds cars in place.
+// assets/js/broker-inventory.js posts with X-Requested-With and gets JSON
+// back, so the broker stays on the same page, filters and scroll position.
+// Without JS the form posts normally and lands back on the same
+// Marketplace page (not "My Desk") via the "back" field.
 $flash      = '';
 $flashType  = 'ok';
 
+/** Marketplace query string to return to (allow-listed keys only). */
+function invBackQs(string $raw): string
+{
+    parse_str($raw, $in);
+    $keep = array_intersect_key($in, array_flip(['tab', 'q', 'make', 'province', 'comm_type', 'net', 'sort', 'page']));
+    $keep = array_filter(array_map(static fn ($v) => is_string($v) ? mb_substr($v, 0, 80) : '', $keep), 'strlen');
+    return http_build_query($keep);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
-    $action = $_POST['action'] ?? '';
-    $carId  = (int) ($_POST['car_id'] ?? 0);
+    $action    = $_POST['action'] ?? '';
+    $carId     = (int) ($_POST['car_id'] ?? 0);
+    $wantsJson = ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'XMLHttpRequest';
+    $backQs    = invBackQs((string) ($_POST['back'] ?? ''));
 
-    if ($action === 'add_to_desk' && $carId && !$rules['can_add']) {
-        $_SESSION['flash_error'] = $rules['message'];
-        redirect('/app/broker/inventory.php');
-    }
+    $ok  = false;
+    $msg = 'Nothing changed.';
 
     if ($action === 'add_to_desk' && $carId) {
-        // b10: enforce car limit
-        $currentCount = (int) $pdo->prepare("
-            SELECT COUNT(*) FROM broker_inventory bi
-            JOIN cars c ON c.id = bi.car_id
-            WHERE bi.salesdesk_id = ? AND c.status = 'active'
-        ")->execute([$salesdeskId]) ? $pdo->query(
-            "SELECT COUNT(*) FROM broker_inventory bi
-             JOIN cars c ON c.id = bi.car_id
-             WHERE bi.salesdesk_id = {$salesdeskId} AND c.status = 'active'"
-        )->fetchColumn() : 0;
-
-        // Proper parameterised count.
-        $cntStmt = $pdo->prepare("
-            SELECT COUNT(*) FROM broker_inventory bi
-            JOIN cars c ON c.id = bi.car_id
-            WHERE bi.salesdesk_id = ? AND c.status = 'active'
-        ");
-        $cntStmt->execute([$salesdeskId]);
-        $currentCount = (int) $cntStmt->fetchColumn();
-
-        if ($currentCount >= $carLimit) {
-            $_SESSION['flash_error'] = "You've reached your car limit ({$carLimit} cars). Ask an admin to increase your limit.";
+        $currentCount = brokerDeskCarCount($salesdeskId);
+        if (!$rules['can_add']) {
+            $msg = $rules['message'];
+        } elseif (!sdHasRoom($carLimit, $currentCount)) {
+            // b10 / PLANS-1: enforce the desk car limit (null = unlimited).
+            $onPlanLimit = $myPlan && $myPlan['source'] === 'default'
+                && sdPlanLimit($myPlan, 'max_desk_cars') === $carLimit;
+            $msg = $onPlanLimit
+                ? "Your desk is full — the {$myPlan['name']} plan holds {$carLimit} cars. Remove a car, or see Pro on the Plan page for unlimited cars."
+                : "Your desk is full ({$carLimit} cars). Remove a car to add another.";
         } else {
-            // Check car is active and not already on desk.
-            // 0013: agents may only add their org's brands.
+            // Car must be active. 0013: agents may only add their org's brands.
             [$brandSql, $brandParams] = brandFilterSql($brands);
-            $carStmt = $pdo->prepare("SELECT c.id, c.status FROM cars c WHERE c.id = ? AND c.status = 'active'"
+            $carStmt = $pdo->prepare("SELECT c.id FROM cars c WHERE c.id = ? AND c.status = 'active'"
                 . ($brandSql ? " AND {$brandSql}" : ''));
             $carStmt->execute(array_merge([$carId], $brandParams));
-            $car = $carStmt->fetch();
-
-            if (!$car && $brands) {
-                $_SESSION['flash_error'] = 'As an agent at ' . $rules['org']['org_name']
-                    . ' you can only add ' . implode(', ', $brands) . ' cars.';
-            }
-            if ($car) {
-                $checkStmt = $pdo->prepare("
-                    SELECT id FROM broker_inventory WHERE salesdesk_id = ? AND car_id = ? LIMIT 1
-                ");
+            $carFound = (bool) $carStmt->fetch();
+            if ($carFound && !sdBrokerMayListCar($userId, $carId)) {
+                $msg = 'That car is for its business’s network brokers only.';   // 4a
+            } elseif (!$carFound) {
+                $msg = $brands
+                    ? 'As an agent at ' . $rules['org']['org_name'] . ' you can only add ' . implode(', ', $brands) . ' cars.'
+                    : 'That car is no longer available.';
+            } else {
+                $checkStmt = $pdo->prepare("SELECT id FROM broker_inventory WHERE salesdesk_id = ? AND car_id = ? LIMIT 1");
                 $checkStmt->execute([$salesdeskId, $carId]);
                 if ($checkStmt->fetch()) {
-                    $_SESSION['flash_error'] = 'This car is already on your desk.';
+                    $ok  = true;                       // already there = the outcome they wanted
+                    $msg = 'Already on your desk.';
+                } elseif (($parkedId = sdParkedIdForCar($userId, $carId)) && sdRestoreParkedRow($salesdeskId, $parkedId)) {
+                    // 3b: a paused car comes back with its link and views.
+                    $ok  = true;
+                    $msg = 'Back on your desk — same link as before.';
                 } else {
-                    $trackingCode = bin2hex(random_bytes(16));
                     $pdo->prepare("
                         INSERT INTO broker_inventory (salesdesk_id, car_id, tracking_code, views, added_at)
                         VALUES (?, ?, ?, 0, NOW())
-                    ")->execute([$salesdeskId, $carId, $trackingCode]);
-                    $_SESSION['flash_ok'] = 'Car added to your desk!';
+                    ")->execute([$salesdeskId, $carId, bin2hex(random_bytes(16))]);
+                    $ok  = true;
+                    $msg = 'Added to your desk.';
                 }
             }
         }
-        redirect('/app/broker/inventory.php?tab=desk');
-    }
-
-    if ($action === 'remove_from_desk' && $carId) {
+    } elseif ($action === 'remove_from_desk' && $carId) {
         // Prevent removal if car is sold (b5).
         $soldCheck = $pdo->prepare("SELECT c.status FROM broker_inventory bi JOIN cars c ON c.id = bi.car_id WHERE bi.salesdesk_id = ? AND bi.car_id = ?");
         $soldCheck->execute([$salesdeskId, $carId]);
         $carStatus = $soldCheck->fetchColumn();
         if ($carStatus === 'sold') {
-            $_SESSION['flash_error'] = 'Sold cars cannot be removed from your desk.';
+            $msg = 'Sold cars cannot be removed from your desk.';
         } else {
             $pdo->prepare("DELETE FROM broker_inventory WHERE salesdesk_id = ? AND car_id = ?")
                 ->execute([$salesdeskId, $carId]);
-            $_SESSION['flash_ok'] = 'Car removed from your desk.';
+            $ok  = true;
+            $msg = 'Removed from your desk.';
+            sdGraceCheckBroker($userId, false);   // 3b: back under the limit closes the window
         }
-        redirect('/app/broker/inventory.php?tab=desk');
+    } elseif ($action === 'resume_parked') {
+        // 3b: bring a paused car back (needs a free slot, org cap included).
+        $invId = (int) ($_POST['inv_id'] ?? 0);
+        if (!sdHasRoom($carLimit, brokerDeskCarCount($salesdeskId))) {
+            $msg = 'Your desk is full (' . sdLimitText($carLimit) . ' cars). Remove a car or upgrade to bring this one back.';
+        } else {
+            [$ok, $msg] = sdBrokerResumeCar($userId, $invId);
+        }
+        $action = 'remove_from_desk';   // land back on My Desk
+    } elseif ($action === 'drop_parked') {
+        [$ok, $msg] = sdBrokerDropParked($userId, (int) ($_POST['inv_id'] ?? 0));
+        $action = 'remove_from_desk';
     }
+
+    if ($wantsJson) {
+        $count = brokerDeskCarCount($salesdeskId);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'ok'         => $ok,
+            'message'    => $msg,
+            'car_id'     => $carId,
+            'desk_count' => $count,
+            'limit'      => $carLimit,
+            'limit_text' => sdLimitText($carLimit),
+            'at_limit'   => !sdHasRoom($carLimit, $count),
+        ]);
+        exit;
+    }
+
+    $_SESSION[$ok ? 'flash_ok' : 'flash_error'] = $msg;
+    // Removing happens on My Desk; adding stays in the Marketplace.
+    redirect('/app/broker/inventory.php?' . ($action === 'remove_from_desk' ? 'tab=desk' : ($backQs !== '' ? $backQs : 'tab=market')));
 }
 
 $flash      = $_SESSION['flash_ok']    ?? '';
@@ -159,8 +209,16 @@ $q         = trim($_GET['q']         ?? '');
 $make      = trim($_GET['make']      ?? '');
 $province  = trim($_GET['province']  ?? '');
 $commType  = trim($_GET['comm_type'] ?? '');
+// 4a: 'mine' = every business whose network I'm in; an id = one of them
+$myOrgs    = sdBrokerVerifiedOrgIds($userId);
+$net       = (string) ($_GET['net'] ?? '');
+$net       = $net === 'mine' || in_array((int) $net, $myOrgs, true) ? $net : '';
 $sort      = trim($_GET['sort']      ?? 'commission_desc');
 $page      = max(1, (int) ($_GET['page'] ?? 1));
+$mktBackQs = http_build_query(array_filter([
+    'tab' => 'market', 'q' => $q, 'make' => $make, 'province' => $province,
+    'comm_type' => $commType, 'net' => $net, 'sort' => $sort, 'page' => $page > 1 ? $page : null,
+], static fn ($v) => $v !== null && $v !== ''));
 $perPage   = 12;
 $offset    = ($page - 1) * $perPage;
 
@@ -187,6 +245,10 @@ $deskCarsStmt->execute([$salesdeskId, $salesdeskId]);
 $deskCars    = $deskCarsStmt->fetchAll();
 $deskCount   = count($deskCars);
 
+// 3b: paused (parked) cars and the downgrade window.
+$graceState  = sdBrokerDeskState($userId);
+$parkedCars  = $tab === 'desk' ? sdParkedCars($userId) : [];
+
 // ── Marketplace cars ──────────────────────────────────────────
 $mktWhere  = ["c.status = 'active'", "d.is_active = 1"];
 $mktParams = [];
@@ -211,6 +273,15 @@ if ($make)     {   // 0013: include alternative spellings (Volkswagen ↔ VW)
 }
 if ($province) { $mktWhere[] = "a.province = ?";            $mktParams[] = $province; }
 if ($commType) { $mktWhere[] = "c.commission_type = ?";     $mktParams[] = $commType; }
+// 4a: network-only cars for members of their business only
+[$netSql, $netParams] = sdMarketplaceNetworkSql($userId);
+$mktWhere[] = $netSql;
+array_push($mktParams, ...$netParams);
+if ($net !== '') {
+    $netIds = $net === 'mine' ? ($myOrgs ?: [0]) : [(int) $net];
+    $mktWhere[] = 'd.organization_id IN (' . implode(',', array_fill(0, count($netIds), '?')) . ')';
+    array_push($mktParams, ...$netIds);
+}
 
 $whereClause = 'WHERE ' . implode(' AND ', $mktWhere);
 $commExpr = "CASE c.commission_type WHEN 'fixed' THEN c.commission_value WHEN 'percentage' THEN c.price*(c.commission_value/100) ELSE 0 END";
@@ -242,6 +313,7 @@ $mktStmt = $pdo->prepare("
         c.id, c.make, c.model, c.year, c.price, c.image_urls, c.slug AS car_slug,
         c.commission_type, c.commission_value, c.mileage, c.condition_type,
         ({$commExpr}) AS comm_rand,
+        " . (sdVipReady() ? 'c.network_exclusive' : '0 AS network_exclusive') . ", d.organization_id AS org_id,
         d.id AS dealer_id, d.company_name AS dealer_name,
         d.verification_status AS dealer_verification,
         a.city AS dealer_city,
@@ -255,6 +327,14 @@ $mktStmt = $pdo->prepare("
 ");
 $mktStmt->execute($mktParams);
 $mktCars = $mktStmt->fetchAll();
+
+// 4a: network bonuses of the businesses whose network I'm in, and their names for the filter
+$myBonuses = sdOrgBonuses($myOrgs);
+$myNetworks = [];
+if ($myOrgs) {
+    $nn = $pdo->query('SELECT id, name FROM organizations WHERE id IN (' . implode(',', $myOrgs) . ') ORDER BY name');
+    $myNetworks = $nn->fetchAll(PDO::FETCH_KEY_PAIR);
+}
 
 // Distinct makes for filter.
 $makesStmt = $pdo->query("SELECT DISTINCT make FROM cars WHERE status='active' ORDER BY make");
@@ -282,14 +362,19 @@ ob_start();
 </div>
 <?php endif; ?>
 
+<?php require __DIR__ . '/../../views/partials/grace-banner.php'; ?>
+
 <!-- Page header with slot counter -->
 <div class="inv-header">
   <div>
     <h1 class="inv-title">Inventory</h1>
     <p class="inv-sub">
-      <span class="slot-count <?= $deskCount >= $carLimit ? 'at-limit' : '' ?>">
-        <?= $deskCount ?> / <?= $carLimit ?> desk slots used
+      <span class="slot-count <?= sdHasRoom($carLimit, $deskCount) ? '' : 'at-limit' ?>" data-slot-count aria-live="polite">
+        <span data-slot-used><?= $deskCount ?></span> / <span data-slot-limit><?= sdLimitText($carLimit) ?></span> desk slots used
       </span>
+      <?php if ($myPlan): ?>
+      · <a class="plan-chip" href="/app/broker/plan"><?= htmlspecialchars($myPlan['name']) ?> plan</a>
+      <?php endif; ?>
     </p>
   </div>
   <div style="display:flex;gap:6px;">
@@ -441,6 +526,57 @@ ob_start();
 </div>
 <?php endif; ?>
 
+<?php if ($parkedCars): ?>
+<!-- 3b: cars paused by the plan limit -->
+<section class="parked" aria-labelledby="parkedTitle">
+  <h2 class="parked-title" id="parkedTitle">
+    <i class="fa-solid fa-pause"></i> Paused cars <span class="parked-count"><?= count($parkedCars) ?></span>
+  </h2>
+  <p class="parked-sub">Hidden from your desk and links — over your plan's limit, or made network-only by their business. Nothing was deleted: bring one back when you have a free slot.</p>
+  <ul class="parked-list">
+    <?php foreach ($parkedCars as $pc):
+      $pImgs = json_decode($pc['image_urls'] ?? '[]', true) ?: [];
+      $pImg  = $pImgs[0] ?? null;
+      $pGone = $pc['status'] !== 'active';
+    ?>
+    <li class="parked-row<?= $pGone ? ' is-gone' : '' ?>">
+      <span class="parked-thumb">
+        <?php if ($pImg): ?><img src="<?= htmlspecialchars($pImg) ?>" alt="" loading="lazy"><?php else: ?><i class="fa-solid fa-car-side"></i><?php endif; ?>
+      </span>
+      <span class="parked-info">
+        <span class="parked-name"><?= htmlspecialchars($pc['year'] . ' ' . $pc['make'] . ' ' . $pc['model']) ?></span>
+        <span class="parked-meta">R <?= number_format((float) $pc['price'], 0, '.', ',') ?>
+          · <?= (int) $pc['views'] ?> views · <?= (int) $pc['leads'] ?> leads
+          <?php if ($pGone): ?>· <strong><?= htmlspecialchars(ucfirst((string) $pc['status'])) ?> by the dealer</strong><?php endif; ?>
+          <?php if (!$pc['may_list']): /* 4a */ ?>· <strong class="parked-net">Network only — <?= htmlspecialchars((string) ($pc['org_name'] ?: 'its business')) ?></strong><?php endif; ?>
+        </span>
+      </span>
+      <span class="parked-actions">
+        <?php if (!$pGone && !$pc['may_list']): /* 4a */ ?>
+        <a class="btn btn-ghost btn-sm" href="/app/broker/networks">Join network</a>
+        <?php elseif (!$pGone): ?>
+        <form method="POST">
+          <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+          <input type="hidden" name="action" value="resume_parked">
+          <input type="hidden" name="inv_id" value="<?= (int) $pc['inv_id'] ?>">
+          <button class="btn btn-ghost btn-sm" type="submit"<?= sdHasRoom($carLimit, $deskCount) ? '' : ' disabled title="Your desk is full"' ?>>
+            <i class="fa-solid fa-play"></i> Bring back
+          </button>
+        </form>
+        <?php endif; ?>
+        <form method="POST" data-confirm="Remove this paused car for good? Its link stops working.">
+          <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+          <input type="hidden" name="action" value="drop_parked">
+          <input type="hidden" name="inv_id" value="<?= (int) $pc['inv_id'] ?>">
+          <button class="btn btn-ghost btn-sm" type="submit" aria-label="Remove for good"><i class="fa-solid fa-xmark"></i></button>
+        </form>
+      </span>
+    </li>
+    <?php endforeach; ?>
+  </ul>
+</section>
+<?php endif; ?>
+
 <?php else: ?>
 <!-- ══════════════════════════════════
      MARKETPLACE TAB
@@ -457,7 +593,7 @@ ob_start();
 <div class="dorg-banner <?= $rules['mode'] === 'pending' ? 'dorg-banner-pending' : 'dorg-banner-suspended' ?>">
   <i class="fa-solid <?= $rules['mode'] === 'pending' ? 'fa-clock' : 'fa-pause' ?>"></i>
   <span><?= htmlspecialchars($rules['message']) ?></span>
-  <a href="/app/broker/desk-org">Details</a>
+  <a href="/app/broker/networks">Details</a>
 </div>
 <?php endif; ?>
 
@@ -488,6 +624,18 @@ ob_start();
       <option value="percentage" <?= $commType === 'percentage' ? 'selected' : '' ?>>Percentage (%)</option>
     </select>
   </div>
+  <?php if ($myNetworks): /* 4a */ ?>
+  <div>
+    <div class="flabel" style="margin-bottom:4px;">Networks</div>
+    <select class="finput mkt-net-select" name="net">
+      <option value="">All cars</option>
+      <option value="mine" <?= $net === 'mine' ? 'selected' : '' ?>>My networks’ cars</option>
+      <?php foreach ($myNetworks as $nid => $nname): ?>
+      <option value="<?= (int) $nid ?>" <?= $net === (string) $nid ? 'selected' : '' ?>><?= htmlspecialchars($nname) ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <?php endif; ?>
   <div>
     <div class="flabel" style="margin-bottom:4px;">Sort</div>
     <select class="finput" name="sort" style="width:160px;">
@@ -500,7 +648,7 @@ ob_start();
   </div>
   <div style="display:flex;gap:6px;align-items:flex-end;">
     <button class="btn btn-ghost btn-sm" type="submit">Filter</button>
-    <?php if ($q || $make || $province || $commType): ?>
+    <?php if ($q || $make || $province || $commType || $net !== ''): ?>
     <a href="?tab=market" class="btn btn-ghost btn-sm">Clear</a>
     <?php endif; ?>
   </div>
@@ -525,7 +673,7 @@ ob_start();
       ? (float)$car['commission_value']
       : round((float)$car['price'] * ((float)$car['commission_value'] / 100), 2);
     $onDesk   = (bool)((int)$car['on_desk']);
-    $atLimit  = $deskCount >= $carLimit;
+    $atLimit  = !sdHasRoom($carLimit, $deskCount);
   ?>
   <div class="car-card">
     <div class="car-card-img">
@@ -538,6 +686,9 @@ ob_start();
       <div class="car-status-badge">
         <span class="badge badge-verified" style="font-size:9px"><i class="fa-solid fa-circle-check" style="font-size:8px"></i> Verified</span>
       </div>
+      <?php endif; ?>
+      <?php if ((int) $car['network_exclusive']): /* 4a */ ?>
+      <span class="net-only-badge" title="Only your network’s brokers can list this car"><i class="fa-solid fa-lock" aria-hidden="true"></i> Network only</span>
       <?php endif; ?>
     </div>
     <div class="car-card-body">
@@ -559,6 +710,12 @@ ob_start();
           <span style="color:var(--faint)">(R <?= number_format($commRand, 0, '.', ',') ?>)</span>
         <?php endif; ?>
       </div>
+      <?php if ($b = $myBonuses[(int) $car['org_id']] ?? null): /* 4a */ ?>
+      <div class="net-bonus-chip" title="Network bonus from <?= htmlspecialchars($myNetworks[(int) $car['org_id']] ?? 'your network', ENT_QUOTES) ?>">
+        <i class="fa-solid fa-gift" aria-hidden="true"></i> Network bonus <strong>+R <?= number_format(sdBonusAmount($b['type'], $b['value'], $car['price']), 0, '.', ',') ?></strong>
+        <?php if ($b['type'] === 'percentage'): ?><span class="net-bonus-chip__rand">(<?= htmlspecialchars(rtrim(rtrim(number_format((float) $b['value'], 2, '.', ''), '0'), '.')) ?>%)</span><?php endif; ?>
+      </div>
+      <?php endif; ?>
 
       <div class="car-card-stats">
         <?php if ($car['mileage']): ?>
@@ -578,15 +735,16 @@ ob_start();
       </button>
       <?php elseif ($atLimit): ?>
       <button class="btn btn-ghost btn-sm" disabled style="width:100%;margin-top:8px"
-              title="Desk full (<?= $carLimit ?> cars max)">
+              title="Desk full (<?= sdLimitText($carLimit) ?> cars max)">
         <i class="fa-solid fa-lock"></i> Desk full
       </button>
       <?php else: ?>
-      <form method="POST" style="margin-top:8px">
+      <form method="POST" class="inv-add-form" data-add-to-desk>
         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
         <input type="hidden" name="action" value="add_to_desk">
         <input type="hidden" name="car_id" value="<?= $car['id'] ?>">
-        <button class="btn btn-primary btn-sm" type="submit" style="width:100%">
+        <input type="hidden" name="back" value="<?= htmlspecialchars($mktBackQs) ?>">
+        <button class="btn btn-primary btn-sm inv-add-btn" type="submit">
           <i class="fa-solid fa-plus"></i> Add to Desk
         </button>
       </form>
@@ -615,63 +773,11 @@ ob_start();
 <?php endif; ?>
 <?php endif; /* tab */ ?>
 
-<style>
-.inv-header { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem; }
-.inv-title  { font-family:var(--serif);font-size:1.5rem;font-weight:300; }
-.inv-sub    { font-size:12px;color:var(--muted);margin-top:2px; }
-.slot-count { font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:var(--r-full);background:var(--bg);border:1px solid var(--border);color:var(--muted); }
-.slot-count.at-limit { background:var(--amb-bg);border-color:var(--amb-b);color:var(--amber); }
 
-.car-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px; }
-.car-card { background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden; }
-.car-card.car-sold   { opacity:.65; }
-.car-card.car-paused { border-color:var(--amb-b); }
-.car-card-img { position:relative;height:160px;background:var(--bg); }
-.car-card-img img { width:100%;height:100%;object-fit:cover; }
-.car-img-placeholder { width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--border); }
-.car-status-badge { position:absolute;top:8px;right:8px; }
-.car-card-body { padding:12px; }
-.car-card-title  { font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px; }
-.car-card-price  { font-size:15px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:2px; }
-.car-card-dealer { font-size:11px;color:var(--muted);margin-bottom:8px; }
-.car-card-stats  { display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--faint);margin-bottom:8px; }
-.car-card-actions { display:flex;gap:6px;margin-top:8px; }
-.comm-chip { background:var(--gr-bg);border:1px solid var(--gr-b);border-radius:var(--r-sm);padding:5px 9px;font-size:11px;color:var(--green);margin-bottom:8px;display:flex;align-items:center;gap:5px; }
-
-.share-sheet { background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;margin-bottom:6px; }
-.share-url-row { display:flex;gap:6px; }
-</style>
-
-<script>
-function toggleShare(id) {
-  var el = document.getElementById('share-' + id);
-  if (!el) return;
-  var showing = el.style.display !== 'none';
-  // Close all open share sheets first.
-  document.querySelectorAll('.share-sheet').forEach(function(s) {
-    s.style.display = 'none';
-  });
-  el.style.display = showing ? 'none' : 'block';
-}
-
-function copyShare(id) {
-  var input = document.getElementById('shareUrl-' + id);
-  if (!input) return;
-  navigator.clipboard.writeText(input.value).then(function () {
-    // Flash all copy buttons for this card.
-    document.querySelectorAll('[onclick="copyShare(' + id + ')"] i').forEach(function(icon) {
-      var orig = icon.className;
-      icon.className = 'fa-solid fa-check';
-      setTimeout(function () { icon.className = orig; }, 1600);
-    });
-  }).catch(function () {
-    input.select();
-    document.execCommand('copy');
-  });
-}
-</script>
 
 <?php
 $pageContent = ob_get_clean();
-$pageStyles  = ['/assets/css/desk-org.css'];
+$pageStyles  = ['/assets/css/desk-org.css', '/assets/css/plans.css', '/assets/css/broker-inventory.css'];
+$pageScripts = ['/assets/js/broker-inventory.js'];
+$flashError  = '';   // already shown above — stop layout-app printing it a second time
 require_once '../../views/layout-app.php';

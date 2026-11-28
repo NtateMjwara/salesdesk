@@ -16,12 +16,14 @@ require_once '../../includes/functions.php';
 require_once '../../includes/csrf.php';
 require_once '../../includes/admin_scope.php';
 require_once '../../includes/migrations.php';
+require_once '../../includes/business.php';   // 0020: old desk-org tools retire once it has run
 
 applyCachePolicy('auth');
 require_once __DIR__ . '/../../includes/superadmin.php';
 requireSuperadmin();   // 0014: platform-wide page — superadmins only
 
 $adminId = (int) $_SESSION['user_id'];
+$bizReady = sdBusinessReady();   // 0020 ran: orgs are business accounts
 $runLog     = $_SESSION['migration_log'] ?? null;
 $resetLog   = $_SESSION['reinstall_log'] ?? null;
 $testResult = $_SESSION['test_save'] ?? null;
@@ -30,6 +32,13 @@ unset($_SESSION['migration_log'], $_SESSION['reinstall_log'], $_SESSION['test_sa
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     validateCSRF();
     $action = $_POST['action'] ?? '';
+
+    // 0020: the desk-org reset and test save would undo or bypass the
+    // business-org sync, so they're switched off once it has run.
+    if ($bizReady && in_array($action, ['reinstall', 'test_save'], true)) {
+        $_SESSION['flash_error'] = 'That tool was for the old desk organisations and is no longer available.';
+        redirect('/app/admin/migrations');
+    }
 
     // Reset & reinstall 0013 (data-preserving — see includes/migrations.php)
     if ($action === 'reinstall') {
@@ -191,6 +200,7 @@ ob_start();
   </table>
 </div>
 
+<?php if (!$bizReady): /* 0020: desk-org tools retire with the old desk orgs */ ?>
 <h2 class="adm-h2 adm-section-gap">Troubleshooting</h2>
 
 <div class="adm-tools">
@@ -254,6 +264,7 @@ ob_start();
     </div>
   </div>
 </div>
+<?php endif; ?>
 
 <?php
 $pageContent = ob_get_clean();

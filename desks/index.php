@@ -370,7 +370,7 @@ ob_start();
       <p class="dk-cta__sub">
         Create a free SalesDesk, join an organisation or stay independent, add cars from
         verified dealerships, share your link — and earn commission on every deal you source.
-        No stock, no showroom, no monthly fee.
+        No stock, no showroom — free to start.
       </p>
     </div>
     <div class="dk-cta__actions">

@@ -33,6 +33,7 @@ declare(strict_types=1);
 
 require_once '../includes/security.php';
 require_once '../includes/database.php';
+require_once __DIR__ . '/../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../includes/functions.php';
 require_once 'includes/sitemap-functions.php';
 
@@ -57,7 +58,7 @@ $xml = smCached('sitemap-index', SITEMAP_CACHE_TTL, function (): string {
             FROM cars c
             JOIN broker_inventory bi ON bi.car_id = c.id
             JOIN dealers d           ON d.id = c.dealer_id
-            WHERE c.status = 'active' AND d.is_active = 1
+            WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND d.is_active = 1
         ")->fetchColumn();
     } catch (Throwable) {
         $total = 0;

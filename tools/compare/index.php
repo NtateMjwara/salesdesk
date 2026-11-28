@@ -24,6 +24,7 @@ declare(strict_types=1);
 
 require_once '../../includes/security.php';
 require_once '../../includes/database.php';
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../../includes/functions.php';
 require_once '../../includes/session.php';
 
@@ -37,7 +38,7 @@ try {
         SELECT COUNT(DISTINCT c.id)
         FROM cars c
         JOIN broker_inventory bi ON bi.car_id = c.id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
     ")->fetchColumn();
 } catch (Throwable) {
     $totalCars = 0;
@@ -85,7 +86,7 @@ function loadCarsByField(PDO $pdo, string $field, array $values): array
             GROUP BY bi.car_id
         ) first_desk ON first_desk.car_id = c.id
         WHERE c.{$field} IN ({$ph})
-          AND c.status = 'active'
+          AND c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND first_desk.desk_slug IS NOT NULL
         ORDER BY FIELD(c.{$field}, " . $ph . ")
         LIMIT 3

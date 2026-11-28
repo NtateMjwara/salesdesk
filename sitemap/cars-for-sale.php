@@ -31,6 +31,7 @@ declare(strict_types=1);
 
 require_once '../includes/security.php';
 require_once '../includes/database.php';
+require_once __DIR__ . '/../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../includes/functions.php';
 require_once 'includes/sitemap-functions.php';
 
@@ -75,7 +76,7 @@ $xml = smCached("sitemap-cars-for-sale-{$page}", SITEMAP_CACHE_TTL, function () 
             )
             GROUP BY bi2.car_id
         ) first_desk ON first_desk.car_id = c.id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
           AND d.is_active = 1
           AND first_desk.desk_slug IS NOT NULL
         ORDER BY c.id ASC

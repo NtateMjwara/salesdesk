@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 require_once '../../includes/security.php';
 require_once '../../includes/database.php';
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../../includes/functions.php';
 require_once '../../includes/session.php';
 
@@ -33,7 +34,7 @@ try {
         SELECT COUNT(DISTINCT c.id)
         FROM cars c
         JOIN broker_inventory bi ON bi.car_id = c.id
-        WHERE c.status = 'active'
+        WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
     ")->fetchColumn();
 } catch (Throwable) {
     $totalCars = 0;

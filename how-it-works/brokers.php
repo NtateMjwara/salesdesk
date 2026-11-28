@@ -32,11 +32,21 @@ $breadcrumbs    = [
 ];
 
 $defaultFee = 10;
+$pricingLine = 'Free';            // Pricing page: "Free plan, or Pro from R149/month (optional)"
+$freeCars    = null;              // Free plan's desk-car limit (brokers)
 try {
     require_once '../includes/database.php';
     require_once '../includes/functions.php';
     $defaultFee = getPlatformConfigInt('platform_fee_percent', 10);
+    // Live plan catalogue (Admin → Plans) — see includes/pricing.php.
+    require_once '../includes/pricing.php';
+    $pricingCat  = sdPricingCatalogue();
+    $defaultFee  = $pricingCat['fee_percent'];
+    $pricingLine = sdPricingSummaryLine($pricingCat, 'broker');
+    $freeCars    = sdPricingFreeLimit($pricingCat, 'broker', 'max_desk_cars');
+    $paidPlan    = $pricingCat['audiences']['broker']['from_paid'] ?? null;
 } catch (Throwable) {}
+$paidPlan = $paidPlan ?? null;
 
 ob_start();
 ?>
@@ -297,7 +307,7 @@ ob_start();
     <div class="bpv2-kicker-light">How it works</div>
     <h2 class="bpv2-title">Six steps from sign-up to payout.</h2>
     <div class="bpv2-flow-list">
-      <div class="bpv2-flow-step"><div class="bpv2-step-num">1</div><div class="bpv2-step-body"><strong>Create your free SalesDesk</strong><span>Your personal vehicle marketplace is live in minutes. No subscription, no setup cost, no inventory to purchase.</span></div></div>
+      <div class="bpv2-flow-step"><div class="bpv2-step-num">1</div><div class="bpv2-step-body"><strong>Create your free SalesDesk</strong><span>Your personal vehicle marketplace is live in minutes. Free to start, no setup cost, no inventory to purchase.</span></div></div>
       <div class="bpv2-flow-step"><div class="bpv2-step-num">2</div><div class="bpv2-step-body"><strong>Choose your inventory</strong><span>Browse vehicles from verified dealerships and select the listings that suit your audience. Commission is shown upfront on every listing.</span></div></div>
       <div class="bpv2-flow-step"><div class="bpv2-step-num">3</div><div class="bpv2-step-body"><strong>Build your marketplace</strong><span>Create collections, share vehicles, publish content, and grow your reputation as a trusted automotive marketplace.</span></div></div>
       <div class="bpv2-flow-step"><div class="bpv2-step-num">4</div><div class="bpv2-step-body"><strong>Generate enquiries</strong><span>When buyers enquire through your SalesDesk, every lead is securely attributed to your account from the first click.</span></div></div>
@@ -490,7 +500,7 @@ ob_start();
     <div class="bpv2-kicker-light">What it costs you</div>
     <table class="bpv2-cost-table">
       <tr><td class="bpv2-cost-label">Setup and registration</td><td class="bpv2-cost-val bpv2-green">Free</td></tr>
-      <tr><td class="bpv2-cost-label">Monthly subscription</td><td class="bpv2-cost-val bpv2-green">None</td></tr>
+      <tr><td class="bpv2-cost-label">Monthly plan</td><td class="bpv2-cost-val bpv2-green"><?= htmlspecialchars($pricingLine) ?> — <a href="/pricing">see pricing</a></td></tr>
       <tr><td class="bpv2-cost-label">Stock or capital required</td><td class="bpv2-cost-val bpv2-green">None — you never own the vehicles</td></tr>
       <tr><td class="bpv2-cost-label">Platform fee</td><td class="bpv2-cost-val"><?= $defaultFee ?>% deducted from your commission at payout</td></tr>
       <tr><td class="bpv2-cost-label">Cost per lead that doesn't close</td><td class="bpv2-cost-val bpv2-green">R0 — you only earn on concluded sales</td></tr>
@@ -569,11 +579,16 @@ ob_start();
         ],
         [
           'How many vehicles can I have on my SalesDesk at once?',
-          'New promoters can feature up to 10 active vehicles at any time. If you need a higher limit, reach out to our admin team — increases are granted based on activity and account standing.'
+          ($freeCars !== null
+              ? 'On the Free plan you can have up to ' . number_format($freeCars, 0, '.', ' ') . ' cars on your desk at once.'
+                . ($paidPlan ? ' ' . htmlspecialchars($paidPlan['name']) . ' raises the limit — <a href="/pricing#brokers">see pricing</a>.' : '')
+              : 'There is no limit on the cars you can have on your desk. <a href="/pricing#brokers">See pricing</a>.')
         ],
         [
           'Is there a monthly fee or subscription?',
-          'SalesDesk is completely free to join and run. We only take our platform fee (' . $defaultFee . '%) when a deal closes and commission is paid out. If you don\'t earn, we don\'t earn.'
+          'You can join and run your desk on the Free plan with no monthly fee.'
+          . ($paidPlan ? ' ' . htmlspecialchars($paidPlan['name']) . ' (' . htmlspecialchars(sdPriceText((int) $paidPlan['price_cents'])) . '/month, optional) adds more room — <a href="/pricing#brokers">see pricing</a>.' : '')
+          . ' On every plan we take our platform fee (' . $defaultFee . '%) only when a deal closes and commission is paid out. If you don\'t earn, we don\'t earn.'
         ],
         [
           'How and when do I actually get paid?',

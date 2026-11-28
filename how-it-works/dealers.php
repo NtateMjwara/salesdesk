@@ -32,11 +32,21 @@ $breadcrumbs    = [
 ];
 
 $defaultFee = 10;
+$pricingLine = 'Free';            // Pricing page: "Free plan, or Pro from R149/month (optional)"
+$freeCars    = null;              // Free plan's desk-car limit (brokers)
 try {
     require_once '../includes/database.php';
     require_once '../includes/functions.php';
     $defaultFee = getPlatformConfigInt('platform_fee_percent', 10);
+    // Live plan catalogue (Admin → Plans) — see includes/pricing.php.
+    require_once '../includes/pricing.php';
+    $pricingCat  = sdPricingCatalogue();
+    $defaultFee  = $pricingCat['fee_percent'];
+    $pricingLine = sdPricingSummaryLine($pricingCat, 'organization');
+    $freeCars    = sdPricingFreeLimit($pricingCat, 'broker', 'max_desk_cars');
+    $paidPlan    = $pricingCat['audiences']['organization']['from_paid'] ?? null;
 } catch (Throwable) {}
+$paidPlan = $paidPlan ?? null;
 
 ob_start();
 ?>
@@ -289,7 +299,7 @@ ob_start();
       </div>
       <div class="dpv2-flow-step">
         <div class="dpv2-step-num">6</div>
-        <div class="dpv2-step-body"><strong>Pay only when you sell</strong><span>No subscriptions, no advertising invoices, no monthly commitments — only a commission on a completed sale.</span></div>
+        <div class="dpv2-step-body"><strong>Pay only when you sell</strong><span>Free to list, no advertising invoices, no monthly commitment — only a commission on a completed sale.</span></div>
       </div>
     </div>
   </div>
@@ -365,6 +375,7 @@ ob_start();
       <tr><td class="dpv2-cost-label">Platform fee</td><td class="dpv2-cost-val"><?= $defaultFee ?>% deducted from the promoter's commission at payout — not charged to your dealership</td></tr>
       <tr><td class="dpv2-cost-label">Upfront advertising spend</td><td class="dpv2-cost-val dpv2-green">R0 — nothing until a vehicle sells</td></tr>
       <tr><td class="dpv2-cost-label">Setup and onboarding</td><td class="dpv2-cost-val dpv2-green">Free — less than 30 minutes to go live</td></tr>
+      <tr><td class="dpv2-cost-label">Monthly plan</td><td class="dpv2-cost-val dpv2-green"><?= htmlspecialchars($pricingLine) ?> — <a href="/pricing#dealerships">see pricing</a></td></tr>
     </table>
   </div>
 </section>
@@ -384,7 +395,12 @@ ob_start();
       $faqs = [
         [
           'Can I control which promoters market my vehicles?',
-          'Not individually — any approved, verified promoter can add any active listing to their own storefront. This open model is deliberate: it\'s what turns one dealership into thousands of independent marketplaces. If you have a concern about a specific promoter\'s conduct, our admin team can investigate and restrict their access.'
+          'By default any approved, verified promoter can add any active listing to their own storefront. This open model is deliberate: it\'s what turns one dealership into thousands of independent marketplaces. On plans with VIP network perks you can also keep chosen cars network-only, so only brokers in your network can sell them (<a href="/pricing#vip-perks">see pricing</a>). If you have a concern about a specific promoter\'s conduct, our admin team can investigate and restrict their access.'
+        ],
+        [
+          'Is there a monthly fee?',
+          'Listing your stock is free on the Free plan, and you only pay the commission you set when a car sells.'
+          . ($paidPlan ? ' ' . htmlspecialchars($paidPlan['name']) . ' (from ' . htmlspecialchars(sdPriceText((int) $paidPlan['price_cents'])) . '/month, optional) adds a bigger broker network, broker invitations and VIP network perks — <a href="/pricing#dealerships">see pricing</a>.' : '')
         ],
         [
           'What stops two promoters fighting over the same buyer?',
@@ -466,7 +482,7 @@ ob_start();
       <div class="dpv2-kicker-light dpv2-mono">Ready when you are</div>
       <div class="dpv2-cta-title">Turn your inventory into a national sales network.</div>
       <div class="dpv2-cta-body">
-        Upload your inventory once. Activate thousands of potential promoters. There's no advertising spend, no subscription, and no risk — only a commission when a vehicle sells through SalesDesk.
+        Upload your inventory once. Activate thousands of potential promoters. It's free to list: no advertising spend and no risk — only a commission when a vehicle sells through SalesDesk. Paid plans for broker networks are optional.
       </div>
       <div class="dpv2-cta-actions">
         <a href="/auth/register.php" class="dpv2-btn dpv2-btn-primary">

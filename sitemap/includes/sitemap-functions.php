@@ -24,6 +24,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
+
 const SITEMAP_MAX_URLS_PER_FILE = 45000; // protocol cap is 50,000 — leave headroom
 const SITEMAP_CACHE_TTL         = 21600; // 6 hours
 const SITEMAP_CACHE_DIR         = __DIR__ . '/../cache';
@@ -263,7 +265,7 @@ function smCarsForSaleExtras(PDO $pdo, string $base, string $now): array
         $makes = $pdo->query("
             SELECT DISTINCT c.make FROM cars c
             JOIN broker_inventory bi ON bi.car_id = c.id
-            WHERE c.status = 'active'
+            WHERE c.status = 'active' AND " . sdPublicCarSql('c') . "
             ORDER BY c.make
         ")->fetchAll(PDO::FETCH_COLUMN);
 

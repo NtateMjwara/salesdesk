@@ -33,6 +33,7 @@ require_once '../includes/visitor.php';
 require_once '../includes/structured-data.php';
 require_once '../includes/desk-directory.php';
 require_once '../views/partials/desk-card.php';
+require_once '../includes/network_dashboard.php';   // 4b: VIP network badge
 
 applyCachePolicy('public');
 
@@ -59,6 +60,23 @@ if (!$isIndependent) {
         ");
         $orgStmt->execute([$slug]);
         $org = $orgStmt->fetch() ?: null;
+
+        // 0020: every dealership has a business org, but a hub only exists
+        // once its network has at least one live, approved broker desk —
+        // no empty public pages (the sitemap and /desks/ use the same rule).
+        if ($org) {
+            $live = $pdo->prepare("
+                SELECT 1 FROM organization_members om
+                JOIN salesdesks sd ON sd.user_id = om.user_id AND sd.is_active = 1
+                JOIN users u       ON u.id = sd.user_id AND u.status = 'active'
+                WHERE om.organization_id = ?" . sdVerifiedMemberSql('om') . "
+                LIMIT 1
+            ");
+            $live->execute([(int) $org['id']]);
+            if (!$live->fetchColumn()) {
+                $org = null;
+            }
+        }
     }
     if (!$org) {
         require __DIR__ . '/../broker/404.php';
@@ -206,8 +224,9 @@ if ($org) {
       <?php if ($isIndependent): ?>
       <i class="fa-solid fa-user-tie" aria-hidden="true"></i> Independent brokers
       <?php else: ?>
-      <i class="fa-solid <?= ($org['verification_status'] ?? '') === 'verified' ? 'fa-circle-check' : 'fa-building' ?>" aria-hidden="true"></i>
-      Desk organisation<?= ($org['verification_status'] ?? '') === 'verified' ? ' · Verified' : '' ?>
+      <?php $hubVip = !empty($org['id']) && sdNetDashVip((int) $org['id']); /* 4b */ ?>
+      <i class="fa-solid <?= $hubVip ? 'fa-crown' : (($org['verification_status'] ?? '') === 'verified' ? 'fa-circle-check' : 'fa-building') ?>" aria-hidden="true"></i>
+      <?= $hubVip ? 'VIP broker network' : 'Desk organisation' ?><?= ($org['verification_status'] ?? '') === 'verified' ? ' · Verified' : '' ?>
       <?php endif; ?>
     </span>
 
@@ -359,7 +378,7 @@ if ($org) {
 
   <div class="dk-grid">
     <?php foreach ($desks as $desk): ?>
-    <?= sdDeskCard($desk, $deskPreviews[(int) $desk['id']] ?? [], ['heading' => 'h2', 'show_org' => false]) ?>
+    <?= sdDeskCard($desk, $deskPreviews[(int) $desk['id']] ?? [], ['heading' => 'h2', 'show_org' => false, 'network_badge' => !empty($hubVip) ? $hubName : null]) ?>
     <?php endforeach; ?>
   </div>
 
@@ -384,7 +403,7 @@ if ($org) {
       <h2 class="dk-cta__title" id="dkCtaTitle">Your desk could be on this page.</h2>
       <p class="dk-cta__sub">
         Create a free SalesDesk, add cars from verified dealerships, share your link —
-        and earn commission on every deal you source. No stock, no showroom, no monthly fee.
+        and earn commission on every deal you source. No stock, no showroom — free to start.
       </p>
       <?php endif; ?>
     </div>

@@ -41,8 +41,13 @@ decisions win. Undecided items are marked **(undecided)**: ask before building o
 - Launch offer for existing brokers: **(undecided)**.
 
 ## Leads and buyer data
-- Hiding some buyer information from brokers on leads: **(undecided)**. Reasoning: enquiries also go directly to the
-  dealership, and brokers don't have to engage the buyer. This directly affects the CRM design.
+- Brokers see **status only, no buyer contact details** (decided 28 Nov 2026): the buyer's first name, the car, the stage
+  and key dates. No phone, email, message, notes or activity, on the page or in emails. Reasoning: enquiries also go
+  directly to the dealership, and brokers don't have to engage the buyer.
+- CRM v1 (28 Nov 2026), full detail in `crm/spec.md`: for dealerships and execs first; manual assignment with an
+  automatic default (the uploading exec) and an Unassigned queue; execs see only their assigned leads; the core CRM is
+  free on every plan, and advanced parts will be Business Pro / Enterprise; click-to-WhatsApp/call/email with
+  automatic logging (SalesDesk sends nothing to buyers); alerts at 2 business hours untouched and 5 days stale.
 
 ## Content admin
 - Whether content pages stay open to all admins: **(undecided)**. Most content features were removed in October,

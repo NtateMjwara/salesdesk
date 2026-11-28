@@ -1,7 +1,7 @@
 # CRM in the portal — starting brief (28 Nov 2026)
 
-**Status: not yet specced.** This brief sets out what exists, the constraints and the questions to settle with Sfiso.
-The first CRM session should produce `docs/crm/spec.md` from it. Don't start building before he has agreed that spec.
+**Status: specced (28 Nov 2026).** The questions below were settled with Sfiso, and the v1 spec is in
+`docs/crm/spec.md` (draft, awaiting his sign-off). Don't start building before he has agreed that spec.
 
 ## Goal
 

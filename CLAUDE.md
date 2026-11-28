@@ -128,6 +128,7 @@ Built and shipped through migration 0026: dealer workspace (0015–0018), plans 
 networks (0020–0021), PayFast billing for brokers and Business Pro (0022, 0026), downgrade grace (0023), all four VIP
 perks (0024–0025), Enterprise invoicing (0026), and the dynamic /pricing page.
 
-Next up: a more robust **CRM in the portal**. Start from `docs/crm/brief.md`.
+Next up: a more robust **CRM in the portal**. The decisions are settled and the v1 spec is in `docs/crm/spec.md`
+(awaiting Sfiso's sign-off, branch `claude/crm`).
 Before going live, see `docs/open-items.md`. The PayFast sandbox round trips and a credentials rotation are still
 outstanding.

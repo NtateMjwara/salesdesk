@@ -103,14 +103,17 @@ INSERT INTO dealers (id, uuid, user_id, company_name, slug, address_id, brand_fo
 (1, 'bbbb1111-0000-4000-a000-000000000001', 4, 'Cars & More Boksburg', 'cars-and-more-boksburg', 4, '["Toyota","Ford","VW"]', 'verified', '/uploads/cipc/bbbb1111.pdf', DATE_SUB(NOW(), INTERVAL 30 DAY), 1, NOW(), NOW());
 
 -- ============================================================
--- ORGANIZATIONS (broker team)
+-- ORGANIZATIONS (desk organisation — admin-run online dealership, 0013)
 -- ============================================================
-INSERT INTO organizations (id, uuid, name, slug, owner_user_id, address_id, verification_status, is_active, created_at, updated_at) VALUES
-(1, 'cccc1111-0000-4000-a000-000000000001', 'Gauteng Auto Brokers', 'gauteng-auto-brokers', 2, 1, 'verified', 1, NOW(), NOW());
+INSERT INTO organizations (id, uuid, name, slug, brands, description, owner_user_id, address_id, verification_status, is_active, created_by_admin_id, created_at, updated_at) VALUES
+(1, 'cccc1111-0000-4000-a000-000000000001', 'Gauteng Auto Brokers', 'gauteng-auto-brokers', '["Toyota","Ford"]', 'Toyota and Ford specialists across Gauteng.', 1, 1, 'verified', 1, 1, NOW(), NOW());
 
-INSERT INTO organization_members (id, organization_id, user_id, role, joined_at) VALUES
-(1, 1, 2, 'owner', NOW()),
-(2, 1, 3, 'agent', NOW());
+INSERT INTO organization_managers (organization_id, admin_user_id, added_by, created_at) VALUES
+(1, 1, 1, NOW());
+
+INSERT INTO organization_members (id, organization_id, user_id, role, status, verified_by, verified_at, joined_at) VALUES
+(1, 1, 2, 'agent', 'verified', 1, NOW(), NOW()),
+(2, 1, 3, 'agent', 'verified', 1, NOW(), NOW());
 
 -- ============================================================
 -- SALES EXECUTIVES

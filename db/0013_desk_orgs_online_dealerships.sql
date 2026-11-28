@@ -114,20 +114,25 @@ WHERE @sd_had_status = 0
 INSERT IGNORE INTO schema_migrations (name) VALUES ('0013_members_verified');
 
 -- ── 2c. One org per broker: keep the earliest membership ────
+-- GUARDED (0020): once orgs are business accounts, brokers may belong to
+-- several networks — never trim memberships or re-add the unique key.
 DELETE om FROM organization_members om
 JOIN organization_members keep_row
   ON keep_row.user_id = om.user_id
- AND (keep_row.joined_at < om.joined_at OR (keep_row.joined_at = om.joined_at AND keep_row.id < om.id));
+ AND (keep_row.joined_at < om.joined_at OR (keep_row.joined_at = om.joined_at AND keep_row.id < om.id))
+WHERE (SELECT COUNT(*) FROM schema_migrations WHERE name = '0020_business_orgs') = 0;
 
-SET @sd_sql = (SELECT IF((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organization_members' AND INDEX_NAME = 'uq_orgmem_one_org') = 0, 'ALTER TABLE `organization_members` ADD UNIQUE KEY uq_orgmem_one_org (user_id)', 'DO 0'));
+SET @sd_sql = (SELECT IF((SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'organization_members' AND INDEX_NAME = 'uq_orgmem_one_org') = 0 AND (SELECT COUNT(*) FROM schema_migrations WHERE name = '0020_business_orgs') = 0, 'ALTER TABLE `organization_members` ADD UNIQUE KEY uq_orgmem_one_org (user_id)', 'DO 0'));
 PREPARE sd_stmt FROM @sd_sql; EXECUTE sd_stmt; DEALLOCATE PREPARE sd_stmt;
 
 -- ── 3. Convert orgs with no manager to admin-run orgs ───────
+-- GUARDED (0020): business orgs are managed through their dealership.
 INSERT IGNORE INTO organization_managers (organization_id, admin_user_id, added_by, created_at)
 SELECT o.id, u.id, NULL, NOW()
 FROM organizations o
 JOIN users u ON u.role = 'admin' AND u.status = 'active'
-WHERE NOT EXISTS (SELECT 1 FROM organization_managers m WHERE m.organization_id = o.id);
+WHERE NOT EXISTS (SELECT 1 FROM organization_managers m WHERE m.organization_id = o.id)
+  AND (SELECT COUNT(*) FROM schema_migrations WHERE name = '0020_business_orgs') = 0;
 
 SET FOREIGN_KEY_CHECKS = 1;
 

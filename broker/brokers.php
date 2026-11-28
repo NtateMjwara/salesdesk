@@ -11,12 +11,24 @@
 declare(strict_types=1);
 
 require_once '../includes/security.php';
+require_once '../includes/database.php';
+require_once '../includes/functions.php';   // applyCachePolicy() — the page fataled without it
 require_once '../includes/visitor.php';
 require_once '../includes/session.php';
 
 applyCachePolicy('public');
 
 $visitor = initVisitorSession();
+
+// Pricing page: live plan facts for the copy below (includes/pricing.php).
+$freeCars = null;
+$paidPlan = null;
+try {
+    require_once '../includes/pricing.php';
+    $pricingCat = sdPricingCatalogue();
+    $freeCars   = sdPricingFreeLimit($pricingCat, 'broker', 'max_desk_cars');
+    $paidPlan   = $pricingCat['audiences']['broker']['from_paid'] ?? null;
+} catch (Throwable) {}
 
 $pageTitle     = 'Earn Commission Selling Cars | SalesDesk Brokers';
 $ogTitle       = 'Become a SalesDesk Broker — Earn Commission on Every Sale';
@@ -67,7 +79,7 @@ ob_start();
     </a>
   </div>
   <p style="font-size:12px;color:var(--faint);margin-top:12px;">
-    Free to join. No monthly fees. Commission only.
+    Free to join. Commission only. <a href="/pricing">See pricing</a>
   </p>
 </div>
 
@@ -212,9 +224,11 @@ ob_start();
     ['What if a buyer contacts the dealer directly after I shared the link?',
      'Your tracking link is cryptographically locked at the moment the buyer submits their enquiry. If they use your link first, the attribution is yours — even if they call the dealer later.'],
     ['How many cars can I list on my desk?',
-     'New brokers can list up to 10 active cars. Speak to your account manager or admin to increase your limit.'],
+     $freeCars !== null
+         ? 'On the Free plan you can have up to ' . number_format($freeCars, 0, '.', ' ') . ' cars on your desk.' . ($paidPlan ? ' ' . $paidPlan['name'] . ' raises the limit — see salesdesk.co.za/pricing.' : '')
+         : 'There is no limit on the cars on your desk.'],
     ['Is there a monthly fee?',
-     'No. SalesDesk is completely free to use as a broker. We only take our platform fee when a deal closes and commission is paid.'],
+     'Not on the Free plan — you can run your desk without paying anything.' . ($paidPlan ? ' ' . $paidPlan['name'] . ' is optional at ' . sdPriceText((int) $paidPlan['price_cents']) . '/month for more room.' : '') . ' On every plan we only take our platform fee when a deal closes and commission is paid.'],
   ];
   foreach ($faqs as $i => [$question, $answer]):
   ?>

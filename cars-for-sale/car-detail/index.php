@@ -71,6 +71,7 @@ require_once '../../includes/visitor.php';
 require_once '../../includes/functions.php';
 require_once '../../includes/session.php';
 require_once '../../includes/desk-seo.php';
+require_once '../../includes/vip_network.php';   // 4a: network-only cars
 
 applyCachePolicy('public');
 
@@ -142,9 +143,31 @@ if (!$isPlatformCar) {
         LIMIT 1
     ");
     $platformCarStmt->execute([$carSlug]);
-    if (!$platformCarStmt->fetchColumn()) {
+    $platformCarId = (int) $platformCarStmt->fetchColumn();
+    if (!$platformCarId) {
         http_response_code(404);
         exit('This listing was not found or has been removed.');
+    }
+
+    // 4a: a network-only car is never a platform listing. Send the buyer
+    // to the network broker who listed it first, or 404 if none has.
+    if (sdVipReady()) {
+        $ex = $pdo->prepare("SELECT network_exclusive FROM cars WHERE id = ?");
+        $ex->execute([$platformCarId]);
+        if ((int) $ex->fetchColumn()) {
+            $firstDesk = $pdo->prepare("
+                SELECT sd.slug FROM broker_inventory bi JOIN salesdesks sd ON sd.id = bi.salesdesk_id
+                WHERE bi.car_id = ? AND sd.is_active = 1 ORDER BY bi.added_at ASC LIMIT 1
+            ");
+            $firstDesk->execute([$platformCarId]);
+            $toDesk = $firstDesk->fetchColumn();
+            if ($toDesk) {
+                header('Location: /cars-for-sale/' . rawurlencode((string) $toDesk) . '/' . rawurlencode($carSlug) . '/', true, 302);
+                exit;
+            }
+            http_response_code(404);
+            exit('This listing was not found or has been removed.');
+        }
     }
 
     $deskRow = [
@@ -323,6 +346,7 @@ $relStmt = $pdo->prepare("
     ) first_rel ON first_rel.car_id = c2.id
     WHERE c2.dealer_id = ?
       AND c2.status    = 'active'
+      AND " . sdPublicCarSql('c2') . "   -- 4a
       AND c2.id       != ?
     ORDER BY c2.created_at DESC
     LIMIT 4

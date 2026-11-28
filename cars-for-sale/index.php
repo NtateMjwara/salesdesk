@@ -106,6 +106,7 @@ declare(strict_types=1);
 
 require_once '../includes/security.php';
 require_once '../includes/database.php';
+require_once __DIR__ . '/../includes/vip_network.php';   // 4a: network-only cars stay off platform listings
 require_once '../includes/visitor.php';
 require_once '../includes/functions.php';
 require_once '../includes/session.php';
@@ -161,7 +162,7 @@ if (!in_array($sort, $validSorts, true))           $sort = 'newest';
 $makes = $pdo->query("
     SELECT c.make, COUNT(*) AS cnt FROM cars c
     JOIN dealers d ON d.id = c.dealer_id
-    WHERE c.status = 'active' AND d.is_active = 1
+    WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND d.is_active = 1
     GROUP BY c.make
     ORDER BY c.make
 ")->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -171,7 +172,7 @@ $makes      = array_keys($makes);
 $bodyTypes = $pdo->query("
     SELECT DISTINCT c.body_type FROM cars c
     JOIN dealers d ON d.id = c.dealer_id
-    WHERE c.status = 'active' AND d.is_active = 1 AND c.body_type IS NOT NULL
+    WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND d.is_active = 1 AND c.body_type IS NOT NULL
     ORDER BY c.body_type
 ")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -180,7 +181,7 @@ $provinces = $pdo->query("
     FROM dealers d
     JOIN addresses a ON a.id = d.address_id
     JOIN cars c ON c.dealer_id = d.id
-    WHERE d.is_active = 1 AND a.province IS NOT NULL AND c.status = 'active'
+    WHERE d.is_active = 1 AND a.province IS NOT NULL AND c.status = 'active' AND " . sdPublicCarSql('c') . "
     ORDER BY a.province
 ")->fetchAll(PDO::FETCH_COLUMN);
 
@@ -189,7 +190,7 @@ $desks = $pdo->query("
     FROM salesdesks sd
     JOIN broker_inventory bi ON bi.salesdesk_id = sd.id
     JOIN cars c ON c.id = bi.car_id
-    WHERE sd.is_active = 1 AND c.status = 'active'
+    WHERE sd.is_active = 1 AND c.status = 'active' AND " . sdPublicCarSql('c') . "
     ORDER BY sd.display_name
 ")->fetchAll();
 
@@ -198,7 +199,7 @@ $yearRange = $pdo->query("
     SELECT MIN(c.year) AS min_year, MAX(c.year) AS max_year
     FROM cars c
     JOIN dealers d ON d.id = c.dealer_id
-    WHERE c.status = 'active' AND d.is_active = 1
+    WHERE c.status = 'active' AND " . sdPublicCarSql('c') . " AND d.is_active = 1
 ")->fetch();
 $yearFloor   = (int) ($yearRange['min_year'] ?? (int) date('Y') - 10);
 $yearCeiling = (int) ($yearRange['max_year'] ?? (int) date('Y'));
@@ -289,7 +290,7 @@ $firstDeskSub = "
 // and fetch queries still share this identical $where array/JOIN
 // structure — that discipline from FIX-B stays, only the gate itself
 // is gone.
-$where  = ["c.status = 'active'", "d.is_active = 1"];
+$where  = ["c.status = 'active' AND " . sdPublicCarSql('c') . "", "d.is_active = 1"];
 $params = [];
 
 if ($q) {

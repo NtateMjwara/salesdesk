@@ -98,6 +98,7 @@ require_once '../includes/session.php';
 require_once '../includes/filter-whitelists.php';
 require_once '../includes/desk-seo.php';
 require_once '../includes/structured-data.php';
+require_once '../includes/network_dashboard.php';   // 4b: VIP network badges
 
 applyCachePolicy('public');
 
@@ -357,6 +358,9 @@ $stats = $statsStmt->fetch();
 // SEO-1: presentation only (title / breadcrumb / schema) — never used
 // for attribution.
 $org = sdDeskOrg((int) $desk['user_id']);
+// 4b: networks with VIP perks this broker belongs to → badges on the desk
+$vipNets   = sdBrokerVipNetworks((int) $desk['user_id']);
+$vipNetIds = array_map('intval', array_column($vipNets, 'id'));
 
 // ── Wishlist state ─────────────────────────────────────────────
 $wishlistedIds = [];
@@ -647,11 +651,16 @@ echo renderLocalBusinessSchema(
             <?php if ($location): ?>
             <span class="ds-tag"><i class="fa-solid fa-location-dot" aria-hidden="true"></i> <?= $e($location) ?></span>
             <?php endif; ?>
-            <?php if ($org): ?>
+            <?php if ($org && !in_array((int) $org['id'], $vipNetIds, true)): ?>
             <a class="ds-tag ds-tag--link<?= $isOrgVerified ? ' ds-tag--verified' : '' ?>" href="<?= $e(sdOrgHubPath($org)) ?>">
               <i class="fa-solid <?= $isOrgVerified ? 'fa-circle-check' : 'fa-building' ?>" aria-hidden="true"></i> <?= $e($org['name']) ?>
             </a>
             <?php endif; ?>
+            <?php foreach ($vipNets as $vn): /* 4b: VIP network badge */ ?>
+            <a class="ds-tag ds-tag--link ds-tag--vip" href="<?= $e(sdOrgHubPath($vn)) ?>" title="Verified broker in <?= $e($vn['name']) ?>’s network">
+              <i class="fa-solid fa-crown" aria-hidden="true"></i> <?= $e($vn['name']) ?> network
+            </a>
+            <?php endforeach; ?>
             <span class="ds-tag"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Commission-protected</span>
           </div>
         </div>

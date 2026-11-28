@@ -1,0 +1,222 @@
+/**
+ * SalesDesk — Visitor account pages  (v1, WISH-1 Nov 2026)
+ * assets/css/account.css
+ *
+ * Page stylesheet for /account/* (Saved cars, Recently viewed; Saved
+ * searches can share it). Loaded via $extraCss after public.css.
+ * Reuses the shared kit — .pub-section, .vc-grid, .vc, .pub-empty — and
+ * only adds what those don't cover.
+ *
+ * Sections:
+ *   1. Saved cars — header + grid items
+ *   2. No longer available list
+ *   3. Remove animation
+ *   4. Recently viewed — day groups (RV-1)
+ */
+
+
+/* ══════════════════════════════════════
+   1. SAVED CARS — HEADER + GRID
+   ══════════════════════════════════════ */
+.acct-saved { padding-bottom: clamp(8px, 2vw, 24px); }
+
+.acct-saved__count { color: var(--text); font-weight: 700; }
+
+.acct-saved__item {
+  display: flex;
+  min-width: 0;
+}
+
+.acct-saved__item > .vc { flex: 1; }
+
+.acct-saved__empty { margin-top: 8px; }
+.acct-saved__empty .pub-empty__sub i { color: #e11d48; }
+
+
+/* ══════════════════════════════════════
+   2. NO LONGER AVAILABLE
+   ══════════════════════════════════════ */
+.acct-saved__gone { margin-top: clamp(32px, 4vw, 48px); }
+.acct-saved__grid + .acct-saved__gone { padding-top: clamp(24px, 3vw, 32px); border-top: 1px solid var(--border); }
+
+.acct-saved__gone-title {
+  font-family: var(--font-d);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--text);
+}
+
+.acct-saved__gone-sub {
+  margin-top: 4px;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.acct-gone-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  list-style: none;
+}
+
+.acct-gone {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 10px 10px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+
+.acct-gone__thumb {
+  display: grid;
+  place-items: center;
+  flex: 0 0 96px;
+  height: 72px;
+  overflow: hidden;
+  font-size: 22px;
+  color: var(--border2);
+  background: var(--bg);
+  border-radius: var(--r-md);
+}
+
+.acct-gone__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1);
+  opacity: .7;
+}
+
+.acct-gone__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.acct-gone__name {
+  font-family: var(--font-d);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acct-gone__meta {
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.acct-gone__badge {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  font: 700 11px/1 var(--sans);
+  color: var(--muted);
+  background: var(--bg);
+  border-radius: var(--r-full);
+}
+
+.acct-gone__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 14px;
+  font: 600 13px/1 var(--sans);
+  color: #e11d48;
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  border-radius: var(--r-full);
+  cursor: pointer;
+  transition: background var(--dur-1), border-color var(--dur-1);
+}
+
+.acct-gone__remove:hover { background: #ffe4e6; border-color: #fda4af; }
+
+@media (max-width: 560px) {
+  .acct-gone { flex-wrap: wrap; }
+  .acct-gone__thumb { flex-basis: 72px; height: 56px; }
+  .acct-gone__badge { display: none; }
+  .acct-gone__remove { padding: 0 12px; }
+  .acct-gone__remove span { display: none; }
+}
+
+
+/* ══════════════════════════════════════
+   3. REMOVE ANIMATION  (class set by public.js)
+   ══════════════════════════════════════ */
+.acct-saved__item,
+.acct-gone {
+  transition: opacity .2s var(--ease-in), transform .2s var(--ease-in);
+}
+
+.acct-saved__item.is-removing,
+.acct-gone.is-removing {
+  opacity: 0;
+  transform: scale(.96);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acct-saved__item,
+  .acct-gone { transition: none; }
+}
+
+
+/* ══════════════════════════════════════
+   4. RECENTLY VIEWED — DAY GROUPS (RV-1)
+   ══════════════════════════════════════ */
+.acct-recent__group + .acct-recent__group { margin-top: clamp(28px, 3.4vw, 44px); }
+
+.acct-recent__day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-family: var(--font-d);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -.015em;
+  color: var(--text);
+}
+
+.acct-recent__day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.acct-recent__day-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  font: 700 11px/1 var(--sans);
+  color: var(--text2);
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+}
+
+.acct-recent__note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: clamp(28px, 3vw, 40px);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+.acct-recent__note i { color: var(--faint); }

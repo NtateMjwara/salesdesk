@@ -14,6 +14,12 @@
  *   – Initialises every input[data-typeahead-box] on the page
  *     (nav, search sheet, browse sidebar) exactly once.
  *
+ * v3 (Nov 2026, DROP-1):
+ *   – Panels unroll top-down / roll up on close (CSS clip-path wipe in
+ *     public-shell.css §4). Moving between two open menus swaps them
+ *     instantly (.is-instant) instead of animating both.
+ *   – A click straight after hover-open no longer slams the panel shut.
+ *
  * Loaded with `defer` from layout-public.php.
  */
 (function () {
@@ -59,6 +65,8 @@
     if (btn && panel) zones.push({ wrap: wrap, btn: btn, panel: panel, timer: null });
   });
 
+  function isOpen(z) { return z.panel.classList.contains('open'); }
+
   function closeZone(z) {
     clearTimeout(z.timer);
     z.btn.classList.remove('open');
@@ -68,6 +76,19 @@
 
   function closeAllZones(except) {
     zones.forEach(function (z) { if (z !== except) closeZone(z); });
+  }
+
+  /* DROP-1: run a class change with transitions off for one frame, so
+     moving between two open menus swaps them instantly instead of one
+     rolling up while the next rolls down. */
+  function withoutAnimation(panels, fn) {
+    panels.forEach(function (p) { p.classList.add('is-instant'); });
+    fn();
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        panels.forEach(function (p) { p.classList.remove('is-instant'); });
+      });
+    });
   }
 
   function fitPanel(panel) {
@@ -81,18 +102,36 @@
     if (shift !== 0) panel.style.setProperty('--pub-panel-shift', shift + 'px');
   }
 
-  function openZone(z) {
-    closeAllZones(z);
-    z.btn.classList.add('open');
-    z.btn.setAttribute('aria-expanded', 'true');
-    z.panel.classList.add('open');
-    fitPanel(z.panel);
+  function openZone(z, viaHover) {
+    clearTimeout(z.timer);
+    if (isOpen(z)) return;
+
+    function show() {
+      closeAllZones(z);
+      z.btn.classList.add('open');
+      z.btn.setAttribute('aria-expanded', 'true');
+      z.panel.classList.add('open');
+      z.openedAt  = Date.now();
+      z.viaHover  = !!viaHover;
+      fitPanel(z.panel);
+    }
+
+    var current = zones.filter(function (o) { return o !== z && isOpen(o); });
+    if (current.length) {
+      withoutAnimation(current.map(function (o) { return o.panel; }).concat(z.panel), show);
+    } else {
+      show();
+    }
   }
 
   zones.forEach(function (z) {
     z.btn.addEventListener('click', function (e) {
       e.stopPropagation();
-      z.panel.classList.contains('open') ? closeZone(z) : openZone(z);
+      if (!isOpen(z)) { openZone(z, false); return; }
+      // A hover just opened it: the click that follows is the same intent
+      // ("show me this menu"), so don't immediately toggle it shut.
+      if (z.viaHover && Date.now() - z.openedAt < 700) { z.viaHover = false; return; }
+      closeZone(z);
     });
 
     z.panel.addEventListener('click', function (e) {
@@ -103,7 +142,9 @@
     z.wrap.addEventListener('mouseenter', function () {
       if (!HOVER_MQ.matches || !NAV_DESKTOP_MQ.matches) return;
       clearTimeout(z.timer);
-      z.timer = setTimeout(function () { openZone(z); }, 90);
+      // Another menu already open → follow the pointer without delay.
+      var delay = zones.some(function (o) { return o !== z && isOpen(o); }) ? 0 : 90;
+      z.timer = setTimeout(function () { openZone(z, true); }, delay);
     });
     z.wrap.addEventListener('mouseleave', function () {
       if (!HOVER_MQ.matches || !NAV_DESKTOP_MQ.matches) return;
@@ -115,7 +156,7 @@
     z.btn.addEventListener('keydown', function (e) {
       if (e.key !== 'ArrowDown') return;
       e.preventDefault();
-      openZone(z);
+      openZone(z, false);
       var first = z.panel.querySelector('a, button');
       if (first) first.focus();
     });

@@ -929,3 +929,17 @@
   .dk-card__visit,
   .ds-about__link { padding-block: 8px; }
 }
+
+/* ═══════════════════════════════════════════
+   PLANS-4b — VIP network badges
+   .ds-tag--vip   broker desk hero (broker/index.php)
+   .dk-vip-badge  member cards on a VIP network's page (desks/org.php)
+   ═══════════════════════════════════════════ */
+.ds-tag--vip {
+  background: linear-gradient(135deg, rgba(250, 204, 21, .22), rgba(250, 204, 21, .08));
+  border-color: rgba(250, 204, 21, .55);
+  font-weight: 600;
+}
+.ds-tag--vip i { color: #facc15; }
+.dk-vip-badge { color: #854d0e; background: #fef9c3; border-color: #fde68a; }
+.dk-vip-badge i { color: #ca8a04; }

@@ -6,8 +6,10 @@
  * data attributes, so a module does nothing on pages without its markup.
  *
  * Modules:
- *   1.  Toasts            window.sdToast(msg, {icon, href, linkText})
+ *   1.  Toasts            window.sdToast(msg, {icon, href, linkText, action})
+ *   1b. Click guard       window.sdBusy — no double clicks / double submits (ONCE-1)
  *   2.  Wishlist          [data-wishlist="carId"] (+ legacy window.toggleWishlist)
+ *                         v2: state hydration, exact counts, saved-page undo
  *   3.  Share             [data-share-open] / [data-share-copy] / [data-share-close]
  *   4.  Lightbox          [data-lightbox-images='[…]'] + [data-lightbox-open="i"]
  *   5.  Carousel counter  [data-carousel] > [data-carousel-track] + [data-carousel-count]
@@ -58,18 +60,221 @@
     el.innerHTML = (opts.icon ? '<i class="fa-solid ' + esc(opts.icon) + '" aria-hidden="true"></i>' : '')
       + '<span>' + esc(msg) + '</span>'
       + (opts.href ? '<a href="' + esc(opts.href) + '">' + esc(opts.linkText || 'View') + '</a>' : '');
-    toastRegion.appendChild(el);
-    setTimeout(function () {
+
+    var timer;
+    function dismiss() {
+      clearTimeout(timer);
+      if (el.classList.contains('is-leaving')) return;
       el.classList.add('is-leaving');
       setTimeout(function () { el.remove(); }, 260);
-    }, opts.duration || 3200);
+    }
+
+    // WISH-1: optional action button, e.g. { label: 'Undo', onClick: fn }
+    if (opts.action && typeof opts.action.onClick === 'function') {
+      var act = document.createElement('button');
+      act.type = 'button';
+      act.className = 'pub-toast__action';
+      act.textContent = opts.action.label || 'Undo';
+      act.addEventListener('click', function () {
+        if (act.disabled) return;
+        act.disabled = true;                 // ONCE-1: an Undo runs once
+        dismiss();
+        opts.action.onClick();
+      });
+      el.appendChild(act);
+    }
+
+    toastRegion.appendChild(el);
+    timer = setTimeout(dismiss, opts.duration || 3200);
+    return el;
   };
 
 
   /* ═══════════════════════════════════════════
-     2. WISHLIST
+     1b. CLICK GUARD — one action at a time   (ONCE-1, Nov 2026)
+     ───────────────────────────────────────────
+     Stops double / repeated clicks from firing an action twice.
+
+       • Anything busy ([data-busy], or inside a busy element) ignores
+         clicks and submits until its action finishes.
+       • Double-clicks (the 2nd click of a dblclick, e.detail > 1) on
+         links and buttons are swallowed. Controls meant to be clicked
+         repeatedly are exempt: REPEAT_OK below, or [data-allow-repeat].
+       • Same-tab link navigation locks that link and shows a thin
+         progress bar until the next page arrives.
+       • A form that really submits (not prevented by a script) locks
+         itself and its submit button (spinner) until the page changes.
+       • Scripts doing async work wrap it: sdBusy.run(el, fn) or
+         sdBusy.lock(el) / sdBusy.unlock(el).
+
+     Everything unlocks when a page is restored from the back/forward
+     cache, and after a safety timeout (downloads, 204s, etc.).
      ═══════════════════════════════════════════ */
-  var pendingWish = {};
+  var ACTIONABLE = 'a[href], button, [role="button"], input[type="submit"], input[type="button"], input[type="reset"], summary';
+  var REPEAT_OK  = '[data-allow-repeat], [data-rail-prev], [data-rail-next], [data-carousel-prev], [data-carousel-next], '
+                 + '[data-lb-prev], [data-lb-next], [data-lb-go], .pub-lightbox__thumb';
+  var NAV_SAFETY_MS  = 10000;
+  var FORM_SAFETY_MS = 15000;
+  var progressBar    = null;
+
+  function busyRoot(el) { return el && el.closest ? el.closest('[data-busy]') : null; }
+
+  function lock(el, opts) {
+    if (!el || el.hasAttribute('data-busy')) return false;
+    opts = opts || {};
+    el.setAttribute('data-busy', '');
+    el.setAttribute('aria-busy', 'true');
+    el.classList.add('is-busy');
+
+    // Spinner for real buttons when asked (keeps the button's width steady)
+    if (opts.spinner && el.matches('button, .pub-btn')) {
+      el.style.minWidth = el.getBoundingClientRect().width + 'px';
+      el.setAttribute('data-busy-html', el.innerHTML);
+      el.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> '
+        + esc(opts.label || el.getAttribute('data-busy-label') || el.textContent.trim() || 'Please wait');
+    }
+    if (opts.timeout) {
+      el._sdBusyTimer = setTimeout(function () { unlock(el); }, opts.timeout);
+    }
+    return true;
+  }
+
+  function unlock(el) {
+    if (!el || !el.hasAttribute('data-busy')) return;
+    clearTimeout(el._sdBusyTimer);
+    el.removeAttribute('data-busy');
+    el.removeAttribute('aria-busy');
+    el.classList.remove('is-busy');
+    if (el.hasAttribute('data-busy-html')) {
+      el.innerHTML = el.getAttribute('data-busy-html');
+      el.removeAttribute('data-busy-html');
+      el.style.minWidth = '';
+    }
+  }
+
+  function unlockAll() {
+    document.querySelectorAll('[data-busy]').forEach(unlock);
+    showProgress(false);
+  }
+
+  function showProgress(on) {
+    if (on) {
+      if (!progressBar) {
+        progressBar = document.createElement('div');
+        progressBar.className = 'sd-nav-progress';
+        progressBar.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(progressBar);
+      }
+      progressBar.classList.remove('is-on'); void progressBar.offsetWidth;
+      progressBar.classList.add('is-on');
+    } else if (progressBar) {
+      progressBar.classList.remove('is-on');
+    }
+  }
+
+  window.sdBusy = {
+    lock: lock,
+    unlock: unlock,
+    isBusy: function (el) { return !!busyRoot(el); },
+    /** Run fn() (may return a promise) with el locked; resolves with fn's result. */
+    run: function (el, fn, opts) {
+      if (!lock(el, opts)) return Promise.resolve(undefined);
+      var out;
+      try { out = fn(); } catch (err) { unlock(el); return Promise.reject(err); }
+      return Promise.resolve(out).then(
+        function (v) { unlock(el); return v; },
+        function (err) { unlock(el); throw err; });
+    }
+  };
+
+  function isSameTabNavigation(a, e) {
+    if (!a.matches('a[href]')) return false;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return false;
+    if (a.hasAttribute('download')) return false;
+    var target = (a.getAttribute('target') || '').toLowerCase();
+    if (target && target !== '_self') return false;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#' || /^(javascript|mailto|tel|sms|whatsapp):/i.test(href)) return false;
+    try {
+      var url = new URL(a.href, location.href);
+      // Same page, only the hash changes → no navigation
+      if (url.origin === location.origin && url.pathname === location.pathname
+          && url.search === location.search && url.hash) return false;
+    } catch (err) { return false; }
+    return true;
+  }
+
+  // Capture phase: runs before every page/module click handler.
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest(ACTIONABLE) : null;
+    if (!el) return;
+
+    if (busyRoot(el)) {                                   // action already running
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (e.detail > 1 && !el.matches(REPEAT_OK)) {          // 2nd click of a double-click
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // After every handler has had its say: if the link still navigates, lock it.
+    if (isSameTabNavigation(el, e)) {
+      setTimeout(function () {
+        if (e.defaultPrevented) return;
+        lock(el, { timeout: NAV_SAFETY_MS });
+        showProgress(true);
+        setTimeout(function () { showProgress(false); }, NAV_SAFETY_MS);
+      }, 0);
+    }
+  }, true);
+
+  // A busy form can't be submitted again (Enter key included).
+  document.addEventListener('submit', function (e) {
+    if (busyRoot(e.target)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
+  // A form that really submits locks itself + its submit button.
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    var submitter = e.submitter || form.querySelector('button[type="submit"], button:not([type]), input[type="submit"]');
+    setTimeout(function () {
+      if (e.defaultPrevented) return;                     // a script owns this submit
+      if (form.target && form.target !== '_self') return; // opens elsewhere, page stays
+      lock(form, { timeout: FORM_SAFETY_MS });
+      if (submitter) lock(submitter, { spinner: true, timeout: FORM_SAFETY_MS });
+      showProgress(true);
+    }, 0);
+  });
+
+  window.addEventListener('pageshow', function (e) { if (e.persisted) unlockAll(); });
+
+
+  /* ═══════════════════════════════════════════
+     2. WISHLIST   (v2 — WISH-1, Nov 2026)
+     ───────────────────────────────────────────
+     Hearts:      [data-wishlist="carId"]  (aria-pressed carries state)
+     Nav badge:   [data-wishlist-count]    (+ [data-wishlist-link] label)
+     Inline num:  [data-wishlist-inline]   "(3)" in the mobile drawer
+     Saved page:  [data-wishlist-grid] [data-wish-item] [data-wishlist-total]
+                  [data-wishlist-empty]  [data-wishlist-fresh]
+
+     Public pages are browser-cached for 5 min, so the heart states and
+     the count PHP printed can be stale. hydrateWishlist() asks
+     /api/visitor/wishlist.php (never cached) and repaints on load and
+     when a page is restored from the back/forward cache.
+     ═══════════════════════════════════════════ */
+  var WISH_TOGGLE_URL = '/api/visitor/wishlist-toggle.php';
+  var WISH_STATE_URL  = '/api/visitor/wishlist.php';
+  var SAVED_URL       = '/account/wishlist/';
+  var pendingWish     = {};
+  var touchedWish     = {};   // ids toggled while a hydrate request is in flight
 
   function setWishState(carId, on) {
     document.querySelectorAll('[data-wishlist="' + carId + '"]').forEach(function (btn) {
@@ -88,48 +293,164 @@
     });
   }
 
-  function bumpNavCount(delta) {
+  function currentNavCount() {
+    var el = document.querySelector('[data-wishlist-count]');
+    return el ? (parseInt(el.textContent, 10) || 0) : 0;
+  }
+
+  function setNavCount(n, bump) {
+    n = Math.max(0, n | 0);
     document.querySelectorAll('[data-wishlist-count]').forEach(function (el) {
-      var n = Math.max(0, (parseInt(el.textContent, 10) || 0) + delta);
+      var changed = (parseInt(el.textContent, 10) || 0) !== n;
       el.textContent = n;
       el.hidden = n === 0;
-      el.classList.remove('is-bump');
-      void el.offsetWidth;
-      el.classList.add('is-bump');
-      var link = el.closest('[data-wishlist-link]');
-      if (link) link.setAttribute('aria-label', 'Saved cars (' + n + ')');
+      if (bump && changed) {
+        el.classList.remove('is-bump');
+        void el.offsetWidth;
+        el.classList.add('is-bump');
+      }
+    });
+    document.querySelectorAll('[data-wishlist-link]').forEach(function (link) {
+      link.setAttribute('aria-label', 'Saved cars (' + n + ')');
+      link.classList.toggle('has-saved', n > 0);
+      var icon = link.querySelector('i');
+      if (icon) icon.className = (n > 0 ? 'fa-solid' : 'fa-regular') + ' fa-heart';
+    });
+    document.querySelectorAll('[data-wishlist-inline]').forEach(function (el) {
+      el.textContent = n ? '(' + n + ')' : '';
+    });
+  }
+
+  function pageRef() {
+    try { return new URLSearchParams(window.location.search).get('ref') || ''; }
+    catch (err) { return ''; }
+  }
+
+  function postToggle(carId) {
+    var body = 'car_id=' + encodeURIComponent(carId);
+    var ref  = pageRef();
+    if (/^[a-f0-9]{32}$/i.test(ref)) body += '&ref=' + encodeURIComponent(ref);
+    return fetch(WISH_TOGGLE_URL, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+      body: body
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok || typeof data.wishlisted !== 'boolean') {
+          var err = new Error(data.error || 'Failed'); err.status = r.status; throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  /* ── Saved cars page: take a card out of the grid, with Undo ── */
+  function savedPageCount() {
+    return document.querySelectorAll('[data-wishlist-grid] [data-wish-item]').length;
+  }
+
+  function syncSavedPage() {
+    var n = savedPageCount();
+    document.querySelectorAll('[data-wishlist-total]').forEach(function (el) {
+      el.textContent = n === 1 ? '1 car' : n + ' cars';
+    });
+    document.querySelectorAll('[data-wishlist-group]').forEach(function (g) {
+      g.hidden = !g.querySelector('[data-wish-item]');
+    });
+    var empty = document.querySelector('[data-wishlist-empty]');
+    if (empty) empty.hidden = n > 0;
+  }
+
+  function removeFromSavedPage(item, carId) {
+    var parent = item.parentNode, next = item.nextSibling;
+    var canUndo = !item.hasAttribute('data-wish-noundo');
+    item.classList.add('is-removing');
+    var removeTimer = setTimeout(function () {
+      item.remove();
+      syncSavedPage();
+    }, REDUCED.matches ? 0 : 220);
+
+    window.sdToast('Removed from saved cars', {
+      icon: 'fa-heart-crack',
+      duration: 5000,
+      action: canUndo ? {
+        label: 'Undo',
+        onClick: function () {
+          postToggle(carId).then(function (data) {
+            if (!data.wishlisted) return;
+            clearTimeout(removeTimer);
+            item.classList.remove('is-removing');
+            if (!item.isConnected) parent.insertBefore(item, next && next.parentNode === parent ? next : null);
+            setWishState(carId, true);
+            setNavCount(typeof data.count === 'number' ? data.count : currentNavCount() + 1, true);
+            syncSavedPage();
+          }).catch(function () {
+            window.sdToast("Couldn't restore that car. It may no longer be available.", { icon: 'fa-circle-exclamation' });
+          });
+        }
+      } : null
     });
   }
 
   function toggleWish(btn, carId) {
     if (!carId || pendingWish[carId]) return;
     pendingWish[carId] = true;
+    touchedWish[carId] = true;
 
+    lock(btn);                                   // ONCE-1
     var wasOn = btn.getAttribute('aria-pressed') === 'true' || btn.classList.contains('wishlisted');
     setWishState(carId, !wasOn);                 // optimistic
     btn.classList.remove('is-pop'); void btn.offsetWidth; btn.classList.add('is-pop');
 
-    fetch('/api/visitor/wishlist-toggle.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-      body: 'car_id=' + encodeURIComponent(carId)
-    })
-      .then(function (r) { return r.json(); })
+    postToggle(carId)
       .then(function (data) {
-        if (typeof data.wishlisted !== 'boolean') throw new Error(data.error || 'Failed');
         setWishState(carId, data.wishlisted);
-        if (data.wishlisted !== wasOn) bumpNavCount(data.wishlisted ? 1 : -1);
+        setNavCount(typeof data.count === 'number'
+          ? data.count
+          : currentNavCount() + (data.wishlisted === wasOn ? 0 : (data.wishlisted ? 1 : -1)), true);
+
+        var item = btn.closest('[data-wishlist-grid] [data-wish-item]');
+        if (item && !data.wishlisted) { removeFromSavedPage(item, carId); return; }
+
         window.sdToast(data.wishlisted ? 'Saved to your cars' : 'Removed from saved cars', {
           icon: data.wishlisted ? 'fa-heart' : 'fa-heart-crack',
-          href: data.wishlisted ? '/account/wishlist/' : null,
+          href: data.wishlisted ? SAVED_URL : null,
           linkText: 'View saved'
         });
       })
-      .catch(function () {
+      .catch(function (err) {
         setWishState(carId, wasOn);              // roll back
-        window.sdToast("Couldn't update saved cars. Please try again.", { icon: 'fa-circle-exclamation' });
+        window.sdToast(err && err.status === 404
+          ? 'This car is no longer available to save.'
+          : (err && err.status === 429 ? 'Slow down a little, then try again.' : "Couldn't update saved cars. Please try again."),
+          { icon: 'fa-circle-exclamation' });
       })
-      .finally(function () { delete pendingWish[carId]; });
+      .finally(function () { delete pendingWish[carId]; unlock(btn); });
+  }
+
+  function hydrateWishlist() {
+    touchedWish = {};
+    fetch(WISH_STATE_URL, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.ids)) return;
+        var saved = {};
+        data.ids.forEach(function (id) { saved[String(id)] = true; });
+        var seen = {};
+        document.querySelectorAll('[data-wishlist]').forEach(function (btn) {
+          var id = btn.getAttribute('data-wishlist');
+          if (!id || seen[id] || pendingWish[id] || touchedWish[id]) return;
+          seen[id] = true;
+          setWishState(id, !!saved[id]);
+        });
+        setNavCount(typeof data.count === 'number' ? data.count : data.ids.length, false);
+      })
+      .catch(function () { /* keep the server-rendered state */ });
   }
 
   document.addEventListener('click', function (e) {
@@ -139,6 +460,11 @@
     e.stopPropagation();
     toggleWish(btn, btn.getAttribute('data-wishlist'));
   });
+
+  // Fresh (no-store) pages like the Saved cars page already render the
+  // true state; everything else re-syncs once on load.
+  if (!document.querySelector('[data-wishlist-fresh]')) hydrateWishlist();
+  window.addEventListener('pageshow', function (e) { if (e.persisted) hydrateWishlist(); });
 
   // Legacy API (broker storefront markup still calls this)
   window.toggleWishlist = function (btn, carId) { if (btn) toggleWish(btn, String(carId)); };
@@ -375,9 +701,11 @@
     }
 
     function resetBtn() {
+      unlock(form);
       if (!submitBtn) return;
       submitBtn.disabled = false;
-      submitBtn.innerHTML = btnHtml;
+      unlock(submitBtn);
+      if (!submitBtn.hasAttribute('data-busy-html')) submitBtn.innerHTML = btnHtml;
     }
 
     form.addEventListener('submit', function (e) {
@@ -404,10 +732,8 @@
       }
       if (firstBad) { firstBad.focus(); return; }
 
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> Sending…';
-      }
+      lock(form);                                  // ONCE-1: blocks re-submit until done
+      if (submitBtn) lock(submitBtn, { spinner: true, label: 'Sending…' });
 
       fetch('/api/leads/submit.php', { method: 'POST', body: new FormData(form) })
         .then(function (r) { return r.json(); })
@@ -752,7 +1078,9 @@
      can show a live count and apply on tap instead.
      ═══════════════════════════════════════════ */
   window.sdSubmitClean = function (form) {
-    if (!form) return;
+    if (!form || form.hasAttribute('data-busy')) return;   // ONCE-1: already submitting
+    lock(form, { timeout: FORM_SAFETY_MS });
+    showProgress(true);
     Array.prototype.forEach.call(form.elements, function (el) {
       if (!el.name || el.type === 'submit' || el.type === 'button') return;
       if ((el.type === 'radio' || el.type === 'checkbox') && !el.checked) return;

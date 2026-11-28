@@ -1,0 +1,131 @@
+/**
+ * SalesDesk — Broker Marketplace & My Desk  (DESK-1, Nov 2026)
+ * assets/css/broker-inventory.css
+ *
+ * Page stylesheet for /app/broker/inventory. §1 was an inline <style>
+ * block in the page (moved here unchanged); §2 styles the in-place
+ * "Add to Desk" (assets/js/broker-inventory.js).
+ */
+
+/* ══════════════════════════════════════
+   1. PAGE (moved from inline <style>)
+   ══════════════════════════════════════ */
+.inv-header { display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem; }
+.inv-title  { font-family:var(--serif);font-size:1.5rem;font-weight:300; }
+.inv-sub    { font-size:12px;color:var(--muted);margin-top:2px; }
+.slot-count { font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:var(--r-full);background:var(--bg);border:1px solid var(--border);color:var(--muted); }
+.slot-count.at-limit { background:var(--amb-bg);border-color:var(--amb-b);color:var(--amber); }
+
+.car-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px; }
+.car-card { background:var(--white);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden; }
+.car-card.car-sold   { opacity:.65; }
+.car-card.car-paused { border-color:var(--amb-b); }
+.car-card-img { position:relative;height:160px;background:var(--bg); }
+.car-card-img img { width:100%;height:100%;object-fit:cover; }
+.car-img-placeholder { width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--border); }
+.car-status-badge { position:absolute;top:8px;right:8px; }
+.car-card-body { padding:12px; }
+.car-card-title  { font-size:13px;font-weight:600;color:var(--text);margin-bottom:2px; }
+.car-card-price  { font-size:15px;font-weight:700;font-family:var(--mono);color:var(--text);margin-bottom:2px; }
+.car-card-dealer { font-size:11px;color:var(--muted);margin-bottom:8px; }
+.car-card-stats  { display:flex;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--faint);margin-bottom:8px; }
+.car-card-actions { display:flex;gap:6px;margin-top:8px; }
+.comm-chip { background:var(--gr-bg);border:1px solid var(--gr-b);border-radius:var(--r-sm);padding:5px 9px;font-size:11px;color:var(--green);margin-bottom:8px;display:flex;align-items:center;gap:5px; }
+
+.share-sheet { background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;margin-bottom:6px; }
+.share-url-row { display:flex;gap:6px; }
+
+
+/* ══════════════════════════════════════
+   2. ADD TO DESK IN PLACE (DESK-1)
+   ══════════════════════════════════════ */
+.inv-add-form { margin-top: 8px; }
+.inv-add-btn,
+.inv-added { width: 100%; justify-content: center; }
+
+.inv-add-btn[aria-busy="true"] { opacity: .78; cursor: progress; }
+
+.inv-added-row { display: flex; gap: 6px; margin-top: 8px; }
+.inv-added {
+  flex: 1;
+  color: var(--green);
+  background: var(--gr-bg);
+  border-color: var(--gr-b);
+  cursor: default;
+}
+.inv-undo { flex: 0 0 auto; }
+
+.car-card.is-added { border-color: var(--gr-b); }
+.slot-count.is-bump { animation: inv-bump .45s ease; }
+@keyframes inv-bump { 40% { transform: scale(1.08); } }
+
+/* Toasts */
+.inv-toasts {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 400;
+  display: grid;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.inv-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--ink, #0a1628);
+  border-radius: var(--r-md);
+  box-shadow: 0 10px 30px rgba(10, 22, 40, .25);
+  pointer-events: auto;
+  animation: inv-toast-in .22s ease both;
+}
+.inv-toast.is-error i { color: #fca5a5; }
+.inv-toast i { color: #86efac; }
+.inv-toast a, .inv-toast button {
+  margin-left: 4px;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #93c5fd;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.inv-toast.is-leaving { animation: inv-toast-out .18s ease both; }
+@keyframes inv-toast-in  { from { opacity: 0; transform: translateY(10px); } }
+@keyframes inv-toast-out { to   { opacity: 0; transform: translateY(6px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .slot-count.is-bump, .inv-toast, .inv-toast.is-leaving { animation: none; }
+}
+
+/* ═══════════════════════════════════════════
+   PLANS-4a — VIP network perks in the Marketplace
+   ═══════════════════════════════════════════ */
+.net-only-badge {
+  position: absolute; left: 8px; bottom: 8px;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: var(--r-full);
+  background: rgba(15, 23, 42, .78); color: #fff;
+  font-size: 10px; font-weight: 600; letter-spacing: .02em;
+}
+.net-only-badge i { font-size: 9px; }
+.net-bonus-chip {
+  display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden;
+  margin: -4px 0 8px; padding: 5px 9px;
+  border: 1px dashed var(--p-b); border-radius: var(--r-sm);
+  background: var(--p-light); color: var(--p-dark, var(--p));
+  font-size: 11px;
+}
+.net-bonus-chip i { font-size: 10px; }
+.net-bonus-chip__rand { color: var(--muted); }
+.mkt-net-select { width: 180px; }
+.parked-net { color: var(--p); font-weight: 600; }

@@ -2237,3 +2237,33 @@
   .kpi-card,
   .d-pipeline-cell { break-inside: avoid; }
 }
+
+/* 2c: dashboard notice — broker network applications waiting (app/dealer/dashboard.php) */
+.d-net-alert { margin-bottom: 1.5rem; }
+.d-net-alert a { font-weight: 600; margin-left: 6px; }
+
+/* 2d: business owner's dealership switcher bar (views/layout-app.php) */
+.grp-bar { background: var(--p-light); border-bottom: 1px solid var(--p-b); }
+.grp-bar--sister { background: #eef6ff; box-shadow: inset 0 -2px 0 var(--p-mid); }
+.grp-bar__inner { max-width: 1100px; margin: 0 auto; padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.grp-bar__text { font-size: 13px; color: var(--text2); line-height: 1.5; min-width: 0; }
+.grp-bar__text i { color: var(--p); margin-right: 6px; }
+.grp-bar__note { color: var(--muted); margin-left: 4px; }
+.grp-bar__form { display: flex; align-items: center; gap: 6px; margin: 0; }
+.grp-bar__label { font-size: 12px; color: var(--muted); }
+.grp-bar__select { font: inherit; font-size: 13px; padding: 5px 28px 5px 10px; border: 1px solid var(--p-b); border-radius: 8px; background-color: var(--white); color: var(--text); max-width: 260px; }
+.grp-bar__btn { font: inherit; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--p); background: var(--p); color: #fff; cursor: pointer; }
+@media (max-width: 640px) {
+  .grp-bar__form { width: 100%; }
+  .grp-bar__select { flex: 1 1 auto; max-width: none; min-width: 0; }
+  .grp-bar__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .grp-bar__note { display: block; margin-left: 0; }
+}
+
+/* 4a: upload wizard "Network only" + inventory badge */
+.cu-netonly { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; margin: 0 0 1.25rem; border: 1px solid var(--p-b); border-radius: var(--r-md); background: var(--p-light); cursor: pointer; font-size: 13px; color: var(--text); }
+.cu-netonly input { margin-top: 3px; accent-color: var(--p); }
+.cu-netonly__help { display: block; font-size: 12px; color: var(--text2); margin-top: 2px; line-height: 1.5; }
+.d-net-only-badge { position: absolute; left: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; background: rgba(15, 23, 42, .78); color: #fff; font-size: 10px; font-weight: 600; text-decoration: none; }
+.d-net-only-badge i { font-size: 9px; }
+.dl-bonus-line { display: flex; justify-content: space-between; margin: -2px 0 6px 10px; font-size: 11.5px; color: var(--green); font-family: var(--mono); }

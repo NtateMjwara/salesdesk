@@ -1,0 +1,173 @@
+/* ============================================================
+   SalesDesk — Dealer portal: Network  (plans Phase 2c)
+   Loaded via $pageStyles by app/dealer/network.php, after
+   networks.css (broker cards, badges, grid). Member cards reuse the
+   team page's .d-exec-card / .d-team-* classes from dealer.css.
+   ============================================================ */
+
+.dnet-gap { margin: 0 0 1rem; }
+.dnet-of  { font-size: 14px; font-weight: 500; color: var(--muted); }
+.dnet-alert { color: var(--amber); }
+.dnet-plan { font-size: 18px; }
+
+/* ── Open / closed switch ──────────────────────────────────── */
+.dnet-switch {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--r-lg, 12px);
+  padding: 14px 16px; margin: 0 0 1.25rem;
+}
+.dnet-switch.is-open { border-color: var(--gr-b); background: var(--gr-bg); }
+.dnet-switch__text  { display: grid; gap: 3px; min-width: 0; flex: 1 1 320px; }
+.dnet-switch__state { font-size: 14px; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+.dnet-switch.is-open .dnet-switch__state i { color: var(--green); }
+.dnet-switch__state i { color: var(--faint); }
+.dnet-switch__help  { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.dnet-switch__help a { color: var(--p); font-weight: 600; text-decoration: none; margin-left: 4px; white-space: nowrap; }
+.dnet-switch form { margin: 0; }
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+.dnet-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 0 0 1.25rem; }
+.dnet-tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; margin-bottom: -1px;
+  font-size: 14px; font-weight: 500; color: var(--muted); text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.dnet-tab:hover { color: var(--text); }
+.dnet-tab.is-active { color: var(--p); border-bottom-color: var(--p); font-weight: 600; }
+.dnet-tab-count {
+  font-size: 11px; font-weight: 700; line-height: 1; padding: 3px 7px; border-radius: 99px;
+  color: var(--amber); background: var(--amb-bg); border: 1px solid var(--amb-b);
+}
+
+/* ── Member cards (on top of .d-exec-card) ─────────────────── */
+.dnet-card--invited   { border-left-color: var(--p-mid); }
+.dnet-card--suspended { border-left-color: var(--faint); }
+.dnet-card--rejected  { border-left-color: var(--red-b); opacity: .85; }
+.dnet-card .d-exec-card__actions form { margin: 0; }
+.dnet-reason { font-size: 12.5px; color: var(--muted); font-style: italic; margin-top: 6px; }
+
+/* ── Find brokers ──────────────────────────────────────────── */
+.dnet-search { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 .75rem; }
+.dnet-search input[type="search"] { flex: 1 1 260px; min-width: 200px; }
+.dnet-search select { flex: 0 1 200px; }
+.dnet-search .sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.dnet-count { font-size: 13px; color: var(--muted); margin: 0 0 .75rem; }
+.dnet-broker .net-meta a { color: var(--p); text-decoration: none; }
+.dnet-broker .net-meta a:hover { text-decoration: underline; }
+
+.dnet-pager { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin: 1.25rem 0 0; }
+.dnet-page {
+  min-width: 34px; height: 34px; padding: 0 10px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 600; color: var(--text2); text-decoration: none;
+  background: var(--white); border: 1px solid var(--border);
+}
+.dnet-page:hover { border-color: var(--p-b); color: var(--p); }
+.dnet-page.is-active { background: var(--p); border-color: var(--p); color: #fff; }
+
+@media (max-width: 640px) {
+  .dnet-switch form, .dnet-switch .btn { width: 100%; }
+  .dnet-search select, .dnet-search .btn { flex: 1 1 100%; }
+}
+
+/* ═══════════════════════════════════════════
+   PLANS-4a — VIP perks tab (views/partials/dealer-network-perks.php)
+   ═══════════════════════════════════════════ */
+.perk-locked {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 14px 16px; margin: 0 0 1rem;
+  border: 1px solid var(--p-b); border-radius: var(--r-md); background: var(--p-light);
+}
+.perk-locked__icon { color: var(--p); font-size: 18px; margin-top: 2px; }
+.perk-locked__title { display: block; font-size: 14px; color: var(--text); margin-bottom: 2px; }
+.perk-locked__text { margin: 0; font-size: 13px; color: var(--text2); line-height: 1.55; }
+.perk-card {
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--white);
+  padding: 16px 18px; margin: 0 0 1rem;
+}
+.perk-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.perk-card__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.perk-card__title i { color: var(--p); font-size: 13px; }
+.perk-card__text { margin: 0 0 .9rem; font-size: 13px; color: var(--text2); line-height: 1.6; max-width: 760px; }
+.perk-state {
+  font-size: 11.5px; font-weight: 600; padding: 2px 10px; border-radius: var(--r-full);
+  background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+}
+.perk-state.is-on { background: var(--gr-bg); color: var(--green); border-color: var(--gr-b); }
+.perk-bonus { display: grid; gap: 12px; max-width: 520px; }
+.perk-bonus__types { display: flex; gap: 8px 18px; flex-wrap: wrap; border: 0; padding: 0; margin: 0; }
+.perk-radio { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
+.perk-radio input { accent-color: var(--p); }
+.perk-bonus__value .finput { max-width: 200px; }
+.perk-bonus .btn { justify-self: start; }
+.perk-hint { margin: 6px 0 0; font-size: 12px; color: var(--green); min-height: 1em; }
+.perk-stock__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.perk-stock__count { font-size: 12.5px; font-weight: 600; color: var(--p); }
+.perk-list { list-style: none; margin: 0 0 12px; padding: 0; border: 1px solid var(--border); border-radius: var(--r-md); max-height: 520px; overflow: auto; }
+.perk-row { border-top: 1px solid var(--border); }
+.perk-row:first-child { border-top: 0; }
+.perk-row__label { display: flex; align-items: center; gap: 12px; padding: 9px 12px; cursor: pointer; }
+.perk-row__label:hover { background: var(--bg); }
+.perk-row__check { width: 17px; height: 17px; flex-shrink: 0; accent-color: var(--p); }
+.perk-row__thumb {
+  flex: 0 0 56px; width: 56px; height: 38px; border-radius: 6px; overflow: hidden;
+  background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--faint);
+}
+.perk-row__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.perk-row__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.perk-row__name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.perk-row__meta { font-size: 12px; color: var(--muted); }
+.net-only-tag {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-full);
+  background: var(--p-light); color: var(--p); border: 1px solid var(--p-b);
+}
+.net-only-tag i { font-size: 9px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0; }
+@media (max-width: 560px) {
+  .perk-row__label { flex-wrap: wrap; }
+  .net-only-tag { margin-left: 29px; }
+}
+
+/* ═══════════════════════════════════════════
+   PLANS-4b — Dashboard tab (views/partials/dealer-network-dashboard.php)
+   ═══════════════════════════════════════════ */
+.dash-period { display: flex; align-items: center; gap: 6px; margin: 0; }
+.dash-period .finput { width: auto; min-width: 150px; padding-top: 6px; padding-bottom: 6px; }
+.dash-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.dash-total { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); padding: 10px 12px; display: grid; gap: 2px; }
+.dash-total__num { font-size: 18px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.dash-total__label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.dash-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--r-md); }
+.dash-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dash-table th { text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); background: var(--bg); padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dash-table td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: top; color: var(--text); }
+.dash-table tbody tr:first-child td { border-top: 0; }
+.dash-table .num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+.dash-broker { display: block; font-weight: 600; }
+.dash-desk { font-size: 12px; color: var(--p); text-decoration: none; }
+.dash-desk:hover { text-decoration: underline; }
+.dash-flag { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: var(--r-full); background: var(--amb-bg); color: var(--amber); border: 1px solid var(--amb-b); }
+.dash-other td { color: var(--muted); font-style: italic; background: var(--bg); }
+.dash-ann-form { display: grid; gap: 10px; max-width: 680px; margin: 0 0 1rem; }
+.dash-ann-form .fgroup { margin: 0; }
+.dash-ann-form textarea { resize: vertical; min-height: 96px; }
+.dash-count { color: var(--muted); text-align: right; }
+.dash-ann-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dash-ann-left { font-size: 12.5px; color: var(--muted); }
+.dash-ann-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dash-ann { border: 1px solid var(--border); border-left: 3px solid var(--p-mid); border-radius: var(--r-md); padding: 10px 14px; background: var(--white); }
+.dash-ann__head { display: flex; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; align-items: baseline; }
+.dash-ann__title { font-size: 14px; color: var(--text); }
+.dash-ann__meta { font-size: 11.5px; color: var(--muted); }
+.dash-ann__body { margin: 6px 0 0; font-size: 13px; color: var(--text2); line-height: 1.6; }
+.dash-ann form { margin: 6px 0 0; }
+.dash-ann__remove { padding-left: 0; }
+@media (max-width: 640px) {
+  .dash-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-period { flex-wrap: wrap; }
+}

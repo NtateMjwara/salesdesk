@@ -458,3 +458,11 @@ select.finput {
 }
 
 .pip-label.active { color: var(--p); }
+
+/* 3b: link carried by a notification (app/notifications.php) */
+.notif-link { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--p); }
+.notif-link i { font-size: 10px; margin-left: 2px; }
+
+/* 4a: network bonus notes (broker Earnings / Leads) */
+.net-bonus-note { display: block; margin-top: 2px; font-size: 10.5px; font-family: var(--sans); color: var(--green); font-weight: 600; }
+.net-bonus-locked { margin: 0; font-size: 13px; color: var(--text2); line-height: 1.5; }

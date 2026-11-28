@@ -1145,6 +1145,18 @@ select.pub-form-input {
 .pub-toast i { color: var(--accent-2); }
 .pub-toast a { color: #93c5fd; font-weight: 600; margin-left: 4px; }
 
+/* WISH-1: action button inside a toast (e.g. "Undo") */
+.pub-toast__action {
+  margin-left: 4px;
+  padding: 4px 2px;
+  font: 600 14px/1 var(--sans);
+  color: #93c5fd;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.pub-toast__action:hover { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+
 @keyframes pub-toast-in  { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes pub-toast-out { to { opacity: 0; transform: translateY(8px); } }
 
@@ -1537,4 +1549,52 @@ a.active-filter-tag__dismiss:hover { background: rgba(15, 76, 158, .12); opacity
   .pub-reveal-ready .pub-reveal,
   .pub-reveal-ready .pub-reveal:not(.pub-revealed) { opacity: 1; transform: none; transition: none; }
   .vc:hover, .vc:hover .vc__img { transform: none; }
+}
+
+/* ══════════════════════════════════════
+   18. BUSY STATES   (ONCE-1, Nov 2026)
+   Set by public.js §1b click guard: [data-busy] on whatever is running
+   (button, link, form). Busy controls ignore further clicks in JS;
+   these rules only make the wait visible.
+   ══════════════════════════════════════ */
+[data-busy],
+[data-busy] * { cursor: progress; }
+
+button[data-busy],
+.pub-btn[data-busy],
+[role="button"][data-busy],
+input[type="submit"][data-busy] { opacity: .78; }
+
+/* Hearts already animate; don't dim them for the split second they're busy */
+[data-wishlist][data-busy] { opacity: 1; }
+
+/* Thin top bar while the next page loads after a link / form submit */
+.sd-nav-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: calc(var(--z-toast) + 10);
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--p-mid), var(--accent));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s linear;
+}
+
+.sd-nav-progress.is-on {
+  opacity: 1;
+  animation: sd-nav-trickle 8s cubic-bezier(.08, .7, .2, 1) forwards;
+}
+
+@keyframes sd-nav-trickle {
+  0%   { transform: scaleX(0); }
+  10%  { transform: scaleX(.35); }
+  100% { transform: scaleX(.92); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-nav-progress.is-on { animation: none; transform: scaleX(.6); }
 }

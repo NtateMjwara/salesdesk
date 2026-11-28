@@ -106,20 +106,14 @@
   color: var(--text);
 }
 
-.pub-nav__mark {
-  width: 44px;
-  height: auto;
+/* BRAND-1 (Nov 2026): single SVG lockup (mark + wordmark).
+   Sized by height so the lettering keeps a ~12px x-height on desktop;
+   the art's own viewBox is cropped tight, so no optical offsets needed. */
+.pub-nav__logo {
+  display: block;
+  width: auto;
+  height: 36px;
 }
-
-.pub-nav__name {
-  font-family: var(--font-d);
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -.03em;
-  color: var(--text);
-}
-.pub-nav__name span { color: var(--p); }
 
 .pub-nav__links {
   display: flex;
@@ -169,8 +163,23 @@
 /* ══════════════════════════════════════
    4. MEGA PANELS
    ══════════════════════════════════════ */
+/*
+ * DROP-1 (Nov 2026): panels unroll from the top edge down and roll
+ * back up when closing — a clip-path wipe, no scaling or bouncing.
+ *
+ *   closed  clip-path bottom inset = 100%  → zero visible height
+ *   open    clip-path pushed outside the box on every side so the
+ *           drop shadow and the hover bridge (::before) aren't clipped
+ *
+ * Opening uses an ease-out curve (fast start, soft landing); closing
+ * uses ease-in and is a little quicker, so it gets out of the way.
+ * Switching straight from one open panel to another skips the wipe
+ * (.is-instant, set by public-nav.js) — the new panel just appears.
+ */
 .pub-mega-panel {
   --pub-panel-shift: 0px;
+  --pub-drop-in:  .26s cubic-bezier(.2, .7, .25, 1);
+  --pub-drop-out: .18s cubic-bezier(.45, 0, .8, .4);
   position: absolute;
   top: calc(100% + 12px);
   left: 50%;
@@ -181,17 +190,35 @@
   border: 1px solid var(--border);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-xl);
-  opacity: 0;
   visibility: hidden;
-  transform: translate(calc(-50% + var(--pub-panel-shift)), 6px);
-  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease), visibility 0s linear var(--dur-2);
+  opacity: 0;
+  transform: translate(calc(-50% + var(--pub-panel-shift)), -4px);
+  clip-path: inset(0 -90px 100% -90px);
+  transition:
+    clip-path  var(--pub-drop-out),
+    transform  var(--pub-drop-out),
+    opacity    .12s linear .06s,
+    visibility 0s linear .18s;
 }
 
 .pub-mega-panel.open {
-  opacity: 1;
   visibility: visible;
+  opacity: 1;
   transform: translate(calc(-50% + var(--pub-panel-shift)), 0);
-  transition-delay: 0s;
+  clip-path: inset(-20px -90px -130px -90px);
+  z-index: calc(var(--z-dropdown) + 1);   /* above a panel that's still rolling up */
+  transition:
+    clip-path  var(--pub-drop-in),
+    transform  var(--pub-drop-in),
+    opacity    .1s linear,
+    visibility 0s linear 0s;
+}
+
+.pub-mega-panel.is-instant { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pub-mega-panel,
+  .pub-mega-panel.open { transition: visibility 0s, opacity .1s linear; }
 }
 
 /* Hover bridge so the pointer can travel from trigger to panel */
@@ -203,6 +230,30 @@
   top: -14px;
   height: 14px;
 }
+
+/* Single-column panel (Buy a car) */
+.pub-mega-panel--single { width: 320px; }
+.pub-mega-panel--single .pub-mega-col { min-width: 0; }
+
+.pub-mega-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 0;
+  padding: 12px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--p);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  transition: background var(--dur-1);
+}
+
+.pub-mega-all:hover,
+.pub-mega-all:focus-visible { background: var(--p-light); }
+.pub-mega-all i { font-size: 12px; transition: transform var(--dur-2) var(--ease); }
+.pub-mega-all:hover i { transform: translateX(3px); }
 
 .pub-mega-cols {
   display: flex;
@@ -414,6 +465,9 @@
 
 .pub-nav__search-btn { display: none; }
 
+/* WISH-1: nav heart fills once anything is saved */
+.pub-nav__icon-btn.has-saved i { color: #e11d48; }
+
 .pub-nav__count {
   position: absolute;
   top: 4px;
@@ -509,7 +563,7 @@
   width: 280px;
   min-width: 0;
   padding: 8px;
-  transform: translateY(6px);
+  transform: translateY(-4px);
 }
 
 .pub-mega-panel.pub-acct-panel.open { transform: translateY(0); }
@@ -859,6 +913,8 @@
 
   .pub-nav .pub-nav__hamburger,
   .pub-nav .pub-nav__search-btn { display: inline-flex; }
+
+  .pub-nav__logo { height: 32px; }
 }
 
 @media (min-width: 1101px) {
@@ -867,8 +923,7 @@
 }
 
 @media (max-width: 380px) {
-  .pub-nav__name { font-size: 17px; }
-  .pub-nav__mark { width: 38px; }
+  .pub-nav__logo { height: 28px; }
   .pub-nav__icon-btn { width: 38px; }
 }
 
@@ -973,16 +1028,8 @@
   margin-bottom: 16px;
 }
 
-.sd-footer__logo { width: 44px; height: auto; }
-
-.sd-footer__name {
-  font-family: var(--font-d);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -.03em;
-  color: #fff;
-}
-.sd-footer__name span { color: var(--p-bright); }
+/* BRAND-1: white lockup on the ink surface */
+.sd-footer__logo { display: block; width: auto; height: 40px; }
 
 .sd-footer__desc {
   margin-bottom: 22px;

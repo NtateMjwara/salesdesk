@@ -59,11 +59,11 @@
       var kind      = reasonBtn.getAttribute('data-reason-kind') || 'exec';
       if (kindInput) kindInput.value = kind;
       modal.querySelector('[data-reason-title]').textContent  = isSusp
-        ? (kind === 'agent' ? 'Suspend agent' : 'Suspend sales exec')
+        ? (kind === 'agent' ? 'Suspend network broker' : 'Suspend sales exec')
         : (kind === 'agent' ? 'Decline application' : 'Decline request');
       modal.querySelector('[data-reason-sub]').textContent    = isSusp
         ? (kind === 'agent'
-            ? name + ' won’t be able to add new cars until they are reinstated.'
+            ? name + ' won’t count as part of this network until reinstated. They can still share any car.'
             : name + '’s live listings will be paused until they are reinstated.')
         : name + ' will be emailed that their request was declined.';
       modal.querySelector('[data-reason-submit]').textContent = isSusp ? 'Suspend' : 'Decline & notify';

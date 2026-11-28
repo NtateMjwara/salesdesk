@@ -353,3 +353,94 @@ form.adm-head-action { margin: 0 0 0 auto; }
   .ua-bulk-controls { width: 100%; }
   .ua-bulk-controls .adm-select-sm { flex: 1 1 100%; max-width: none; }
 }
+
+/* ══════════════════════════════════════
+   PLANS-1 (0019): plan & limits on users-view, Admin → Plans
+   ══════════════════════════════════════ */
+.plan-assign {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px 14px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+.plan-assign .fgroup { margin-bottom: 0; }
+.plan-assign .plan-note { grid-column: span 2; }
+.plan-assign .btn { justify-self: start; }
+.plan-status { border: 0; padding: 0; margin: 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.plan-status legend { width: 100%; }
+.plan-status label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+
+.plan-limits td { vertical-align: top; }
+.plan-limit-form { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.plan-limit-form .ua-limit-input { width: 96px; }
+.plan-limit-form input[name="limit_reason"] { flex: 1 1 160px; min-width: 140px; }
+.plan-unl { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--text2); }
+
+.plans-mrr { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+
+/* 0020: dealership → Business tab */
+.biz-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+.biz-facts dt { font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text2); margin-bottom: 3px; }
+.biz-facts dd { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.biz-net-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.biz-net-head .adm-h2 { margin-bottom: 0; }
+#network .adm-h3 { margin-top: 1.25rem; }
+/* Phase 3: Admin → Plans → Billing */
+.bill-status { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.bill-urls { margin: 12px 0 6px; }
+.bill-urls dd { font-size: 13px; }
+.bill-checks { white-space: nowrap; letter-spacing: 2px; }
+.bill-events td { vertical-align: middle; }
+/* 2d: Enterprise dealerships card */
+.biz-ent-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 20px; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+.biz-ent-form { margin: 0; }
+.biz-ent-row { display: flex; gap: 8px; align-items: center; }
+.biz-ent-row .finput { flex: 1 1 auto; min-width: 0; }
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 1.5rem;
+}
+.plans-grid .card { margin: 0; }
+.plan-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.plan-card-name { font-size: 16px; font-weight: 700; color: var(--text); }
+.plan-card-price { font-size: 15px; font-weight: 600; color: var(--p); white-space: nowrap; }
+.plan-card-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 6px 0 10px; }
+.plan-card-stats strong { color: var(--text); font-weight: 600; }
+.plan-card-limits { list-style: none; margin: 0 0 12px; padding: 0; font-size: 13px; }
+.plan-card-limits li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-top: 1px solid var(--border); }
+.plan-card-limits li span:last-child { font-weight: 600; color: var(--text); }
+.plan-edit summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--p); }
+.plan-edit[open] summary { margin-bottom: 10px; }
+.plan-edit .fgroup { margin-bottom: 10px; }
+.plan-edit-limit { display: flex; gap: 8px; align-items: center; }
+.plan-edit-limit .finput { width: 110px; }
+.plan-phase-note { font-size: 12px; color: var(--muted); margin: -4px 0 12px; }
+@media (max-width: 640px) {
+  .plan-assign .plan-note { grid-column: auto; }
+}
+
+/* 4b: business announcements on the Business tab */
+.adm-ann-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; color: var(--text2); }
+.adm-ann-list .adm-mono { margin-right: 6px; }
+
+/* 0026: business billing on the Business tab */
+.biz-billing { margin: 0 0 1rem; }
+.biz-billing .adm-inline-form { display: inline-block; margin: 6px 0 0; }
+.biz-inv-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.biz-inv-start .finput { width: auto; min-width: 240px; }
+.biz-inv-start .flabel { margin: 0; }
+.biz-inv-table td { vertical-align: top; }
+.biz-inv-actions { min-width: 300px; }
+.biz-inv-actions form { margin: 0 0 6px; }
+.biz-inv-paid, .biz-inv-void { display: flex; gap: 6px; align-items: center; }
+.biz-inv-paid .finput, .biz-inv-void .finput { width: 150px; padding-top: 5px; padding-bottom: 5px; }
+.inv-admin-table td { vertical-align: top; }
+.biz-inv-table td:nth-child(1), .biz-inv-table td:nth-child(3), .biz-inv-table td:nth-child(4) { white-space: nowrap; }

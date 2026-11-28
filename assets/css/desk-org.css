@@ -65,6 +65,7 @@
 .dorg-banner-pending i { color: var(--amber); }
 .dorg-banner-suspended { border-color: var(--red-b); background: var(--red-bg); }
 .dorg-banner-suspended i { color: var(--red); }
+.dorg-banner-invite   { border-color: var(--p-b); background: var(--p-light); margin-bottom: 8px; }   /* 2c: network invitation */
 .dorg-banner a { margin-left: auto; color: var(--p); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .dorg-banner .dorg-brands { display: inline-flex; }
 

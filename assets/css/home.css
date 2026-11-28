@@ -326,6 +326,53 @@
 
 .home-rail { grid-auto-columns: minmax(240px, 260px); }
 
+/* RV-1: Recently viewed strip — 5 cards on wide screens, 4 below that
+   (the 5th is hidden so the row never ends ragged), 2×2 on tablets and a
+   swipeable row of 4 on phones. The full list lives on
+   /account/recently-viewed/. */
+.home-recent {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 18px);
+}
+
+@media (max-width: 1199px) {
+  .home-recent { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .home-recent > :nth-child(n+5) { display: none; }
+}
+
+@media (max-width: 859px) {
+  .home-recent { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 559px) {
+  .home-recent {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 78%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--page-gutter);
+    scrollbar-width: none;
+    margin-inline: calc(var(--page-gutter) * -1);
+    padding: 4px var(--page-gutter) 12px;
+  }
+  .home-recent::-webkit-scrollbar { display: none; }
+  .home-recent > * { scroll-snap-align: start; }
+}
+
+.home-tabs__more {
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(16px, 2vw, 24px);
+}
+
+.home-tabs__more .pub-btn { gap: 8px; }
+.home-tabs__more-count { color: var(--muted); font-weight: 500; }
+.home-tabs__more .fa-arrow-right { font-size: 12px; transition: transform var(--dur-2) var(--ease); }
+.home-tabs__more .pub-btn:hover .fa-arrow-right { transform: translateX(3px); }
+
 .home-saved {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

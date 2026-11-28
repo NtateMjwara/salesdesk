@@ -161,3 +161,19 @@
   };
 
 })();
+
+/* ── 2d: business owner's dealership switcher (layout-app.php) ──
+   Choosing a dealership switches straight away; the Go button stays for
+   keyboard users and no-JS. */
+(function () {
+  'use strict';
+  var sel = document.querySelector('[data-grp-switch]');
+  if (!sel) return;
+  var initial = sel.value;
+  sel.addEventListener('change', function () {
+    if (sel.value !== initial && sel.form) {
+      sel.disabled = false;
+      sel.form.submit();
+    }
+  });
+})();
